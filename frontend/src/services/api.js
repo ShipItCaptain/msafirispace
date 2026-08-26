@@ -544,7 +544,20 @@ export const bnbAPI = {
   },
   // Search
   search: async (params = {}) => {
-    const response = await api.get('/listings/bnb/search/', { params });
+    // Django's QueryDict.getlist() expects repeated bare keys (amenities=a&amenities=b),
+    // not axios's default bracket notation (amenities[]=a&amenities[]=b), so array
+    // params are serialized manually via URLSearchParams.
+    const { amenities, ...rest } = params;
+    const searchParams = new URLSearchParams();
+    Object.entries(rest).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        searchParams.append(key, value);
+      }
+    });
+    if (Array.isArray(amenities)) {
+      amenities.forEach((amenity) => searchParams.append('amenities', amenity));
+    }
+    const response = await api.get('/listings/bnb/search/', { params: searchParams });
     return response.data;
   },
 };

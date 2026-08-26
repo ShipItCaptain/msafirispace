@@ -5,6 +5,7 @@ import { useNotifications } from '../contexts/NotificationContext';
 import { bnbAPI, bookingsAPI, reviewsAPI } from '../services/api';
 import ComprehensiveBnBForm from '../components/forms/ComprehensiveBnBForm';
 import ConfirmDialog from '../components/common/ConfirmDialog';
+import AvailabilityCalendarModal from '../components/bnb/AvailabilityCalendarModal';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -44,6 +45,7 @@ const BnBHostManagementPage = () => {
   });
   const [listingToDelete, setListingToDelete] = useState(null);
   const [isDeletingListing, setIsDeletingListing] = useState(false);
+  const [availabilityListing, setAvailabilityListing] = useState(null);
 
   // Load data from API when component mounts
   useEffect(() => {
@@ -477,6 +479,13 @@ const BnBHostManagementPage = () => {
                       >
                         <TrashIcon className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => setAvailabilityListing(listing)}
+                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Manage Availability"
+                      >
+                        <CalendarIcon className="w-4 h-4" />
+                      </button>
                     </div>
                     <button 
                       onClick={() => handleViewDetails(listing.id)}
@@ -691,6 +700,16 @@ const BnBHostManagementPage = () => {
         onCancel={() => setListingToDelete(null)}
         tone="danger"
       />
+
+      {availabilityListing && (
+        <AvailabilityCalendarModal
+          bnbId={availabilityListing.id}
+          listingTitle={availabilityListing.title}
+          basePrice={availabilityListing.price_per_night}
+          currency={availabilityListing.currency || 'KES'}
+          onClose={() => setAvailabilityListing(null)}
+        />
+      )}
     </div>
   );
 };

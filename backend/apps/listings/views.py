@@ -495,10 +495,15 @@ class BnBListingListCreateView(generics.ListCreateAPIView):
         # Amenities filtering (if amenities query param provided)
         amenities = self.request.query_params.getlist('amenities')
         if amenities:
-            # Filter listings that have all specified amenities
-            for amenity in amenities:
-                queryset = queryset.filter(amenities__contains=[amenity])
-        
+            # Filter listings that have all specified amenities. Done in Python
+            # rather than a JSONField __contains lookup, since that lookup is
+            # only supported on PostgreSQL, not SQLite.
+            matching_ids = [
+                listing.id for listing in queryset
+                if all(amenity in (listing.amenities or []) for amenity in amenities)
+            ]
+            queryset = queryset.filter(id__in=matching_ids)
+
         return queryset
 
     def perform_create(self, serializer):
@@ -691,9 +696,15 @@ def search_available_bnbs(request):
     if max_price:
         queryset = queryset.filter(price_per_night__lte=max_price)
     if amenities:
-        for amenity in amenities:
-            queryset = queryset.filter(amenities__contains=[amenity])
-    
+        # Filter listings that have all specified amenities. Done in Python
+        # rather than a JSONField __contains lookup, since that lookup is
+        # only supported on PostgreSQL, not SQLite.
+        matching_ids = [
+            bnb.id for bnb in queryset
+            if all(amenity in (bnb.amenities or []) for amenity in amenities)
+        ]
+        queryset = queryset.filter(id__in=matching_ids)
+
     # Filter by availability if dates provided
     if check_in and check_out:
         try:
