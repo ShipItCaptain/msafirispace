@@ -3,9 +3,9 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch as useReduxDispatch } from 'react-redux';
-import { switchUserRole, fetchUserMe } from '../../store/slices/authSlice';
 import { useDispatch } from 'react-redux';
+import { switchUserRole, addUserRole, fetchUserMe } from '../../store/slices/authSlice';
+import { toast } from 'react-hot-toast';
 import { 
   Bars3Icon, 
   XMarkIcon, 
@@ -14,7 +14,6 @@ import {
   HomeIcon,
   BuildingOfficeIcon,
   HomeModernIcon,
-  SparklesIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
 
@@ -66,19 +65,61 @@ const Header = () => {
   const handleHeaderRoleToggle = async () => {
     if (!user) return;
     try {
-      const isCurrentlyHost = (user.active_role && user.active_role !== 'guest');
+      // First, fetch fresh user data from backend to get current active_role
+      const freshUserData = await dispatch(fetchUserMe()).unwrap();
+      const currentActiveRole = freshUserData?.active_role || user.active_role || 'guest';
+      
+      // Determine the new role to switch to based on current active_role from backend
+      const isCurrentlyHost = (currentActiveRole && currentActiveRole !== 'guest');
       const newRole = isCurrentlyHost ? 'guest' : 'bnb_host';
-      await dispatch(switchUserRole({ role: newRole }));
-      try { localStorage.setItem('userActiveRole', newRole); } catch (_) {}
-      try { await dispatch(fetchUserMe()); } catch (_) {}
+      
+      // If already on the target role, don't switch
+      if (currentActiveRole === newRole) {
+        console.log('Already on target role:', newRole);
+        return;
+      }
+      
+      // Check if user has the role in their roles array
+      // If not, add it first before switching (except for guest which everyone has)
+      const userRoles = freshUserData?.roles || user?.roles || ['guest'];
+      const userHasRole = userRoles.includes(newRole);
+      
+      if (!userHasRole && newRole !== 'guest') {
+        // Add the role first if user doesn't have it
+        try {
+          await dispatch(addUserRole({ role: newRole })).unwrap();
+          // Refresh user data after adding role
+          await dispatch(fetchUserMe()).unwrap();
+        } catch (addError) {
+          console.error('Failed to add role:', addError);
+          // If adding role fails, still try to switch (might work if backend auto-adds)
+        }
+      }
+      
+      // Switch to the new role
+      const result = await dispatch(switchUserRole({ role: newRole })).unwrap();
+      
+      // Update localStorage with the new role from backend response
+      if (result?.user?.active_role) {
+        try { localStorage.setItem('userActiveRole', result.user.active_role); } catch (_) {}
+      }
+      
+      // Fetch fresh user data after switching to ensure state is updated
+      await dispatch(fetchUserMe()).unwrap();
+      
+      // Navigate to appropriate page
       if (newRole === 'guest') {
         navigate('/', { replace: true });
       } else {
         navigate('/host/home', { replace: true });
       }
-      setTimeout(() => { try { window.location.reload(); } catch (_) {} }, 10);
+      
+      // Reload to ensure all components pick up the new role
+      setTimeout(() => { try { window.location.reload(); } catch (_) {} }, 100);
     } catch (e) {
       console.error('Header role toggle failed:', e);
+      const errorMessage = e?.detail || e?.message || 'Failed to switch role. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
@@ -117,33 +158,21 @@ const Header = () => {
 
   const navigation = getNavigation();
   
-  // Determine current role for display - handle cases where active_role might be undefined
+  // Determine current role for display - ALWAYS use active_role from backend
+  // Never use fallback logic based on roles array, as active_role is the source of truth
   const getCurrentRoleDisplay = () => {
     if (!user) return 'Loading...';
 
-    // If active_role is set, use it
-    if (user.active_role) {
-      switch (user.active_role) {
-        case 'guest': return 'Guest';
-        case 'bnb_host': return 'Host';
-        case 'hotel_host': return 'Host';
-        // concierge removed
-        default: return 'Guest';
-      }
+    // Always use active_role from backend as the source of truth
+    // If active_role is not set or is undefined/null, default to 'guest'
+    const activeRole = user.active_role || 'guest';
+    
+    switch (activeRole) {
+      case 'guest': return 'Guest';
+      case 'bnb_host': return 'Host';
+      case 'hotel_host': return 'Host';
+      default: return 'Guest';
     }
-
-    // If no active_role but user has host roles, assume they're in host mode
-    if (user.roles && user.roles.some(role => ['bnb_host', 'hotel_host'].includes(role))) {
-      return 'Host';
-    }
-
-    // If we're showing host mode (isActuallyInHostMode is true), then user must be a host
-    if (isActuallyInHostMode) {
-      return 'Host';
-    }
-
-    // Default to guest
-    return 'Guest';
   };
   
   const currentRoleDisplay = getCurrentRoleDisplay();
@@ -282,7 +311,7 @@ const Header = () => {
                       >
                         <span>
                           {!user ? 'Loading user data...' :
-                           currentRoleDisplay === 'Guest' ? 'Switch to Host role' : 
+                           (user.active_role === 'guest' || !user.active_role) ? 'Switch to Host role' : 
                            'Switch to Guest role'}
                         </span>
                         <ChevronDownIcon className="w-4 h-4" />

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
-import { useBnBListings } from '../contexts/BnBListingsContext';
+import { bnbAPI, bookingsAPI, reviewsAPI } from '../services/api';
 import ComprehensiveBnBForm from '../components/forms/ComprehensiveBnBForm';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -13,27 +14,20 @@ import {
   TrashIcon,
   CalendarIcon,
   CurrencyDollarIcon,
-  StarIcon,
   MapPinIcon,
   HomeIcon,
-  WifiIcon,
-  UsersIcon,
-  ChartBarIcon,
   ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  ClockIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
-  XMarkIcon,
-  PhotoIcon,
   HeartIcon,
   ShareIcon
 } from '@heroicons/react/24/outline';
 
 const BnBHostManagementPage = () => {
+  const FALLBACK_IMAGE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="100%" height="100%" fill="%23e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%236b7280" font-family="Arial" font-size="28">No image</text></svg>';
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotifications();
-  const { listings, addListing, updateListing, deleteListing, setListings } = useBnBListings();
+  const [listings, setListings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingListing, setEditingListing] = useState(null);
@@ -46,92 +40,123 @@ const BnBHostManagementPage = () => {
     activeListings: 0,
     totalBookings: 0,
     totalRevenue: 0,
-    averageRating: 0,
-    occupancyRate: 0,
-    monthlyGrowth: 0
+    averageRating: 0
   });
+  const [listingToDelete, setListingToDelete] = useState(null);
+  const [isDeletingListing, setIsDeletingListing] = useState(false);
 
-  // Load data when component mounts
+  // Load data from API when component mounts
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      
-      // Simulate loading delay
-      setTimeout(() => {
-        // Calculate analytics from current listings
-        const totalListings = listings.length;
-        const activeListings = listings.filter(l => l.status === 'active').length;
-        const totalBookings = listings.reduce((sum, l) => sum + (l.bookings || 0), 0);
-        const totalRevenue = listings.reduce((sum, l) => sum + (l.revenue || 0), 0);
-        const averageRating = listings.length > 0 
-          ? listings.reduce((sum, l) => sum + (l.rating || 0), 0) / listings.length 
-          : 0;
-        const occupancyRate = totalListings > 0 ? Math.round((activeListings / totalListings) * 100) : 0;
-        const monthlyGrowth = 12.5; // Mock growth rate
+      try {
+        const [listingsResponse, hostBookingsResponse] = await Promise.all([
+          bnbAPI.getMyListings(),
+          bookingsAPI.getHostBookings(),
+        ]);
+        const data = listingsResponse?.results || listingsResponse || [];
+        const hostBookings = hostBookingsResponse?.results || hostBookingsResponse || [];
+        const safeListings = Array.isArray(data) ? data : [];
+        const safeHostBookings = Array.isArray(hostBookings) ? hostBookings : [];
+        setListings(safeListings);
 
+        const totalListings = safeListings.length;
+        const activeListings = safeListings.filter((listing) => listing.is_active !== false).length;
+        const bnbListingIds = new Set(safeListings.map((listing) => listing.id));
+        const bnbBookings = safeHostBookings.filter(
+          (booking) => booking.booking_type === 'bnb' && bnbListingIds.has(booking.bnb_listing_id)
+        );
+        const totalBookings = bnbBookings.length;
+        const totalRevenue = bnbBookings
+          .filter((booking) => booking.status !== 'cancelled')
+          .reduce((sum, booking) => sum + (parseFloat(booking.total_amount) || 0), 0);
+
+        const reviewStatsResponses = await Promise.allSettled(
+          safeListings.map((listing) => reviewsAPI.getBnBReviewStats(listing.id))
+        );
+        const reviewStats = reviewStatsResponses
+          .filter((result) => result.status === 'fulfilled')
+          .map((result) => result.value)
+          .filter(Boolean);
+        const totalReviews = reviewStats.reduce((sum, stats) => sum + (stats.total_reviews || 0), 0);
+        const weightedRating = reviewStats.reduce(
+          (sum, stats) => sum + ((stats.average_rating || 0) * (stats.total_reviews || 0)),
+          0
+        );
+        const averageRating = totalReviews > 0 ? weightedRating / totalReviews : 0;
         setAnalytics({
           totalListings,
           activeListings,
           totalBookings,
           totalRevenue,
-          averageRating,
-          occupancyRate,
-          monthlyGrowth
+          averageRating: Number(averageRating.toFixed(2))
         });
-
+      } catch (error) {
+        console.error('Failed to load BnB listings:', error);
+        showError('Failed to Load Listings', 'Could not load your BnB listings. Please try again.', 7000);
+      } finally {
         setIsLoading(false);
-      }, 500);
+      }
     };
 
     loadData();
-  }, [listings]);
+  }, [showError]);
 
   const filteredListings = listings.filter(listing => {
-    const matchesSearch = listing.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         listing.location.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || listing.status === filterStatus;
+    const matchesSearch = listing.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         listing.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         listing.address?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = filterStatus === 'all' || 
+                         (filterStatus === 'active' && listing.is_active !== false) ||
+                         (filterStatus === 'inactive' && listing.is_active === false);
     return matchesSearch && matchesFilter;
   });
 
-  const handleDeleteListing = (id) => {
-    if (window.confirm('Are you sure you want to delete this listing?')) {
-      try {
-        deleteListing(id);
-        showSuccess(
-          'Listing Deleted!',
-          'The BnB listing has been successfully deleted.',
-          5000
-        );
-      } catch (error) {
-        showError(
-          'Delete Failed',
-          'There was an error deleting the listing. Please try again.',
-          7000
-        );
-      }
+  const handleDeleteListing = async () => {
+    if (!listingToDelete) return;
+    try {
+      setIsDeletingListing(true);
+      await bnbAPI.remove(listingToDelete);
+      setListings(prev => prev.filter(l => l.id !== listingToDelete));
+      showSuccess(
+        'Listing Deleted!',
+        'The BnB listing has been successfully deleted.',
+        5000
+      );
+      setListingToDelete(null);
+    } catch (error) {
+      console.error('Delete error:', error);
+      showError(
+        'Delete Failed',
+        error?.response?.data?.detail || 'There was an error deleting the listing. Please try again.',
+        7000
+      );
+    } finally {
+      setIsDeletingListing(false);
     }
   };
 
-  const handleToggleStatus = (id) => {
+  const handleToggleStatus = async (id) => {
     try {
       const listing = listings.find(l => l.id === id);
       if (listing) {
-        const updatedListing = {
+        const updatedListing = await bnbAPI.update(id, {
           ...listing,
-          status: listing.status === 'active' ? 'inactive' : 'active'
-        };
-        updateListing(updatedListing);
+          is_active: !listing.is_active
+        });
+        setListings(prev => prev.map(l => l.id === id ? updatedListing : l));
         
         showSuccess(
-          `Listing ${updatedListing.status === 'active' ? 'Activated' : 'Deactivated'}!`,
-          `The BnB listing has been ${updatedListing.status === 'active' ? 'activated' : 'deactivated'} successfully.`,
+          `Listing ${updatedListing.is_active ? 'Activated' : 'Deactivated'}!`,
+          `The BnB listing has been ${updatedListing.is_active ? 'activated' : 'deactivated'} successfully.`,
           4000
         );
       }
     } catch (error) {
+      console.error('Status update error:', error);
       showError(
         'Status Update Failed',
-        'There was an error updating the listing status. Please try again.',
+        error?.response?.data?.detail || 'There was an error updating the listing status. Please try again.',
         7000
       );
     }
@@ -206,9 +231,8 @@ const BnBHostManagementPage = () => {
                 <HomeIcon className="w-6 h-6 text-blue-600" />
               </div>
             </div>
-            <div className="mt-4 flex items-center text-sm text-green-600">
-              <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
-              <span>+2 this month</span>
+            <div className="mt-4 flex items-center text-sm text-gray-600">
+              <span>Current host inventory</span>
             </div>
           </div>
 
@@ -223,7 +247,12 @@ const BnBHostManagementPage = () => {
               </div>
             </div>
             <div className="mt-4 flex items-center text-sm text-gray-600">
-              <span>{Math.round((analytics.activeListings / analytics.totalListings) * 100)}% of total</span>
+              <span>
+                {analytics.totalListings > 0
+                  ? `${Math.round((analytics.activeListings / analytics.totalListings) * 100)}% active`
+                  : '0% active'}
+                {` • Avg rating ${Number(analytics.averageRating || 0).toFixed(1)}`}
+              </span>
             </div>
           </div>
 
@@ -239,7 +268,7 @@ const BnBHostManagementPage = () => {
             </div>
             <div className="mt-4 flex items-center text-sm text-green-600">
               <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
-              <span>+{analytics.monthlyGrowth}% this month</span>
+              <span>Real-time booking count</span>
             </div>
           </div>
 
@@ -255,7 +284,7 @@ const BnBHostManagementPage = () => {
             </div>
             <div className="mt-4 flex items-center text-sm text-green-600">
               <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
-              <span>+15.2% this month</span>
+              <span>From non-cancelled BnB bookings</span>
             </div>
           </div>
         </motion.div>
@@ -349,13 +378,26 @@ const BnBHostManagementPage = () => {
                 {/* Image */}
                 <div className={`${viewMode === 'list' ? 'w-64 h-48' : 'h-48'} bg-gray-200 relative`}>
                   <img
-                    src={listing.images && listing.images.length > 0 ? listing.images[0] : '/api/placeholder/400/300'}
+                    src={
+                      // Prefer backend-provided primary_image if available
+                      listing.primary_image
+                        ? listing.primary_image
+                        : (listing.images && listing.images.length > 0
+                            ? (typeof listing.images[0] === 'string'
+                                ? listing.images[0]
+                                : listing.images[0]?.image)
+                            : FALLBACK_IMAGE)
+                    }
                     alt={listing.title}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = FALLBACK_IMAGE;
+                    }}
                   />
                   <div className="absolute top-4 left-4">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(listing.status)}`}>
-                      {listing.status}
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(listing.is_active !== false ? 'active' : 'inactive')}`}>
+                      {listing.is_active !== false ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                   <div className="absolute top-4 right-4 flex space-x-2">
@@ -373,64 +415,33 @@ const BnBHostManagementPage = () => {
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{listing.title}</h3>
                     <div className="flex items-center space-x-1">
-                      <StarIcon className="w-4 h-4 text-yellow-400 fill-current" />
-                      <span className="text-sm font-medium text-gray-900">{listing.rating}</span>
-                      <span className="text-sm text-gray-500">({listing.reviews})</span>
+                      <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                        {listing.property_type || 'bnb'}
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex items-center text-gray-600 mb-2">
                     <MapPinIcon className="w-4 h-4 mr-1" />
-                    <span className="text-sm">{listing.location}</span>
+                    <span className="text-sm">{listing.city}, {listing.country}</span>
                   </div>
+
+                  {listing.description && (
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">{listing.description}</p>
+                  )}
 
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-4 text-sm text-gray-600">
-                      <div className="flex items-center">
-                        <UsersIcon className="w-4 h-4 mr-1" />
-                        <span>{listing.guests}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <HomeIcon className="w-4 h-4 mr-1" />
-                        <span>{listing.bedrooms}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <WifiIcon className="w-4 h-4 mr-1" />
-                        <span>{listing.bathrooms}</span>
-                      </div>
+                    <div className="text-sm text-gray-600">
+                      {listing.address && (
+                        <div className="flex items-center">
+                          <MapPinIcon className="w-4 h-4 mr-1" />
+                          <span className="line-clamp-1">{listing.address}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">KSh {(listing.price || 0).toLocaleString()}</p>
+                      <p className="text-2xl font-bold text-gray-900">KSh {(listing.price_per_night || 0).toLocaleString()}</p>
                       <p className="text-sm text-gray-500">per night</p>
-                    </div>
-                  </div>
-
-                  {/* Amenities */}
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    {(listing.amenities || []).slice(0, 3).map((amenity, index) => (
-                      <span
-                        key={index}
-                        className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full"
-                      >
-                        {amenity}
-                      </span>
-                    ))}
-                    {(listing.amenities || []).length > 3 && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                        +{(listing.amenities || []).length - 3} more
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                    <div>
-                      <p className="text-gray-500">Bookings</p>
-                      <p className="font-semibold text-gray-900">{listing.bookings || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Revenue</p>
-                      <p className="font-semibold text-gray-900">KSh {(listing.revenue || 0).toLocaleString()}</p>
                     </div>
                   </div>
 
@@ -447,20 +458,20 @@ const BnBHostManagementPage = () => {
                       <button
                         onClick={() => handleToggleStatus(listing.id)}
                         className={`p-2 rounded-lg transition-colors ${
-                          listing.status === 'active'
+                          listing.is_active !== false
                             ? 'text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50'
                             : 'text-green-600 hover:text-green-700 hover:bg-green-50'
                         }`}
-                        title={listing.status === 'active' ? 'Deactivate' : 'Activate'}
+                        title={listing.is_active !== false ? 'Deactivate' : 'Activate'}
                       >
-                        {listing.status === 'active' ? (
+                        {listing.is_active !== false ? (
                           <ExclamationTriangleIcon className="w-4 h-4" />
                         ) : (
                           <CheckCircleIcon className="w-4 h-4" />
                         )}
                       </button>
                       <button
-                        onClick={() => handleDeleteListing(listing.id)}
+                        onClick={() => setListingToDelete(listing.id)}
                         className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete"
                       >
@@ -527,54 +538,138 @@ const BnBHostManagementPage = () => {
                   setShowAddForm(false);
                   setEditingListing(null);
                 }}
-                onSave={(listingData) => {
+                onSave={async (listingData) => {
                   try {
+                    // Map form data to API format with all new fields
+                    const apiData = {
+                      title: listingData.title || listingData.propertyName || '',
+                      description: listingData.description || '',
+                      property_type: listingData.propertyType || 'apartment',
+                      address: listingData.address || '',
+                      city: listingData.city || '',
+                      state_province: listingData.stateProvince || listingData.state || '',
+                      country: listingData.country || 'Kenya',
+                      postal_code: listingData.postalCode || '',
+                      latitude: listingData.latitude ? parseFloat(listingData.latitude) : null,
+                      longitude: listingData.longitude ? parseFloat(listingData.longitude) : null,
+                      price_per_night: parseFloat(listingData.pricePerNight || listingData.price || 0),
+                      cleaning_fee: listingData.cleaningFee ? parseFloat(listingData.cleaningFee) : 0,
+                      security_deposit: listingData.securityDeposit ? parseFloat(listingData.securityDeposit) : 0,
+                      currency: listingData.currency || 'KES',
+                      bedrooms: parseInt(listingData.bedrooms || 1),
+                      bathrooms: parseInt(listingData.bathrooms || 1),
+                      beds: parseInt(listingData.beds || 1),
+                      max_guests: parseInt(listingData.guests || listingData.maxGuests || 2),
+                      square_footage: listingData.squareFootage ? parseInt(listingData.squareFootage) : null,
+                      year_built: listingData.yearBuilt ? parseInt(listingData.yearBuilt) : null,
+                      check_in_time: listingData.checkInTime || '15:00:00',
+                      check_out_time: listingData.checkOutTime || '11:00:00',
+                      minimum_nights: parseInt(listingData.minimumNights || 1),
+                      maximum_nights: parseInt(listingData.maximumNights || 30),
+                      amenities: Array.isArray(listingData.amenities) ? listingData.amenities : [],
+                      house_rules: Array.isArray(listingData.houseRules) ? listingData.houseRules : [],
+                      smoking_allowed: listingData.smokingAllowed || false,
+                      pets_allowed: listingData.petsAllowed || false,
+                      parties_allowed: listingData.partiesAllowed || false,
+                      children_allowed: listingData.childrenAllowed !== undefined ? listingData.childrenAllowed : true,
+                      highlights: Array.isArray(listingData.highlights) ? listingData.highlights : [],
+                      transportation: listingData.transportation || '',
+                      special_instructions: listingData.specialInstructions || '',
+                      host_name: listingData.hostName || '',
+                      host_phone: listingData.hostPhone || '',
+                      host_email: listingData.hostEmail || '',
+                      emergency_contact: listingData.emergencyContact || '',
+                      is_active: true
+                    };
+
+                    let savedListing;
                     if (editingListing) {
-                      console.log('Editing listing data:', listingData);
-                      console.log('Photos from form:', listingData.photos);
-                      console.log('Images from form:', listingData.images);
-                      
-                      const updatedListing = {
-                        ...listingData,
-                        // Map photos to images for compatibility when editing
-                        images: listingData.photos && listingData.photos.length > 0 ? listingData.photos : (listingData.images || ['/api/placeholder/400/300']),
-                        // Map pricePerNight to price for compatibility when editing
-                        price: listingData.pricePerNight || listingData.price || 0,
-                      };
-                      
-                      console.log('Updated listing with images:', updatedListing.images);
-                      updateListing(updatedListing);
-                      showSuccess(
-                        'Listing Updated!',
-                        'Your BnB listing has been successfully updated.',
-                        5000
-                      );
+                      // Update existing listing
+                      savedListing = await bnbAPI.update(editingListing.id, apiData);
+                      setListings(prev => prev.map(l => l.id === editingListing.id ? savedListing : l));
                     } else {
-                      const newListing = {
-                        id: Date.now(),
-                        ...listingData,
-                        // Map photos to images for compatibility
-                        images: listingData.photos && listingData.photos.length > 0 ? listingData.photos : ['/api/placeholder/400/300'],
-                        // Map pricePerNight to price for compatibility
-                        price: listingData.pricePerNight || 0,
-                        status: 'active',
-                        bookings: 0,
-                        revenue: 0,
-                        created_at: new Date().toISOString()
-                      };
-                      addListing(newListing);
-                      showSuccess(
-                        'Listing Created!',
-                        'Your new BnB listing has been successfully created and published.',
-                        5000
-                      );
+                      // Create new listing
+                      savedListing = await bnbAPI.create(apiData);
+                      setListings(prev => [savedListing, ...prev]);
                     }
+
+                    // Upload images if provided
+                    if (listingData.photos && listingData.photos.length > 0) {
+                      console.log('Preparing to upload images:', listingData.photos.length, 'photos');
+                      
+                      const imageUploadPromises = listingData.photos
+                        .map((photo, index) => {
+                          // Skip existing images (from editing mode) - they're already on the server
+                          if (photo.isExisting) {
+                            console.log(`Skipping existing image at index ${index}`);
+                            return null;
+                          }
+                          
+                          // Handle both object format {file, preview, id} and direct File objects
+                          const file = photo.file || (photo instanceof File ? photo : null);
+                          if (!file || !(file instanceof File)) {
+                            console.warn(`Photo at index ${index} is not a valid File object:`, photo);
+                            return null;
+                          }
+                          
+                          console.log(`Uploading image ${index + 1}/${listingData.photos.length}:`, file.name, `(${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+                          
+                          return bnbAPI.uploadImage(savedListing.id, {
+                            image: file,
+                            image_type: photo.image_type || 'exterior',
+                            caption: photo.caption || '',
+                            is_primary: photo.is_primary !== undefined ? photo.is_primary : (index === 0),
+                            order: index
+                          }).then(result => {
+                            console.log(`Successfully uploaded image ${index + 1}:`, result);
+                            return result;
+                          }).catch(imgError => {
+                            console.error(`Failed to upload image ${index + 1} (${file.name}):`, imgError);
+                            // Log the full error details for debugging
+                            if (imgError.response) {
+                              console.error('Error response data:', imgError.response.data);
+                              console.error('Error status:', imgError.response.status);
+                              console.error('Error headers:', imgError.response.headers);
+                            } else if (imgError.request) {
+                              console.error('Request was made but no response received:', imgError.request);
+                            } else {
+                              console.error('Error setting up request:', imgError.message);
+                            }
+                            // Don't throw - let other uploads continue
+                            return { error: imgError, index };
+                          });
+                        })
+                        .filter(p => p !== null); // Remove null entries
+                      
+                      // Wait for all uploads to complete (success or failure)
+                      const results = await Promise.allSettled(imageUploadPromises);
+                      const failures = results.filter(r => r.status === 'rejected' || (r.value && r.value.error));
+                      const successes = results.filter(r => r.status === 'fulfilled' && (!r.value || !r.value.error));
+                      
+                      console.log(`Image upload summary: ${successes.length} succeeded, ${failures.length} failed`);
+                      if (failures.length > 0) {
+                        console.warn('Some images failed to upload. Check console for details.');
+                      }
+                    }
+
+                    // Re-fetch listings to get updated data with images
+                    const response = await bnbAPI.getMyListings();
+                    setListings(response?.results || response || []);
+                    
+                    showSuccess(
+                      editingListing ? 'Listing Updated!' : 'Listing Created!',
+                      editingListing 
+                        ? 'Your BnB listing has been successfully updated.'
+                        : 'Your new BnB listing has been successfully created and published.',
+                      5000
+                    );
                     setShowAddForm(false);
                     setEditingListing(null);
                   } catch (error) {
+                    console.error('Save error:', error);
                     showError(
                       'Operation Failed',
-                      'There was an error saving your listing. Please try again.',
+                      error?.response?.data?.detail || error?.message || 'There was an error saving your listing. Please try again.',
                       7000
                     );
                   }
@@ -584,6 +679,18 @@ const BnBHostManagementPage = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        isOpen={Boolean(listingToDelete)}
+        title="Delete Listing?"
+        message="This action cannot be undone. The listing and related data will no longer be available."
+        confirmLabel="Delete Listing"
+        cancelLabel="Keep Listing"
+        isLoading={isDeletingListing}
+        onConfirm={handleDeleteListing}
+        onCancel={() => setListingToDelete(null)}
+        tone="danger"
+      />
     </div>
   );
 };

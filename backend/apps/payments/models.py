@@ -88,3 +88,32 @@ class PaymentIntent(models.Model):
 
     def __str__(self):
         return f"PaymentIntent {self.reference} ({self.gateway}) - {self.status}"
+
+
+class PaymentWebhookEvent(models.Model):
+    """
+    Stores raw webhook events for auditability and idempotent processing.
+    """
+
+    class Provider(models.TextChoices):
+        MPESA = 'mpesa', 'M-Pesa'
+        PAYSTACK = 'paystack', 'Paystack'
+
+    provider = models.CharField(max_length=20, choices=Provider.choices)
+    event_key = models.CharField(max_length=255, unique=True)
+    request_id = models.CharField(max_length=64, blank=True)
+    payload = models.JSONField(default=dict)
+    processed = models.BooleanField(default=False)
+    processing_notes = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['provider']),
+            models.Index(fields=['processed']),
+        ]
+
+    def __str__(self):
+        return f"WebhookEvent {self.provider}:{self.event_key} processed={self.processed}"

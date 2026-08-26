@@ -37,6 +37,10 @@ db_backup.sqlite3
 /media
 /staticfiles
 /static
+backend/media/
+backend/staticfiles/
+backend/static/
+*.pid
 
 # Environment variables
 .env

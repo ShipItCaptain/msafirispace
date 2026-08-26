@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAuth } from '../hooks/useAuth';
 import { 
   BuildingOfficeIcon, 
   HomeModernIcon, 
-  SparklesIcon,
   CheckIcon,
   ArrowRightIcon
 } from '@heroicons/react/24/outline';
 
 const BecomeHostPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [selectedType, setSelectedType] = useState(null);
   const [isChecking, setIsChecking] = useState(false);
 

@@ -5,10 +5,16 @@ import {
   ListBulletIcon,
   BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import api from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import HotelCard from '../components/hotel/HotelCard';
+import { useFavorites } from '../contexts/FavoritesContext';
 
 const HotelsPage = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [hotels, setHotels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,6 +28,7 @@ const HotelsPage = () => {
   });
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [sortBy, setSortBy] = useState('featured'); // 'featured', 'price', 'rating', 'name'
+  const { isHotelFavorite, isHotelFavoriteBusy, toggleHotelFavorite } = useFavorites();
 
   useEffect(() => {
     const fetchHotels = async () => {
@@ -44,6 +51,19 @@ const HotelsPage = () => {
 
     fetchHotels();
   }, [searchQuery, filters]);
+
+  const handleToggleFavorite = async (hotelId) => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: { pathname: '/hotels' } } });
+      return;
+    }
+    const result = await toggleHotelFavorite(hotelId);
+    if (!result.ok) {
+      toast.error(result.errorMessage);
+      return;
+    }
+    toast.success(result.isFavorite ? 'Added to favorites' : 'Removed from favorites');
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -323,7 +343,12 @@ const HotelsPage = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
               >
-                <HotelCard hotel={hotel} />
+                <HotelCard
+                  hotel={hotel}
+                  isFavorite={isHotelFavorite(hotel.id)}
+                  favoriteLoading={isHotelFavoriteBusy(hotel.id)}
+                  onToggleFavorite={handleToggleFavorite}
+                />
               </motion.div>
             ))}
           </motion.div>

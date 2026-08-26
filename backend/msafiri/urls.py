@@ -43,12 +43,11 @@ urlpatterns = [
         # Core Features
         path('listings/', include('apps.listings.urls')),
         path('bookings/', include('apps.bookings.urls')),
-        path('concierge/', include('apps.concierge.urls')),
         path('payments/', include('apps.payments.urls')),
         path('reviews/', include('apps.reviews.urls')),
         path('promotions/', include('apps.promotions.urls')),
         # path('referrals/', include('apps.referrals.urls')),
-        # path('notifications/', include('apps.notifications.urls')),
+        path('notifications/', include('apps.notifications.urls')),
     ])),
     
     # Allauth URLs (for social authentication)

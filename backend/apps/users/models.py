@@ -4,7 +4,6 @@ Custom User model for Msafiri Space
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from cloudinary_storage.storage import MediaCloudinaryStorage
 
 
 class User(AbstractUser):
@@ -20,14 +19,12 @@ class User(AbstractUser):
     
     class HostType(models.TextChoices):
         BNB_HOST = 'bnb_host', _('BnB Host')
-        CONCIERGE_HOST = 'concierge_host', _('Concierge Services Host')
         HOTEL_RESTAURANT_HOST = 'hotel_restaurant_host', _('Hotel/Restaurant Host')
     
     class Role(models.TextChoices):
         GUEST = 'guest', _('Guest')
         BNB_HOST = 'bnb_host', _('BnB Host')
         HOTEL_HOST = 'hotel_host', _('Hotel Accommodation Host')
-        TOUR_OPERATOR = 'tour_operator', _('Tour Operator')
     
     class Gender(models.TextChoices):
         MALE = 'male', _('Male')
@@ -44,7 +41,6 @@ class User(AbstractUser):
     # Profile Information
     profile_picture = models.ImageField(
         upload_to='users/profile_pictures/',
-        storage=MediaCloudinaryStorage(),
         blank=True,
         null=True
     )
@@ -182,20 +178,12 @@ class User(AbstractUser):
         return (self.user_type == self.UserType.HOST and self.host_type == self.HostType.BNB_HOST) or (self.Role.BNB_HOST in (self.roles or []))
     
     @property
-    def is_concierge_host(self):
-        return self.user_type == self.UserType.HOST and self.host_type == self.HostType.CONCIERGE_HOST
-    
-    @property
     def is_hotel_restaurant_host(self):
         return self.user_type == self.UserType.HOST and self.host_type == self.HostType.HOTEL_RESTAURANT_HOST
 
     @property
     def is_hotel_host(self):
         return self.Role.HOTEL_HOST in (self.roles or [])
-
-    @property
-    def is_tour_operator(self):
-        return self.Role.TOUR_OPERATOR in (self.roles or [])
 
     # Role management helpers
     def has_role(self, role: str) -> bool:
@@ -222,9 +210,31 @@ class User(AbstractUser):
                 self.active_role = self.Role.GUEST
 
     def switch_active_role(self, role: str) -> bool:
-        if role in (self.roles or []) and role in dict(self.Role.choices):
+        """
+        Switch the active role for the user.
+        Allows switching to 'guest' even if not explicitly in roles array (safety fallback).
+        For other roles, the role must be in the user's roles array.
+        """
+        # Validate role is a valid choice
+        if role not in dict(self.Role.choices):
+            return False
+        
+        # Always allow switching to 'guest' (safety fallback)
+        # Ensure 'guest' is in roles array
+        if role == self.Role.GUEST:
+            if self.Role.GUEST not in (self.roles or []):
+                if not self.roles:
+                    self.roles = [self.Role.GUEST]
+                else:
+                    self.roles.append(self.Role.GUEST)
             self.active_role = role
             return True
+        
+        # For other roles, they must be in the user's roles array
+        if role in (self.roles or []):
+            self.active_role = role
+            return True
+        
         return False
     
     def get_full_name(self):
@@ -344,7 +354,6 @@ class BnBHostProfile(models.Model):
     home_sharing_license = models.CharField(max_length=100, blank=True)
     insurance_document = models.FileField(
         upload_to='hosts/insurance/',
-        storage=MediaCloudinaryStorage(),
         blank=True,
         null=True
     )
@@ -381,54 +390,6 @@ class BnBHostProfile(models.Model):
         return f"BnB Profile for {self.user.email}"
 
 
-class ConciergeHostProfile(models.Model):
-    """
-    Extended profile for Concierge Services hosts
-    """
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='concierge_profile')
-    
-    # Service management
-    service_categories = models.JSONField(
-        default=list,
-        help_text="List of service categories: transport, tours, events, etc."
-    )
-    service_radius_km = models.PositiveIntegerField(default=50)
-    service_areas = models.JSONField(
-        default=list,
-        help_text="List of cities/areas where services are provided"
-    )
-    
-    # Concierge-specific fields
-    business_license = models.CharField(max_length=100, blank=True)
-    tourism_license = models.CharField(max_length=100, blank=True)
-    insurance_coverage = models.FileField(
-        upload_to='hosts/insurance/',
-        storage=MediaCloudinaryStorage(),
-        blank=True,
-        null=True
-    )
-    
-    # Service capabilities
-    languages_spoken = models.JSONField(default=list)
-    certifications = models.JSONField(default=list)
-    equipment_available = models.JSONField(default=list)
-    
-    # Availability
-    availability_schedule = models.JSONField(default=dict)
-    emergency_services = models.BooleanField(default=False)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'concierge_host_profiles'
-        verbose_name = 'Concierge Host Profile'
-        verbose_name_plural = 'Concierge Host Profiles'
-    
-    def __str__(self):
-        return f"Concierge Profile for {self.user.email}"
-
-
 class HotelRestaurantHostProfile(models.Model):
     """
     Extended profile for Hotel/Restaurant hosts
@@ -450,13 +411,11 @@ class HotelRestaurantHostProfile(models.Model):
     tourism_license = models.CharField(max_length=100, blank=True)
     health_certificate = models.FileField(
         upload_to='hosts/health_certs/',
-        storage=MediaCloudinaryStorage(),
         blank=True,
         null=True
     )
     food_handling_certificate = models.FileField(
         upload_to='hosts/food_certs/',
-        storage=MediaCloudinaryStorage(),
         blank=True,
         null=True
     )

@@ -201,6 +201,12 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
         state.user = action.payload.user;
         state.tokens = action.payload.tokens;
+        // Persist the server's active_role immediately on login
+        try {
+          if (action.payload?.user?.active_role) {
+            localStorage.setItem('userActiveRole', action.payload.user.active_role);
+          }
+        } catch (_) {}
         state.error = null;
       })
       .addCase(loginUser.rejected, (state, action) => {
@@ -301,19 +307,14 @@ const authSlice = createSlice({
       })
       .addCase(fetchUserMe.fulfilled, (state, action) => {
         state.isLoading = false;
-        
-        // Check if there's a stored role in localStorage and override the API response
-        const storedRole = localStorage.getItem('userActiveRole');
-        
-        if (storedRole) {
-          state.user = {
-            ...action.payload,
-            active_role: storedRole
-          };
-        } else {
-          state.user = action.payload;
-        }
-        
+        // Trust the server as the source of truth for active_role.
+        state.user = action.payload;
+        // Keep localStorage in sync with server-provided active_role for future sessions
+        try {
+          if (action.payload?.active_role) {
+            localStorage.setItem('userActiveRole', action.payload.active_role);
+          }
+        } catch (_) {}
         state.error = null;
       })
       .addCase(fetchUserMe.rejected, (state, action) => {

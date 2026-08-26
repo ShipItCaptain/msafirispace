@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { promotionsAPI } from '../services/api';
 
 const PromotionsPage = () => {
@@ -17,11 +17,7 @@ const PromotionsPage = () => {
     end_date: ''
   });
 
-  useEffect(() => {
-    fetchPromotions();
-  }, [selectedType]);
-
-  const fetchPromotions = async () => {
+  const fetchPromotions = useCallback(async () => {
     try {
       const data = await promotionsAPI.getActivePromotions(selectedType);
       setPromotions(data);
@@ -30,7 +26,11 @@ const PromotionsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedType]);
+
+  useEffect(() => {
+    fetchPromotions();
+  }, [fetchPromotions]);
 
   const handleCreatePromotion = async (e) => {
     e.preventDefault();

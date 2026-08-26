@@ -11,6 +11,9 @@ from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Avg, Q, Sum
+from datetime import timedelta
+from collections import Counter
 import secrets
 import string
 
@@ -22,7 +25,7 @@ from .serializers import (
     ReferralSerializer, UserStatsSerializer,
     AddRoleSerializer, SwitchRoleSerializer,
     HotelRestaurantHostProfileSerializer, BnBHostProfileSerializer,
-    ConciergeHostProfileSerializer, HostOnboardingSerializer
+    HostOnboardingSerializer
 )
 from .models import User, UserProfile, UserAddress
 
@@ -435,15 +438,34 @@ class UserStatsView(APIView):
     
     def get(self, request):
         user = request.user
-        
-        # This would typically fetch data from other apps
-        # For now, returning mock data
+
+        from apps.bookings.models import Booking
+        from apps.payments.models import Payment
+        from apps.reviews.models import Review
+
+        bookings_qs = Booking.objects.filter(traveler=user).select_related('hotel', 'bnb_listing')
+        reviews_qs = Review.objects.filter(traveler=user, is_public=True)
+        successful_payments_qs = Payment.objects.filter(
+            traveler=user,
+            status=Payment.Status.SUCCESS,
+        )
+
+        destination_counter = Counter()
+        for booking in bookings_qs:
+            city = booking.bnb_listing.city if booking.bnb_listing_id else (booking.hotel.city if booking.hotel_id else '')
+            country = booking.bnb_listing.country if booking.bnb_listing_id else (booking.hotel.country if booking.hotel_id else '')
+            label = ', '.join([part for part in [city, country] if part])
+            if label:
+                destination_counter[label] += 1
+
+        avg_rating = reviews_qs.aggregate(avg=Avg('rating'))['avg'] or 0
+        total_spent = successful_payments_qs.aggregate(total=Sum('amount'))['total'] or 0
         stats = {
-            'total_bookings': 0,  # Would come from bookings app
-            'total_reviews': 0,   # Would come from reviews app
-            'average_rating': 0.00,
-            'total_spent': 0.00,  # Would come from payments app
-            'favorite_destinations': [],
+            'total_bookings': bookings_qs.count(),
+            'total_reviews': reviews_qs.count(),
+            'average_rating': round(avg_rating, 2),
+            'total_spent': total_spent,
+            'favorite_destinations': [item[0] for item in destination_counter.most_common(5)],
             'member_since': user.created_at
         }
         
@@ -458,18 +480,170 @@ def user_dashboard(request):
     User dashboard endpoint
     """
     user = request.user
-    
+
+    from apps.bookings.models import Booking
+    from apps.listings.models import Favorite, BnBFavorite, BnBListing, Hotel
+    from apps.reviews.models import Review
+
+    today = timezone.now().date()
+    bookings_qs = Booking.objects.filter(traveler=user).select_related(
+        'hotel', 'room_type', 'bnb_listing'
+    ).order_by('-created_at')
+    reviews_qs = Review.objects.filter(traveler=user, is_public=True)
+
+    upcoming_qs = bookings_qs.filter(
+        check_in__gte=today,
+        status__in=[Booking.BookingStatus.PENDING, Booking.BookingStatus.CONFIRMED],
+    ).order_by('check_in')
+    pending_qs = bookings_qs.filter(status=Booking.BookingStatus.PENDING)
+    pending_amount = pending_qs.aggregate(total=Sum('total_amount'))['total'] or 0
+
+    hotel_favorites_qs = Favorite.objects.filter(user=user).select_related('hotel').order_by('-created_at')
+    bnb_favorites_qs = BnBFavorite.objects.filter(user=user).select_related('bnb_listing').order_by('-created_at')
+
+    favorites = (
+        [
+            {
+                'type': 'hotel',
+                'id': fav.hotel_id,
+                'name': fav.hotel.name,
+                'city': fav.hotel.city,
+                'country': fav.hotel.country,
+                'created_at': fav.created_at,
+            }
+            for fav in hotel_favorites_qs
+        ]
+        + [
+            {
+                'type': 'bnb',
+                'id': fav.bnb_listing_id,
+                'name': fav.bnb_listing.title,
+                'city': fav.bnb_listing.city,
+                'country': fav.bnb_listing.country,
+                'created_at': fav.created_at,
+            }
+            for fav in bnb_favorites_qs
+        ]
+    )
+    favorites.sort(key=lambda item: item['created_at'], reverse=True)
+
+    recent_activity = []
+    for booking in bookings_qs[:5]:
+        property_name = (
+            booking.bnb_listing.title if booking.bnb_listing_id
+            else booking.hotel.name if booking.hotel_id
+            else 'Property'
+        )
+        recent_activity.append({
+            'type': 'booking',
+            'booking_id': booking.id,
+            'property': property_name,
+            'status': booking.status,
+            'date': booking.created_at.date().isoformat(),
+            'check_in': booking.check_in.isoformat(),
+            'check_out': booking.check_out.isoformat(),
+            'amount': booking.total_amount,
+            'currency': booking.currency,
+        })
+
+    upcoming_trips = []
+    for booking in upcoming_qs[:5]:
+        property_name = (
+            booking.bnb_listing.title if booking.bnb_listing_id
+            else booking.hotel.name if booking.hotel_id
+            else 'Property'
+        )
+        upcoming_trips.append({
+            'booking_id': booking.id,
+            'property': property_name,
+            'date': booking.check_in.isoformat(),
+            'check_out': booking.check_out.isoformat(),
+            'status': booking.status,
+            'amount': booking.total_amount,
+            'currency': booking.currency,
+        })
+
+    visited_destinations = set()
+    for booking in bookings_qs:
+        if booking.bnb_listing_id:
+            visited_destinations.add((booking.bnb_listing.city, booking.bnb_listing.country))
+        elif booking.hotel_id:
+            visited_destinations.add((booking.hotel.city, booking.hotel.country))
+
+    recommendation_candidates = []
+    if visited_destinations:
+        city_filters = [Q(city=city, country=country) for city, country in visited_destinations if city and country]
+        if city_filters:
+            hotel_query = city_filters[0]
+            bnb_query = city_filters[0]
+            for city_filter in city_filters[1:]:
+                hotel_query |= city_filter
+                bnb_query |= city_filter
+            recommendation_candidates.extend(
+                [
+                    {
+                        'type': 'hotel',
+                        'id': hotel.id,
+                        'title': hotel.name,
+                        'city': hotel.city,
+                        'country': hotel.country,
+                    }
+                    for hotel in Hotel.objects.filter(is_active=True).filter(hotel_query)[:3]
+                ]
+            )
+            recommendation_candidates.extend(
+                [
+                    {
+                        'type': 'bnb',
+                        'id': bnb.id,
+                        'title': bnb.title,
+                        'city': bnb.city,
+                        'country': bnb.country,
+                    }
+                    for bnb in BnBListing.objects.filter(is_active=True).filter(bnb_query)[:3]
+                ]
+            )
+
+    if not recommendation_candidates:
+        recommendation_candidates.extend(
+            [
+                {
+                    'type': 'hotel',
+                    'id': hotel.id,
+                    'title': hotel.name,
+                    'city': hotel.city,
+                    'country': hotel.country,
+                }
+                for hotel in Hotel.objects.filter(is_active=True).order_by('-created_at')[:3]
+            ]
+        )
+        recommendation_candidates.extend(
+            [
+                {
+                    'type': 'bnb',
+                    'id': bnb.id,
+                    'title': bnb.title,
+                    'city': bnb.city,
+                    'country': bnb.country,
+                }
+                for bnb in BnBListing.objects.filter(is_active=True).order_by('-created_at')[:3]
+            ]
+        )
+
+    average_rating = reviews_qs.aggregate(avg=Avg('rating'))['avg'] or 0
     dashboard_data = {
         'user': UserDetailSerializer(user).data,
         'quick_stats': {
-            'total_bookings': 0,
-            'pending_bookings': 0,
-            'total_reviews': 0,
-            'average_rating': 0.00,
+            'total_bookings': bookings_qs.count(),
+            'pending_bookings': upcoming_qs.count(),
+            'pending_bookings_amount': float(pending_amount),
+            'total_reviews': reviews_qs.count(),
+            'average_rating': round(float(average_rating), 2),
         },
-        'recent_activity': [],
-        'upcoming_trips': [],
-        'recommendations': [],
+        'recent_activity': recent_activity,
+        'upcoming_trips': upcoming_trips,
+        'recommendations': recommendation_candidates[:6],
+        'favorites': favorites[:10],
     }
     
     return Response(dashboard_data, status=status.HTTP_200_OK)
@@ -613,10 +787,16 @@ class HostOnboardingView(APIView):
                 
                 # Create specific host profile
                 host_profile = serializer.save(user=user)
-                
+
+                if user.host_type == User.HostType.HOTEL_RESTAURANT_HOST:
+                    profile_data = HotelRestaurantHostProfileSerializer(host_profile).data
+                else:
+                    profile_data = BnBHostProfileSerializer(host_profile).data
+
                 return Response({
                     'message': 'Host profile created successfully',
-                    'host_profile': serializer.data
+                    'host_type': user.host_type,
+                    'host_profile': profile_data
                 }, status=status.HTTP_201_CREATED)
         except Exception as e:
             print(f"Error creating host profile: {str(e)}")
@@ -681,34 +861,6 @@ class BnBHostProfileView(APIView):
             return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
-class ConciergeHostProfileView(APIView):
-    """
-    Concierge host profile management
-    """
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get(self, request):
-        """Get concierge host profile"""
-        try:
-            profile = request.user.concierge_profile
-            serializer = ConciergeHostProfileSerializer(profile)
-            return Response(serializer.data)
-        except:
-            return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    def put(self, request):
-        """Update concierge host profile"""
-        try:
-            profile = request.user.concierge_profile
-            serializer = ConciergeHostProfileSerializer(profile, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except:
-            return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
-
-
 class HostDashboardView(APIView):
     """
     Host dashboard data
@@ -723,16 +875,92 @@ class HostDashboardView(APIView):
         if not user.is_host:
             return Response({'error': 'User is not a host'}, status=status.HTTP_403_FORBIDDEN)
         
-        # Get basic stats (these would be calculated from actual data in production)
+        from apps.bookings.models import Booking
+        from apps.listings.models import BnBListing, Hotel, RoomType
+        from apps.reviews.models import Review
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        selected_range = request.query_params.get('range')
+
+        if selected_range in {'7d', '30d', '90d'}:
+            days = int(selected_range.replace('d', ''))
+            date_to_value = timezone.now().date()
+            date_from_value = date_to_value - timedelta(days=days)
+        else:
+            date_to_value = date_to or timezone.now().date()
+            date_from_value = date_from
+
+        host_bookings = Booking.objects.filter(
+            Q(hotel__host=user) | Q(bnb_listing__host=user)
+        ).select_related('hotel', 'bnb_listing')
+
+        filtered_bookings = host_bookings
+        if date_from_value:
+            filtered_bookings = filtered_bookings.filter(created_at__date__gte=date_from_value)
+        if date_to_value:
+            filtered_bookings = filtered_bookings.filter(created_at__date__lte=date_to_value)
+
+        total_bookings = filtered_bookings.count()
+        pending_bookings = filtered_bookings.filter(status=Booking.BookingStatus.PENDING).count()
+        total_revenue = sum(float(booking.total_amount or 0) for booking in filtered_bookings)
+
+        today = timezone.now().date()
+        today_check_ins = host_bookings.filter(
+            status=Booking.BookingStatus.CONFIRMED,
+            check_in=today,
+        ).count()
+        today_check_outs = host_bookings.filter(
+            status=Booking.BookingStatus.CONFIRMED,
+            check_out=today,
+        ).count()
+
+        total_rooms = RoomType.objects.filter(hotel__host=user, is_active=True).count()
+        occupied_rooms = host_bookings.filter(
+            status=Booking.BookingStatus.CONFIRMED,
+            check_in__lte=today,
+            check_out__gte=today,
+            room_type__isnull=False,
+        ).count()
+        occupancy_rate = round((occupied_rooms / total_rooms) * 100) if total_rooms > 0 else 0
+
+        reviews_qs = Review.objects.filter(
+            Q(hotel__host=user) | Q(bnb_listing__host=user),
+            is_public=True,
+        )
+        if date_from_value:
+            reviews_qs = reviews_qs.filter(created_at__date__gte=date_from_value)
+        if date_to_value:
+            reviews_qs = reviews_qs.filter(created_at__date__lte=date_to_value)
+        total_reviews = reviews_qs.count()
+        average_rating = float(reviews_qs.aggregate(avg=Avg('rating'))['avg'] or 0)
+
         stats = {
-            'total_bookings': 0,
-            'total_revenue': 0,
-            'average_rating': 0,
-            'total_reviews': 0,
-            'occupancy_rate': 0,
-            'pending_requests': 0,
+            'total_bookings': total_bookings,
+            'pending_bookings': pending_bookings,
+            'pending_requests': pending_bookings,
+            'total_revenue': round(total_revenue, 2),
+            'average_rating': round(average_rating, 2),
+            'total_reviews': total_reviews,
+            'occupancy_rate': occupancy_rate,
+            'total_rooms': total_rooms,
+            'available_rooms': max(total_rooms - occupied_rooms, 0),
+            'today_check_ins': today_check_ins,
+            'today_check_outs': today_check_outs,
+            'total_hotels': Hotel.objects.filter(host=user, is_active=True).count(),
+            'active_hotels': Hotel.objects.filter(host=user, is_active=True, is_verified=True).count(),
+            'total_bnb_listings': BnBListing.objects.filter(host=user, is_active=True).count(),
+            'active_bnb_listings': BnBListing.objects.filter(host=user, is_active=True, is_verified=True).count(),
             'host_type': user.host_type,
-            'verification_status': user.host_verification_status
+            'verification_status': user.host_verification_status,
+            'date_from': str(date_from_value) if date_from_value else None,
+            'date_to': str(date_to_value) if date_to_value else None,
+            'range': selected_range or 'custom',
         }
-        
+
         return Response(stats)
+
+
+class HostDashboardSummaryView(HostDashboardView):
+    """
+    Backward-compatible alias for host dashboard summary endpoint.
+    """

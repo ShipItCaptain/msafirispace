@@ -5,15 +5,25 @@ from rest_framework import generics, status, filters
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
-from .models import Hotel, HotelAmenity, RoomType, RoomAmenity, RoomAvailability, Favorite, BnBListing
+from django.shortcuts import get_object_or_404
+from .models import (
+    Hotel, HotelAmenity, HotelAmenityMapping, HotelImage, RoomType, RoomAmenity,
+    RoomAvailability, RoomImage, Favorite, BnBFavorite, BnBListing, BnBImage,
+    BnBAvailability
+)
 from .serializers import (
     HotelSerializer, HotelListSerializer, HotelDetailSerializer,
-    HotelAmenitySerializer, RoomTypeSerializer, RoomTypeListSerializer,
+    HotelAmenitySerializer, HotelImageSerializer, HotelAmenityMappingSerializer,
+    RoomTypeSerializer, RoomTypeListSerializer,
     RoomTypeDetailSerializer, RoomAmenitySerializer, RoomAvailabilitySerializer,
-    FavoriteSerializer, BnBListingSerializer,
+    RoomImageSerializer, FavoriteSerializer, BnBFavoriteSerializer,
+    BnBListingSerializer, BnBListingListSerializer,
+    BnBImageSerializer, BnBAvailabilitySerializer,
 )
 
 
@@ -54,11 +64,13 @@ class HotelDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         """Only allow the host to update their hotel"""
         if serializer.instance.host != self.request.user:
-            raise PermissionError("You can only update your own hotels")
+            raise PermissionDenied("You can only update your own hotels")
         serializer.save()
     
     def perform_destroy(self, instance):
         """Soft delete - set is_active to False"""
+        if instance.host != self.request.user:
+            raise PermissionDenied("You can only delete your own hotels")
         instance.is_active = False
         instance.save()
 
@@ -73,6 +85,80 @@ class HotelAmenityListView(generics.ListAPIView):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['category']
     search_fields = ['name', 'description']
+
+
+class HotelImageListCreateView(generics.ListCreateAPIView):
+    """List and create images for a hotel"""
+    serializer_class = HotelImageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        hotel_id = self.kwargs['hotel_id']
+        return HotelImage.objects.filter(hotel_id=hotel_id)
+
+    def perform_create(self, serializer):
+        hotel_id = self.kwargs['hotel_id']
+        hotel = get_object_or_404(Hotel, pk=hotel_id)
+        if hotel.host != self.request.user:
+            raise PermissionDenied("You can only add images to your own hotels")
+        serializer.save(hotel=hotel)
+
+
+class HotelImageDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a hotel image"""
+    serializer_class = HotelImageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        hotel_id = self.kwargs['hotel_id']
+        return HotelImage.objects.filter(hotel_id=hotel_id)
+
+    def perform_update(self, serializer):
+        if serializer.instance.hotel.host != self.request.user:
+            raise PermissionDenied("You can only update images for your own hotels")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.hotel.host != self.request.user:
+            raise PermissionDenied("You can only delete images from your own hotels")
+        instance.delete()
+
+
+class HotelAmenityMappingListCreateView(generics.ListCreateAPIView):
+    """List and create amenity mappings for a hotel"""
+    serializer_class = HotelAmenityMappingSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        hotel_id = self.kwargs['hotel_id']
+        return HotelAmenityMapping.objects.filter(hotel_id=hotel_id).select_related('amenity').order_by('id')
+
+    def perform_create(self, serializer):
+        hotel_id = self.kwargs['hotel_id']
+        hotel = get_object_or_404(Hotel, pk=hotel_id)
+        if hotel.host != self.request.user:
+            raise PermissionDenied("You can only add amenities to your own hotels")
+        serializer.save(hotel=hotel)
+
+
+class HotelAmenityMappingDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a hotel amenity mapping"""
+    serializer_class = HotelAmenityMappingSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        hotel_id = self.kwargs['hotel_id']
+        return HotelAmenityMapping.objects.filter(hotel_id=hotel_id).select_related('amenity')
+
+    def perform_update(self, serializer):
+        if serializer.instance.hotel.host != self.request.user:
+            raise PermissionDenied("You can only update amenities for your own hotels")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.hotel.host != self.request.user:
+            raise PermissionDenied("You can only delete amenities from your own hotels")
+        instance.delete()
 
 
 @api_view(['GET'])
@@ -165,6 +251,13 @@ class RoomTypeListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         """Assign the hotel from URL parameter or payload"""
         hotel_id = self.kwargs.get('hotel_id')
+        target_hotel_id = hotel_id or serializer.validated_data.get('hotel_id')
+        if not target_hotel_id:
+            raise ValidationError({'hotel_id': 'hotel_id is required'})
+        hotel = get_object_or_404(Hotel, pk=target_hotel_id)
+        if hotel.host != self.request.user:
+            raise PermissionDenied("You can only add room types to your own hotels")
+
         if hotel_id:
             serializer.save(hotel_id=hotel_id)
         else:
@@ -187,11 +280,14 @@ class RoomTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         """Only allow the hotel host to update their room types"""
         if serializer.instance.hotel.host != self.request.user:
-            raise PermissionError("You can only update room types for your own hotels")
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You can only update room types for your own hotels")
         serializer.save()
     
-    def perform_destroy(self, serializer):
+    def perform_destroy(self, instance):
         """Soft delete - set is_active to False"""
+        if instance.hotel.host != self.request.user:
+            raise PermissionDenied("You can only delete room types from your own hotels")
         instance.is_active = False
         instance.save()
 
@@ -213,6 +309,49 @@ class HotelRoomTypesView(generics.ListAPIView):
             hotel_id=hotel_id,
             is_active=True
         ).select_related('hotel').prefetch_related('images', 'amenity_mappings__amenity')
+
+
+class RoomImageListCreateView(generics.ListCreateAPIView):
+    """List and create images for a room type"""
+    serializer_class = RoomImageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        room_type_id = self.kwargs['room_type_id']
+        return RoomImage.objects.filter(room_type_id=room_type_id)
+
+    def perform_create(self, serializer):
+        room_type_id = self.kwargs['room_type_id']
+        room_type = RoomType.objects.get(pk=room_type_id)
+        
+        # Check ownership - user must own the hotel that owns this room type
+        if room_type.hotel.host != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You can only add images to room types in your own hotels")
+        
+        serializer.save(room_type=room_type)
+
+
+class RoomImageDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a room image"""
+    serializer_class = RoomImageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        room_type_id = self.kwargs['room_type_id']
+        return RoomImage.objects.filter(room_type_id=room_type_id)
+
+    def perform_update(self, serializer):
+        if serializer.instance.room_type.hotel.host != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You can only update images for room types in your own hotels")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.room_type.hotel.host != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You can only delete images from room types in your own hotels")
+        instance.delete()
 
 
 class RoomAmenityListView(generics.ListAPIView):
@@ -254,7 +393,7 @@ class FavoriteListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Favorite.objects.filter(user=self.request.user).select_related('hotel')
+        return Favorite.objects.filter(user=self.request.user).select_related('hotel').order_by('-created_at')
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -270,21 +409,97 @@ class FavoriteDeleteView(generics.DestroyAPIView):
 
     def get_object(self):
         hotel_id = self.kwargs['hotel_id']
-        return Favorite.objects.get(user=self.request.user, hotel_id=hotel_id)
+        return get_object_or_404(Favorite, user=self.request.user, hotel_id=hotel_id)
+
+
+class BnBFavoriteListCreateView(generics.ListCreateAPIView):
+    """
+    List current user's BnB favorites; add new BnB favorite
+    """
+    serializer_class = BnBFavoriteSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return BnBFavorite.objects.filter(user=self.request.user).select_related('bnb_listing').order_by('-created_at')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+
+class BnBFavoriteDeleteView(generics.DestroyAPIView):
+    """
+    Remove a BnB favorite by listing id for current user
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        bnb_listing_id = self.kwargs['bnb_listing_id']
+        return get_object_or_404(BnBFavorite, user=self.request.user, bnb_listing_id=bnb_listing_id)
+
+
+class CombinedFavoriteListView(APIView):
+    """
+    List current user's favorites across hotels and BnB listings.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        hotel_favorites = Favorite.objects.filter(user=request.user).select_related('hotel').order_by('-created_at')
+        bnb_favorites = BnBFavorite.objects.filter(user=request.user).select_related('bnb_listing').order_by('-created_at')
+
+        hotel_data = FavoriteSerializer(
+            hotel_favorites, many=True, context={'request': request}
+        ).data
+        bnb_data = BnBFavoriteSerializer(
+            bnb_favorites, many=True, context={'request': request}
+        ).data
+
+        combined = (
+            [{'type': 'hotel', **item} for item in hotel_data] +
+            [{'type': 'bnb', **item} for item in bnb_data]
+        )
+        combined.sort(key=lambda item: item.get('created_at', ''), reverse=True)
+        return Response({'results': combined}, status=status.HTTP_200_OK)
 
 
 # --- New: BnB API Views ---
 class BnBListingListCreateView(generics.ListCreateAPIView):
-    serializer_class = BnBListingSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['city', 'country', 'is_active']
-    search_fields = ['title', 'description', 'city', 'country']
-    ordering_fields = ['created_at', 'price_per_night', 'title']
+    filterset_fields = [
+        'city', 'country', 'property_type', 'is_active', 'is_verified', 'is_featured',
+        'bedrooms', 'bathrooms', 'max_guests', 'pets_allowed', 'smoking_allowed'
+    ]
+    search_fields = ['title', 'description', 'city', 'country', 'address']
+    ordering_fields = ['created_at', 'price_per_night', 'title', 'max_guests']
     ordering = ['-created_at']
 
+    def get_serializer_class(self):
+        if self.request.method == 'GET':
+            return BnBListingListSerializer
+        return BnBListingSerializer
+
     def get_queryset(self):
-        return BnBListing.objects.filter(is_active=True)
+        queryset = BnBListing.objects.filter(is_active=True).select_related('host').prefetch_related('images')
+        
+        # Price range filtering
+        min_price = self.request.query_params.get('min_price')
+        max_price = self.request.query_params.get('max_price')
+        if min_price:
+            queryset = queryset.filter(price_per_night__gte=min_price)
+        if max_price:
+            queryset = queryset.filter(price_per_night__lte=max_price)
+        
+        # Amenities filtering (if amenities query param provided)
+        amenities = self.request.query_params.getlist('amenities')
+        if amenities:
+            # Filter listings that have all specified amenities
+            for amenity in amenities:
+                queryset = queryset.filter(amenities__contains=[amenity])
+        
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(host=self.request.user)
@@ -295,22 +510,225 @@ class MyBnBListingsView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return BnBListing.objects.filter(host=self.request.user)
+        return BnBListing.objects.filter(host=self.request.user).select_related('host').prefetch_related('images')
 
 
 class BnBListingDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BnBListingSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
-    queryset = BnBListing.objects.all()
+    queryset = BnBListing.objects.select_related('host').prefetch_related('images', 'availability')
 
     def perform_update(self, serializer):
         if serializer.instance.host != self.request.user:
-            raise PermissionError("You can only update your own BnB listings")
+            raise PermissionDenied("You can only update your own BnB listings")
         serializer.save()
 
     def perform_destroy(self, instance):
         instance.is_active = False
         instance.save()
+
+
+class BnBImageListCreateView(generics.ListCreateAPIView):
+    """List and create images for a BnB listing"""
+    serializer_class = BnBImageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        bnb_id = self.kwargs['bnb_id']
+        return BnBImage.objects.filter(bnb_listing_id=bnb_id)
+
+    def perform_create(self, serializer):
+        bnb_id = self.kwargs['bnb_id']
+        bnb_listing = BnBListing.objects.get(pk=bnb_id)
+        
+        # Check ownership
+        if bnb_listing.host != self.request.user:
+            raise PermissionDenied("You can only add images to your own BnB listings")
+        
+        try:
+            serializer.save(bnb_listing=bnb_listing)
+        except Exception as exc:
+            # Return a handled API error instead of a raw 500 for upload failures.
+            raise ValidationError({'image': f'Upload failed: {str(exc)}'}) from exc
+
+
+class BnBImageDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a BnB image"""
+    serializer_class = BnBImageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        bnb_id = self.kwargs['bnb_id']
+        return BnBImage.objects.filter(bnb_listing_id=bnb_id)
+
+    def perform_update(self, serializer):
+        if serializer.instance.bnb_listing.host != self.request.user:
+            raise PermissionDenied("You can only update images for your own BnB listings")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.bnb_listing.host != self.request.user:
+            raise PermissionDenied("You can only delete images from your own BnB listings")
+        instance.delete()
+
+
+class BnBAvailabilityListCreateView(generics.ListCreateAPIView):
+    """List and create availability entries for a BnB listing"""
+    serializer_class = BnBAvailabilitySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        bnb_id = self.kwargs['bnb_id']
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        
+        queryset = BnBAvailability.objects.filter(bnb_listing_id=bnb_id)
+        
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+        
+        return queryset.order_by('date')
+
+    def perform_create(self, serializer):
+        bnb_id = self.kwargs['bnb_id']
+        bnb_listing = BnBListing.objects.get(pk=bnb_id)
+        
+        # Check ownership
+        if bnb_listing.host != self.request.user:
+            raise PermissionDenied("You can only manage availability for your own BnB listings")
+        
+        serializer.save(bnb_listing=bnb_listing)
+
+
+class BnBAvailabilityDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a BnB availability entry"""
+    serializer_class = BnBAvailabilitySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        bnb_id = self.kwargs['bnb_id']
+        return BnBAvailability.objects.filter(bnb_listing_id=bnb_id)
+
+    def perform_update(self, serializer):
+        if serializer.instance.bnb_listing.host != self.request.user:
+            raise PermissionDenied("You can only update availability for your own BnB listings")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.bnb_listing.host != self.request.user:
+            raise PermissionDenied("You can only delete availability for your own BnB listings")
+        instance.delete()
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def bnb_availability(request, bnb_id):
+    """
+    Get BnB availability for a specific listing
+    """
+    from datetime import datetime, timedelta
+    
+    # Get query parameters
+    start_date = request.query_params.get('start_date')
+    end_date = request.query_params.get('end_date')
+    
+    # Default to next 30 days if no dates provided
+    if not start_date:
+        start_date = datetime.now().date()
+    else:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+    
+    if not end_date:
+        end_date = start_date + timedelta(days=30)
+    else:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+    
+    # Get availability for the date range
+    availability = BnBAvailability.objects.filter(
+        bnb_listing_id=bnb_id,
+        date__range=[start_date, end_date]
+    ).order_by('date')
+    
+    serializer = BnBAvailabilitySerializer(availability, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def search_available_bnbs(request):
+    """
+    Search for available BnBs based on criteria
+    """
+    from datetime import datetime, timedelta
+    
+    # Get query parameters
+    check_in = request.query_params.get('check_in')
+    check_out = request.query_params.get('check_out')
+    city = request.query_params.get('city')
+    country = request.query_params.get('country')
+    guests = int(request.query_params.get('guests', 1))
+    min_price = request.query_params.get('min_price')
+    max_price = request.query_params.get('max_price')
+    property_type = request.query_params.get('property_type')
+    amenities = request.query_params.getlist('amenities')
+    
+    # Build queryset
+    queryset = BnBListing.objects.filter(
+        is_active=True,
+        max_guests__gte=guests
+    ).select_related('host').prefetch_related('images')
+    
+    if city:
+        queryset = queryset.filter(city__icontains=city)
+    if country:
+        queryset = queryset.filter(country__icontains=country)
+    if property_type:
+        queryset = queryset.filter(property_type=property_type)
+    if min_price:
+        queryset = queryset.filter(price_per_night__gte=min_price)
+    if max_price:
+        queryset = queryset.filter(price_per_night__lte=max_price)
+    if amenities:
+        for amenity in amenities:
+            queryset = queryset.filter(amenities__contains=[amenity])
+    
+    # Filter by availability if dates provided
+    if check_in and check_out:
+        try:
+            check_in_date = datetime.strptime(check_in, '%Y-%m-%d').date()
+            check_out_date = datetime.strptime(check_out, '%Y-%m-%d').date()
+            
+            if check_in_date >= check_out_date:
+                return Response({'error': 'check_out must be after check_in'}, status=400)
+            
+            # Filter BnBs that are available for the entire date range
+            available_bnbs = []
+            for bnb in queryset:
+                is_available = True
+                current_date = check_in_date
+                while current_date < check_out_date:
+                    availability = BnBAvailability.objects.filter(
+                        bnb_listing=bnb,
+                        date=current_date
+                    ).first()
+                    
+                    if availability and not availability.is_available:
+                        is_available = False
+                        break
+                    
+                    current_date += timedelta(days=1)
+                
+                if is_available:
+                    available_bnbs.append(bnb)
+            
+            queryset = BnBListing.objects.filter(id__in=[bnb.id for bnb in available_bnbs])
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD'}, status=400)
+    
+    serializer = BnBListingListSerializer(queryset, many=True)
+    return Response(serializer.data)
 
 
 @api_view(['GET'])

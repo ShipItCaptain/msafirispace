@@ -2,18 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
-  HomeIcon,
-  MapPinIcon,
-  PhoneIcon,
-  EnvelopeIcon,
-  GlobeAltIcon,
   PhotoIcon,
   XMarkIcon,
   CheckIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
-import api from '../services/api';
+import { buildAmenityIndex, normalizeAmenityToken, resolveHotelAmenityName } from '../utils/hotelAmenities';
 
 const ListHotelPage = () => {
   const navigate = useNavigate();
@@ -42,7 +37,6 @@ const ListHotelPage = () => {
     // Contact Information
     phone: '',
     email: '',
-    website: '',
     
     // Images
     images: [],
@@ -89,7 +83,7 @@ const ListHotelPage = () => {
   const steps = [
     { number: 1, title: 'Basic Information', description: 'Hotel name and description' },
     { number: 2, title: 'Location', description: 'Address and coordinates' },
-    { number: 3, title: 'Contact Details', description: 'Phone, email, and website' },
+    { number: 3, title: 'Contact Details', description: 'Phone and email' },
     { number: 4, title: 'Photos', description: 'Upload hotel images' },
     { number: 5, title: 'Amenities', description: 'Select available amenities' },
     { number: 6, title: 'Review & Submit', description: 'Review and submit listing' }
@@ -200,35 +194,63 @@ const ListHotelPage = () => {
     
     setLoading(true);
     try {
-      const formDataToSend = new FormData();
-      
-      // Add basic information
-      Object.keys(formData).forEach(key => {
-        if (key !== 'images' && key !== 'amenities') {
-          formDataToSend.append(key, formData[key]);
+      const { listingsAPI } = await import('../services/api');
+
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        short_description: formData.short_description,
+        property_type: formData.property_type,
+        star_rating: formData.star_rating,
+        address: formData.address,
+        city: formData.city,
+        state_province: formData.state_province,
+        country: formData.country,
+        postal_code: formData.postal_code,
+        latitude: formData.latitude || null,
+        longitude: formData.longitude || null,
+        phone: formData.phone,
+        email: formData.email,
+      };
+
+      const created = await listingsAPI.createListing(payload);
+      const hotelId = created?.id;
+
+      if (hotelId) {
+        // Upload images after hotel creation
+        const imageUploads = (formData.images || [])
+          .filter((img) => img?.file)
+          .map((img, index) => listingsAPI.uploadHotelImage(hotelId, {
+            file: img.file,
+            image_type: img.image_type || 'exterior',
+            is_primary: Boolean(img.is_primary),
+            order: index,
+            caption: img.caption || '',
+          }));
+        if (imageUploads.length) {
+          await Promise.all(imageUploads);
         }
-      });
-      
-      // Add images
-      formData.images.forEach((image, index) => {
-        formDataToSend.append(`images[${index}]`, image.file);
-        formDataToSend.append(`image_types[${index}]`, image.image_type);
-        formDataToSend.append(`is_primary[${index}]`, image.is_primary);
-      });
-      
-      // Add amenities
-      formData.amenities.forEach(amenityId => {
-        formDataToSend.append('amenities', amenityId);
-      });
-      
-      const response = await api.post('/listings/hotels/', formDataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      // Redirect to hotel page
-      navigate(`/hotel/${response.data.id}`);
+
+        // Map amenity IDs to backend amenity IDs by name
+        if ((formData.amenities || []).length) {
+          const amenityResponse = await listingsAPI.getHotelAmenities();
+          const amenityRows = amenityResponse?.results || amenityResponse || [];
+          const amenityIndex = buildAmenityIndex(amenityRows);
+          const selectedAmenityNames = formData.amenities
+            .map((amenityId) => availableAmenities.find((a) => a.id === amenityId)?.name)
+            .map(resolveHotelAmenityName)
+            .filter(Boolean);
+          const amenityUploads = selectedAmenityNames
+            .map((name) => amenityIndex.get(normalizeAmenityToken(name)))
+            .filter(Boolean)
+            .map((amenityId) => listingsAPI.addHotelAmenity(hotelId, amenityId));
+          if (amenityUploads.length) {
+            await Promise.all(amenityUploads);
+          }
+        }
+      }
+
+      navigate(`/hotel/${created.id}`);
     } catch (error) {
       console.error('Error creating hotel listing:', error);
       setErrors({ submit: 'Failed to create listing. Please try again.' });
@@ -498,19 +520,6 @@ const ListHotelPage = () => {
               {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Website (Optional)
-              </label>
-              <input
-                type="url"
-                name="website"
-                value={formData.website}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                placeholder="https://www.yourhotel.com"
-              />
-            </div>
           </div>
         );
 
@@ -661,7 +670,6 @@ const ListHotelPage = () => {
                   <h5 className="font-medium text-gray-700">Contact</h5>
                   <p className="text-gray-600">{formData.phone}</p>
                   <p className="text-gray-600">{formData.email}</p>
-                  {formData.website && <p className="text-gray-600">{formData.website}</p>}
                 </div>
 
                 <div>

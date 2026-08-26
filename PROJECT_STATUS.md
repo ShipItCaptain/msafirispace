@@ -57,7 +57,6 @@ Msafiri Space is a production-ready hospitality marketplace connecting hotels, r
 ### 🔧 Backend Development
 - [ ] **Listings App**: Models, serializers, views, and endpoints
 - [ ] **Bookings App**: Reservation system with availability management
-- [ ] **Concierge App**: Additional services (transfers, tours, etc.)
 - [ ] **Payments App**: Mpesa STK Push and Flutterwave integration
 - [ ] **Reviews App**: Rating and review system
 - [ ] **Referrals App**: User referral program
@@ -223,7 +222,6 @@ Msafiri Space is a production-ready hospitality marketplace connecting hotels, r
 - **Booking System**: Reservation management
 - **Payment Processing**: Multiple payment methods
 - **Review System**: Verified user feedback
-- **Concierge Services**: Additional travel services
 
 ### Advanced Features
 - **Referral Program**: User acquisition system

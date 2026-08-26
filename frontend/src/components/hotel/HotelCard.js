@@ -1,27 +1,40 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  MapPinIcon,
-  HeartIcon,
-  ShieldCheckIcon
-} from '@heroicons/react/24/outline';
-import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
-import { listingsAPI } from '../../services/api';
+import { MapPinIcon, HeartIcon, StarIcon } from '@heroicons/react/24/outline';
 
-const HotelCard = ({ hotel, className = "" }) => {
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [savingFavorite, setSavingFavorite] = useState(false);
-  const renderStars = (rating) => {
-    return Array.from({ length: 5 }, (_, index) => (
-      <StarSolidIcon
-        key={index}
-        className={`w-4 h-4 ${
-          index < rating ? 'text-yellow-400' : 'text-gray-300'
-        }`}
-      />
-    ));
+const HotelCard = ({
+  hotel,
+  className = '',
+  isFavorite = false,
+  favoriteLoading = false,
+  onToggleFavorite,
+}) => {
+  const getRating = () => {
+    const raw = hotel?.average_rating ?? hotel?.star_rating;
+    if (raw === null || raw === undefined) return null;
+    const num = Number(raw);
+    if (Number.isNaN(num)) return null;
+    return num;
   };
+
+  const rating = getRating();
+
+  const getPriceLabel = () => {
+    const value =
+      hotel?.starting_price ??
+      hotel?.price_per_night ??
+      hotel?.min_price ??
+      null;
+    if (value === null || value === undefined) return null;
+    try {
+      return `KES ${Number(value).toLocaleString()}`;
+    } catch {
+      return `KES ${value}`;
+    }
+  };
+
+  const priceLabel = getPriceLabel();
 
   const getPropertyTypeDisplay = (propertyType) => {
     const typeMap = {
@@ -43,16 +56,16 @@ const HotelCard = ({ hotel, className = "" }) => {
     <motion.div
       whileHover={{ y: -4 }}
       transition={{ duration: 0.2 }}
-      className={`bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 ${className}`}
+      className={`group bg-transparent rounded-3xl transition-all duration-300 ${className}`}
     >
       <Link to={`/hotel/${hotel.id}`}>
-        {/* Hotel Image */}
-        <div className="relative h-48 overflow-hidden">
+        {/* Image */}
+        <div className="relative h-64 overflow-hidden rounded-3xl shadow-md group-hover:shadow-xl bg-gray-100 transition-shadow duration-300">
           {hotel.primary_image ? (
             <img
               src={hotel.primary_image}
               alt={hotel.name}
-              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
             <div className="w-full h-full bg-gray-200 flex items-center justify-center">
@@ -63,84 +76,67 @@ const HotelCard = ({ hotel, className = "" }) => {
             </div>
           )}
           
-          {/* Favorite Button */}
+          {/* Favorite heart */}
           <button
-            onClick={async (e) => {
+            onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              if (savingFavorite) return;
-              try {
-                setSavingFavorite(true);
-                if (!isFavorite) {
-                  await listingsAPI.addFavorite(hotel.id);
-                  setIsFavorite(true);
-                } else {
-                  await listingsAPI.removeFavorite(hotel.id);
-                  setIsFavorite(false);
-                }
-              } catch (_) {
-                // no-op
-              } finally {
-                setSavingFavorite(false);
-              }
+              if (favoriteLoading) return;
+              onToggleFavorite?.(hotel.id);
             }}
+            disabled={favoriteLoading}
             className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-sm transition-all ${
-              isFavorite ? 'bg-red-600 text-white' : 'bg-white bg-opacity-80 text-gray-700 hover:bg-opacity-100'
-            }`}
+              isFavorite
+                ? 'bg-red-600 text-white'
+                : 'bg-white/90 text-gray-800 hover:bg-white'
+            } disabled:opacity-60 disabled:cursor-not-allowed`}
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
             <HeartIcon className="w-5 h-5" />
           </button>
-
-          {/* Featured Badge */}
-          {hotel.is_featured && (
-            <div className="absolute top-3 left-3 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium">
-              Featured
-            </div>
-          )}
-
-          {/* Verified Badge */}
-          {hotel.is_verified && (
-            <div className="absolute bottom-3 right-3 bg-green-600 text-white p-1 rounded-full">
-              <ShieldCheckIcon className="w-4 h-4" />
-            </div>
-          )}
         </div>
 
-        {/* Hotel Information */}
-        <div className="p-4">
-          {/* Hotel Name and Rating */}
-          <div className="flex items-start justify-between mb-2">
-            <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
-              {hotel.name}
-            </h3>
-            <div className="flex items-center space-x-1 ml-2">
-              {renderStars(hotel.star_rating)}
-              <span className="text-sm text-gray-600 ml-1">
-                {hotel.star_rating}
-              </span>
-            </div>
-          </div>
+        {/* Info (matches BnBCard layout) */}
+        <div className="px-1.5 mt-2 space-y-0.5">
+          {/* Title */}
+          <h3 className="text-[15px] font-semibold text-gray-900 line-clamp-1">
+            {hotel.name}
+          </h3>
 
           {/* Location */}
-          <div className="flex items-center text-gray-600 mb-2">
+          <div className="flex items-center text-gray-500">
             <MapPinIcon className="w-4 h-4 mr-1 flex-shrink-0" />
-            <span className="text-sm line-clamp-1">{hotel.full_address}</span>
+            <span className="text-xs line-clamp-1">
+              {hotel.city && hotel.country
+                ? `${hotel.city}, ${hotel.country}`
+                : hotel.full_address}
+            </span>
           </div>
 
-          {/* Description */}
-          <p className="text-gray-600 text-sm line-clamp-2 mb-3">
-            {hotel.short_description}
-          </p>
-
-          {/* Property Type and Amenities */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
-              {getPropertyTypeDisplay(hotel.property_type)}
-            </span>
-            <span className="text-gray-500">
-              {hotel.amenity_count} amenities
-            </span>
+          {/* Price + rating in one line */}
+          <div className="flex items-center flex-wrap gap-1 text-[13px] text-gray-700 pt-1">
+            {priceLabel && (
+              <>
+                <span className="font-semibold text-gray-900">
+                  {priceLabel}
+                </span>
+                <span className="text-gray-500">per night</span>
+              </>
+            )}
+            {rating !== null && (
+              <>
+                <span className="text-gray-400">•</span>
+                <StarIcon className="w-3.5 h-3.5 text-gray-900" />
+                <span className="font-medium text-gray-900">
+                  {rating.toFixed(2)}
+                </span>
+              </>
+            )}
+            {!priceLabel && (
+              <span className="text-gray-500">
+                {getPropertyTypeDisplay(hotel.property_type)}
+              </span>
+            )}
           </div>
         </div>
       </Link>

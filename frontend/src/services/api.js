@@ -1,5 +1,46 @@
 import axios from 'axios';
 
+const REQUEST_ID_HEADER = 'X-Request-ID';
+
+const generateRequestId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
+export const getApiErrorDetails = (error, fallbackMessage = 'Request failed. Please try again.') => {
+  const apiData = error?.response?.data;
+  const requestId =
+    error?.requestId ||
+    error?.response?.headers?.['x-request-id'] ||
+    apiData?.request_id ||
+    null;
+
+  let message = fallbackMessage;
+  if (apiData?.detail) {
+    message = apiData.detail;
+  } else if (typeof apiData?.message === 'string') {
+    message = apiData.message;
+  } else if (apiData && typeof apiData === 'object') {
+    const firstKey = Object.keys(apiData).find((key) => key !== 'request_id');
+    if (firstKey) {
+      const firstValue = apiData[firstKey];
+      if (Array.isArray(firstValue) && firstValue.length > 0) {
+        message = firstValue[0];
+      } else if (typeof firstValue === 'string') {
+        message = firstValue;
+      }
+    }
+  }
+
+  return {
+    message,
+    requestId,
+    fullMessage: requestId ? `${message} (Ref: ${requestId})` : message,
+  };
+};
+
 // Create axios instance
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1',
@@ -16,6 +57,9 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    if (!config.headers[REQUEST_ID_HEADER]) {
+      config.headers[REQUEST_ID_HEADER] = generateRequestId();
+    }
     return config;
   },
   (error) => {
@@ -28,6 +72,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const responseRequestId = error?.response?.headers?.['x-request-id'];
+    const sentRequestId = originalRequest?.headers?.[REQUEST_ID_HEADER];
+    const bodyRequestId = error?.response?.data?.request_id;
+    error.requestId = responseRequestId || bodyRequestId || sentRequestId || null;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -200,6 +248,12 @@ export const authAPI = {
     return response.data;
   },
 
+  // Get host dashboard summary (alias endpoint)
+  getHostDashboardSummary: async (params = {}) => {
+    const response = await api.get('/auth/host/dashboard/summary/', { params });
+    return response.data;
+  },
+
   // BnB host profile
   getBnBProfile: async () => {
     const response = await api.get('/auth/host/bnb/');
@@ -276,6 +330,38 @@ export const listingsAPI = {
     return response.data;
   },
 
+  // Hotel Images API
+  uploadHotelImage: async (hotelId, imageData) => {
+    const formData = new FormData();
+    formData.append('image', imageData.file || imageData);
+    if (imageData.image_type) formData.append('image_type', imageData.image_type);
+    if (imageData.caption) formData.append('caption', imageData.caption);
+    if (imageData.is_primary !== undefined) formData.append('is_primary', imageData.is_primary);
+    if (imageData.order !== undefined) formData.append('order', imageData.order);
+
+    const response = await api.post(`/listings/hotels/${hotelId}/images/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  // Hotel Amenities API
+  getHotelAmenities: async () => {
+    const response = await api.get('/listings/amenities/');
+    return response.data;
+  },
+
+  addHotelAmenity: async (hotelId, amenityId, payload = {}) => {
+    const response = await api.post(`/listings/hotels/${hotelId}/amenities/`, {
+      amenity_id: amenityId,
+      is_available: true,
+      ...payload,
+    });
+    return response.data;
+  },
+
   updateRoomType: async (roomTypeId, roomData) => {
     const response = await api.patch(`/listings/rooms/${roomTypeId}/`, roomData);
     return response.data;
@@ -283,6 +369,33 @@ export const listingsAPI = {
 
   getHotelRoomTypes: async (hotelId, params = {}) => {
     const response = await api.get(`/listings/hotels/${hotelId}/rooms/`, { params });
+    return response.data;
+  },
+
+  getRoomType: async (roomTypeId) => {
+    const response = await api.get(`/listings/rooms/${roomTypeId}/`);
+    return response.data;
+  },
+
+  // Room Image APIs
+  uploadRoomImage: async (roomTypeId, imageData) => {
+    const formData = new FormData();
+    formData.append('image', imageData.file || imageData);
+    if (imageData.image_type) formData.append('image_type', imageData.image_type);
+    if (imageData.caption) formData.append('caption', imageData.caption);
+    if (imageData.is_primary !== undefined) formData.append('is_primary', imageData.is_primary);
+    if (imageData.order !== undefined) formData.append('order', imageData.order);
+    
+    const response = await api.post(`/listings/rooms/${roomTypeId}/images/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  deleteRoomImage: async (roomTypeId, imageId) => {
+    const response = await api.delete(`/listings/rooms/${roomTypeId}/images/${imageId}/`);
     return response.data;
   },
 
@@ -301,6 +414,27 @@ export const listingsAPI = {
     const response = await api.delete(`/listings/favorites/${hotelId}/`);
     return response.data;
   },
+
+  // BnB favorites
+  getBnBFavorites: async () => {
+    const response = await api.get('/listings/favorites/bnb/');
+    return response.data;
+  },
+
+  getCombinedFavorites: async () => {
+    const response = await api.get('/listings/favorites/combined/');
+    return response.data;
+  },
+
+  addBnBFavorite: async (bnbListingId) => {
+    const response = await api.post('/listings/favorites/bnb/', { bnb_listing_id: bnbListingId });
+    return response.data;
+  },
+
+  removeBnBFavorite: async (bnbListingId) => {
+    const response = await api.delete(`/listings/favorites/bnb/${bnbListingId}/`);
+    return response.data;
+  },
 };
 
 // BnB API
@@ -308,6 +442,15 @@ export const bnbAPI = {
   // Public list of BnB listings
   getListings: async (params = {}) => {
     const response = await api.get('/listings/bnb/', { params });
+    return response.data;
+  },
+  // Get single BnB listing by ID
+  get: async (id) => {
+    const response = await api.get(`/listings/bnb/${id}/`);
+    return response.data;
+  },
+  getListing: async (id) => {
+    const response = await api.get(`/listings/bnb/${id}/`);
     return response.data;
   },
   // Current user's BnB listings
@@ -328,6 +471,80 @@ export const bnbAPI = {
   // Delete
   remove: async (id) => {
     const response = await api.delete(`/listings/bnb/${id}/`);
+    return response.data;
+  },
+  // Image management
+  getImages: async (bnbId) => {
+    const response = await api.get(`/listings/bnb/${bnbId}/images/`);
+    return response.data;
+  },
+  uploadImage: async (bnbId, imageData) => {
+    const formData = new FormData();
+    // Ensure we're appending the actual File object
+    if (!imageData.image || !(imageData.image instanceof File)) {
+      throw new Error('Invalid image file provided');
+    }
+    formData.append('image', imageData.image);
+    if (imageData.image_type) formData.append('image_type', imageData.image_type);
+    if (imageData.caption) formData.append('caption', imageData.caption);
+    if (imageData.is_primary !== undefined) formData.append('is_primary', imageData.is_primary);
+    if (imageData.order !== undefined) formData.append('order', imageData.order);
+    
+    // Create a custom config that removes Content-Type so axios can set it automatically
+    // with the correct boundary for multipart/form-data
+    const config = {
+      timeout: 60000, // 60 seconds for large image uploads
+      transformRequest: [(data, headers) => {
+        // Remove Content-Type header to let axios set it automatically for FormData
+        delete headers['Content-Type'];
+        return data;
+      }],
+    };
+    
+    const response = await api.post(`/listings/bnb/${bnbId}/images/`, formData, config);
+    return response.data;
+  },
+  updateImage: async (bnbId, imageId, imageData) => {
+    const formData = new FormData();
+    if (imageData.image) formData.append('image', imageData.image);
+    if (imageData.image_type) formData.append('image_type', imageData.image_type);
+    if (imageData.caption !== undefined) formData.append('caption', imageData.caption);
+    if (imageData.is_primary !== undefined) formData.append('is_primary', imageData.is_primary);
+    if (imageData.order !== undefined) formData.append('order', imageData.order);
+    
+    const response = await api.patch(`/listings/bnb/${bnbId}/images/${imageId}/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+  deleteImage: async (bnbId, imageId) => {
+    const response = await api.delete(`/listings/bnb/${bnbId}/images/${imageId}/`);
+    return response.data;
+  },
+  // Availability calendar
+  getAvailability: async (bnbId, params = {}) => {
+    const response = await api.get(`/listings/bnb/${bnbId}/availability/`, { params });
+    return response.data;
+  },
+  getAvailabilityCalendar: async (bnbId, params = {}) => {
+    const response = await api.get(`/listings/bnb/${bnbId}/availability-calendar/`, { params });
+    return response.data;
+  },
+  createAvailability: async (bnbId, availabilityData) => {
+    const response = await api.post(`/listings/bnb/${bnbId}/availability/`, availabilityData);
+    return response.data;
+  },
+  updateAvailability: async (bnbId, availabilityId, availabilityData) => {
+    const response = await api.patch(`/listings/bnb/${bnbId}/availability/${availabilityId}/`, availabilityData);
+    return response.data;
+  },
+  deleteAvailability: async (bnbId, availabilityId) => {
+    const response = await api.delete(`/listings/bnb/${bnbId}/availability/${availabilityId}/`);
+    return response.data;
+  },
+  // Search
+  search: async (params = {}) => {
+    const response = await api.get('/listings/bnb/search/', { params });
     return response.data;
   },
 };
@@ -369,6 +586,18 @@ export const bookingsAPI = {
     const response = await api.get('/bookings/my-bookings/');
     return response.data;
   },
+
+  // Get bookings for host-owned properties (hotel + bnb)
+  getHostBookings: async (params = {}) => {
+    const response = await api.get('/bookings/host/', { params });
+    return response.data;
+  },
+
+  // Host status management for bookings on host-owned properties
+  updateHostBookingStatus: async (id, statusValue) => {
+    const response = await api.post(`/bookings/${id}/host-status/`, { status: statusValue });
+    return response.data;
+  },
 };
 
 // Concierge API removed
@@ -392,6 +621,12 @@ export const paymentsAPI = {
     const response = await api.get('/payments/history/');
     return response.data;
   },
+
+  // Dev-only: simulate payment success
+  simulatePaymentSuccess: async (reference) => {
+    const response = await api.post('/payments/simulate-success/', { reference });
+    return response.data;
+  },
 };
 
 // Reviews API
@@ -405,6 +640,18 @@ export const reviewsAPI = {
   // Get hotel review stats
   getHotelReviewStats: async (hotelId) => {
     const response = await api.get(`/reviews/hotel/${hotelId}/stats/`);
+    return response.data;
+  },
+
+  // Get reviews for a BnB listing
+  getBnBReviews: async (bnbId, params = {}) => {
+    const response = await api.get(`/reviews/bnb/${bnbId}/`, { params });
+    return response.data;
+  },
+
+  // Get BnB review stats
+  getBnBReviewStats: async (bnbId) => {
+    const response = await api.get(`/reviews/bnb/${bnbId}/stats/`);
     return response.data;
   },
 
@@ -423,6 +670,12 @@ export const reviewsAPI = {
   // Delete review
   deleteReview: async (id) => {
     const response = await api.delete(`/reviews/${id}/`);
+    return response.data;
+  },
+
+  // Host reply on own listing reviews
+  replyToReview: async (id, reply) => {
+    const response = await api.post(`/reviews/${id}/reply/`, { reply });
     return response.data;
   },
 };

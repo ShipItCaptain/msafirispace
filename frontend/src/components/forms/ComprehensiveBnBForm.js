@@ -10,14 +10,22 @@ import {
   UsersIcon,
   WifiIcon,
   PhotoIcon,
-  CalendarIcon,
-  ClockIcon,
   ShieldCheckIcon,
-  StarIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
+
+const MAX_PHOTO_COUNT = 20;
+const MAX_PHOTO_SIZE_MB = 15;
+const MAX_PHOTO_SIZE_BYTES = MAX_PHOTO_SIZE_MB * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
+];
 
 const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -33,7 +41,6 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
     
     // Pricing & Availability
     pricePerNight: '',
-    cleaningFee: '',
     securityDeposit: '',
     minimumNights: 1,
     maximumNights: 30,
@@ -46,7 +53,6 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
     guests: '',
     beds: '',
     squareFootage: '',
-    yearBuilt: '',
     
     // Amenities
     amenities: [],
@@ -69,15 +75,13 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
     
     // Additional Info
     highlights: [],
-    nearbyAttractions: '',
     transportation: '',
     specialInstructions: ''
   });
 
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photoUploadMessages, setPhotoUploadMessages] = useState([]);
 
   const steps = [
     { id: 1, title: 'Basic Info', icon: HomeIcon },
@@ -136,18 +140,71 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
 
   useEffect(() => {
     if (editingListing) {
-      setFormData({
-        ...formData,
+      // Convert existing image payloads into photo objects used by this form.
+      const existingPhotos = Array.isArray(editingListing.images)
+        ? editingListing.images.map((image, index) => ({
+            id: image?.id || `existing-${index}`,
+            file: null,
+            preview: typeof image === 'string' ? image : image?.image || '',
+            isExisting: true,
+            is_primary: Boolean(image?.is_primary),
+            localLoadProgress: 100,
+            isLoadingPreview: false,
+          }))
+        : [];
+
+      // Ensure there is always exactly one primary image marker for display purposes.
+      if (existingPhotos.length > 0 && !existingPhotos.some((photo) => photo.is_primary)) {
+        existingPhotos[0].is_primary = true;
+      }
+
+      setFormData((prev) => ({
+        ...prev,
         ...editingListing,
         amenities: editingListing.amenities || [],
         houseRules: editingListing.houseRules || [],
-        // Map images to photos for form compatibility
-        photos: editingListing.images || [],
+        // Map images to photo objects for form compatibility
+        photos: existingPhotos,
         // Map price to pricePerNight for form compatibility
         pricePerNight: editingListing.price || editingListing.pricePerNight || ''
-      });
+      }));
     }
   }, [editingListing]);
+
+  const normalizePrimaryPhoto = (photos) => {
+    if (!photos.length) return photos;
+    if (photos.some((photo) => photo.is_primary)) {
+      return photos;
+    }
+    return photos.map((photo, index) => ({
+      ...photo,
+      is_primary: index === 0,
+    }));
+  };
+
+  const readFileWithProgress = (file, onProgress) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const percent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+        onProgress(percent);
+      };
+      reader.onerror = () => reject(new Error('File read failed'));
+      reader.onload = () => {
+        onProgress(100);
+        resolve(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const ensureImageCanRender = (dataUrl) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Image preview failed'));
+      img.src = dataUrl;
+    });
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -174,36 +231,124 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
     }));
   };
 
-  const handlePhotoUpload = (event) => {
+  const handlePhotoUpload = async (event) => {
     const files = Array.from(event.target.files);
-    const newFiles = files.map(file => ({
+    event.target.value = '';
+    if (!files.length) return;
+    setErrors((prev) => ({ ...prev, photos: null }));
+
+    const messages = [];
+    const remainingSlots = Math.max(0, MAX_PHOTO_COUNT - formData.photos.length);
+    if (remainingSlots === 0) {
+      setPhotoUploadMessages([`You can upload up to ${MAX_PHOTO_COUNT} photos.`]);
+      return;
+    }
+
+    const filesToProcess = files.slice(0, remainingSlots);
+    if (files.length > remainingSlots) {
+      messages.push(`Only ${remainingSlots} photo slot(s) left. Extra files were ignored.`);
+    }
+
+    const validFiles = [];
+    filesToProcess.forEach((file) => {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        messages.push(`${file.name}: unsupported format. Use JPG, PNG, WEBP, GIF, or HEIC.`);
+        return;
+      }
+      if (file.size > MAX_PHOTO_SIZE_BYTES) {
+        messages.push(`${file.name}: file is too large. Max size is ${MAX_PHOTO_SIZE_MB}MB.`);
+        return;
+      }
+      validFiles.push(file);
+    });
+
+    if (!validFiles.length) {
+      setPhotoUploadMessages(messages.length ? messages : ['No valid images selected.']);
+      return;
+    }
+
+    const hasPrimary = formData.photos.some((photo) => photo.is_primary);
+    const stagedPhotos = validFiles.map((file, index) => ({
+      id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
       file,
-      preview: URL.createObjectURL(file),
-      id: Date.now() + Math.random()
+      preview: '',
+      isExisting: false,
+      is_primary: !hasPrimary && index === 0,
+      localLoadProgress: 0,
+      isLoadingPreview: true,
     }));
-    
-    setUploadedFiles(prev => [...prev, ...newFiles]);
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
-      photos: [...prev.photos, ...newFiles.map(f => f.preview)]
+      photos: [...prev.photos, ...stagedPhotos],
     }));
+
+    await Promise.all(
+      stagedPhotos.map(async (stagedPhoto) => {
+        try {
+          const previewDataUrl = await readFileWithProgress(stagedPhoto.file, (progress) => {
+            setFormData((prev) => ({
+              ...prev,
+              photos: prev.photos.map((photo) =>
+                photo.id === stagedPhoto.id ? { ...photo, localLoadProgress: progress } : photo
+              ),
+            }));
+          });
+          await ensureImageCanRender(previewDataUrl);
+          setFormData((prev) => ({
+            ...prev,
+            photos: prev.photos.map((photo) =>
+              photo.id === stagedPhoto.id
+                ? {
+                    ...photo,
+                    preview: previewDataUrl,
+                    localLoadProgress: 100,
+                    isLoadingPreview: false,
+                  }
+                : photo
+            ),
+          }));
+        } catch (_) {
+          messages.push(`${stagedPhoto.file.name}: failed to load preview. Please try another image.`);
+          setFormData((prev) => {
+            const updatedPhotos = normalizePrimaryPhoto(prev.photos.filter((photo) => photo.id !== stagedPhoto.id));
+            return { ...prev, photos: updatedPhotos };
+          });
+        }
+      })
+    );
+
+    setPhotoUploadMessages(messages);
+    if (!messages.length) {
+      setErrors((prev) => ({ ...prev, photos: null }));
+    }
   };
 
   const handlePhotoRemove = (photoId) => {
-    setUploadedFiles(prev => {
-      const fileToRemove = prev.find(f => f.id === photoId);
-      if (fileToRemove) {
-        URL.revokeObjectURL(fileToRemove.preview);
+    setFormData(prev => {
+      const photoToRemove = prev.photos.find(p => p.id === photoId);
+      if (photoToRemove && photoToRemove.preview && !photoToRemove.isExisting) {
+        // Revoke object URL only for locally-created previews
+        try {
+          URL.revokeObjectURL(photoToRemove.preview);
+        } catch (_) {}
       }
-      return prev.filter(f => f.id !== photoId);
+      const updatedPhotos = normalizePrimaryPhoto(prev.photos.filter(p => p.id !== photoId));
+      return {
+        ...prev,
+        photos: updatedPhotos,
+      };
     });
-    
-    setFormData(prev => ({
+    setErrors((prev) => ({ ...prev, photos: null }));
+  };
+
+  const handleSetPrimaryPhoto = (photoId) => {
+    setFormData((prev) => ({
       ...prev,
-      photos: prev.photos.filter((_, index) => {
-        const fileIndex = uploadedFiles.findIndex(f => f.id === photoId);
-        return index !== fileIndex;
-      })
+      photos: prev.photos.map((photo) => ({
+        ...photo,
+        is_primary: photo.id === photoId,
+      })),
     }));
   };
 
@@ -229,6 +374,8 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
         if (!formData.bathrooms || formData.bathrooms <= 0) newErrors.bathrooms = 'Number of bathrooms is required';
         if (!formData.guests || formData.guests <= 0) newErrors.guests = 'Maximum guests is required';
         break;
+      default:
+        break;
     }
     
     setErrors(newErrors);
@@ -236,6 +383,13 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
   };
 
   const handleNext = () => {
+    if (currentStep === 6 && formData.photos.some((photo) => photo.isLoadingPreview)) {
+      setErrors((prev) => ({
+        ...prev,
+        photos: 'Please wait until image loading completes before continuing.',
+      }));
+      return;
+    }
     if (validateStep(currentStep)) {
       setCurrentStep(prev => Math.min(prev + 1, steps.length));
     }
@@ -246,13 +400,19 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
   };
 
   const handleSubmit = async () => {
+    if (formData.photos.some((photo) => photo.isLoadingPreview)) {
+      setErrors((prev) => ({
+        ...prev,
+        photos: 'Please wait until image loading completes before publishing.',
+      }));
+      return;
+    }
     setIsSubmitting(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      onSave(formData);
+    try {
+      await onSave(formData);
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   const renderStepContent = () => {
@@ -416,31 +576,17 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
                   {errors.pricePerNight && <p className="mt-1 text-sm text-red-600">{errors.pricePerNight}</p>}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cleaning Fee (KSh)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.cleaningFee}
-                      onChange={(e) => handleInputChange('cleaningFee', parseInt(e.target.value) || '')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Security Deposit (KSh)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.securityDeposit}
-                      onChange={(e) => handleInputChange('securityDeposit', parseInt(e.target.value) || '')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="0"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Security Deposit (KSh)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.securityDeposit}
+                    onChange={(e) => handleInputChange('securityDeposit', parseInt(e.target.value) || '')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="0"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -570,34 +716,18 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Square Footage (sq ft)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.squareFootage}
-                      onChange={(e) => handleInputChange('squareFootage', parseInt(e.target.value) || '')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Year Built
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.yearBuilt}
-                      onChange={(e) => handleInputChange('yearBuilt', parseInt(e.target.value) || '')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      placeholder="2020"
-                      min="1800"
-                      max={new Date().getFullYear()}
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Square Footage (sq ft)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.squareFootage}
+                    onChange={(e) => handleInputChange('squareFootage', parseInt(e.target.value) || '')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="0"
+                    min="0"
+                  />
                 </div>
               </div>
             </div>
@@ -657,22 +787,54 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
                     />
                   </label>
                   <p className="mt-1 text-xs text-gray-500">
-                    PNG, JPG, GIF up to 10MB each
+                    JPG, PNG, WEBP, GIF, HEIC up to {MAX_PHOTO_SIZE_MB}MB each
                   </p>
                 </div>
               </div>
 
-              {uploadedFiles.length > 0 && (
+              {photoUploadMessages.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {photoUploadMessages.map((message, index) => (
+                    <p key={`${message}-${index}`}>{message}</p>
+                  ))}
+                </div>
+              )}
+
+              {errors.photos && (
+                <p className="text-sm text-red-600">{errors.photos}</p>
+              )}
+
+              {formData.photos && formData.photos.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mt-6">
-                  {uploadedFiles.map((fileData, index) => (
-                    <div key={fileData.id} className="relative group">
+                  {formData.photos.map((photo, index) => (
+                    <div key={photo.id || index} className="relative group">
                       <img
-                        src={fileData.preview}
-                        alt={`Property photo ${index + 1}`}
+                        src={photo.preview || (typeof photo === 'string' ? photo : '')}
+                        alt={`Property view ${index + 1}`}
                         className="w-full h-24 object-cover rounded-lg"
                       />
+                      {photo.isLoadingPreview && (
+                        <div className="absolute inset-0 rounded-lg bg-black/55 flex flex-col items-center justify-center text-white">
+                          <div className="h-6 w-6 rounded-full border-2 border-white/40 border-t-white animate-spin mb-2" />
+                          <p className="text-xs font-semibold">{photo.localLoadProgress || 0}%</p>
+                        </div>
+                      )}
+                      {photo.is_primary && (
+                        <span className="absolute top-2 left-2 bg-primary-600 text-white text-xs px-2 py-1 rounded">
+                          Display
+                        </span>
+                      )}
                       <button
-                        onClick={() => handlePhotoRemove(fileData.id)}
+                        type="button"
+                        onClick={() => handleSetPrimaryPhoto(photo.id)}
+                        className="absolute bottom-2 left-2 bg-white text-gray-700 text-xs px-2 py-1 rounded border border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={photo.isLoadingPreview}
+                      >
+                        Set Display
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePhotoRemove(photo.id)}
                         className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <XMarkIcon className="w-4 h-4" />
@@ -764,52 +926,200 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Review & Publish</h3>
               <p className="text-sm text-gray-600 mb-6">Review your listing details before publishing</p>
               
-              <div className="bg-gray-50 rounded-lg p-6 space-y-4">
-                <div className="flex items-start space-x-4">
+              <div className="bg-gray-50 rounded-lg p-6 space-y-6">
+                {/* Overview & pricing */}
+                <div className="flex flex-col lg:flex-row lg:items-start lg:space-x-4 space-y-4 lg:space-y-0">
                   <div className="flex-1">
-                    <h4 className="text-lg font-medium text-gray-900">{formData.title}</h4>
-                    <p className="text-sm text-gray-600">{formData.location}</p>
-                    <p className="text-sm text-gray-500 mt-1">{formData.description}</p>
+                    <h4 className="text-lg font-medium text-gray-900">{formData.title || 'Untitled listing'}</h4>
+                    <p className="text-sm text-gray-600">
+                      {[formData.location, formData.city, formData.country].filter(Boolean).join(', ')}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2 whitespace-pre-line">
+                      {formData.description}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-900">KSh {formData.pricePerNight?.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      KSh {formData.pricePerNight ? Number(formData.pricePerNight).toLocaleString() : '0'}
+                    </p>
                     <p className="text-sm text-gray-500">per night</p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Property Type</p>
-                    <p className="font-medium">{propertyTypes.find(t => t.value === formData.propertyType)?.label}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Bedrooms</p>
-                    <p className="font-medium">{formData.bedrooms}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Bathrooms</p>
-                    <p className="font-medium">{formData.bathrooms}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Max Guests</p>
-                    <p className="font-medium">{formData.guests}</p>
-                  </div>
-                </div>
-                
-                <div>
-                  <p className="text-gray-500 text-sm mb-2">Amenities ({formData.amenities.length})</p>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.amenities.slice(0, 5).map(amenity => (
-                      <span key={amenity} className="px-2 py-1 bg-primary-100 text-primary-800 text-xs rounded-full">
-                        {amenity}
-                      </span>
-                    ))}
-                    {formData.amenities.length > 5 && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                        +{formData.amenities.length - 5} more
-                      </span>
+                    {formData.securityDeposit && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Security deposit: KSh {Number(formData.securityDeposit).toLocaleString()}
+                      </p>
                     )}
                   </div>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Location</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Address</p>
+                      <p className="font-medium">
+                        {formData.address || 'Not provided'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">City & Country</p>
+                      <p className="font-medium">
+                        {[formData.city, formData.country].filter(Boolean).join(', ') || 'Not provided'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Property details */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Property details</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500">Property Type</p>
+                      <p className="font-medium">
+                        {propertyTypes.find(t => t.value === formData.propertyType)?.label || 'Not set'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Bedrooms</p>
+                      <p className="font-medium">{formData.bedrooms || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Bathrooms</p>
+                      <p className="font-medium">{formData.bathrooms || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Max Guests</p>
+                      <p className="font-medium">{formData.guests || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Beds</p>
+                      <p className="font-medium">{formData.beds || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Square Footage (Optional)</p>
+                      <p className="font-medium">
+                        {formData.squareFootage ? `${formData.squareFootage} sq ft` : '-'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stay rules & timing */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800 mb-2">Stay requirements</h4>
+                    <p className="text-gray-600">
+                      Minimum nights: <span className="font-medium">{formData.minimumNights}</span>
+                    </p>
+                    <p className="text-gray-600">
+                      Maximum nights: <span className="font-medium">{formData.maximumNights}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800 mb-2">Check-in / Check-out</h4>
+                    <p className="text-gray-600">
+                      Check-in: <span className="font-medium">{formData.checkInTime}</span>
+                    </p>
+                    <p className="text-gray-600">
+                      Check-out: <span className="font-medium">{formData.checkOutTime}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Amenities */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                    Amenities ({formData.amenities.length})
+                  </h4>
+                  {formData.amenities.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.amenities.map(amenity => (
+                        <span
+                          key={amenity}
+                          className="px-2 py-1 bg-primary-100 text-primary-800 text-xs rounded-full"
+                        >
+                          {amenity}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No amenities selected</p>
+                  )}
+                </div>
+
+                {/* House rules */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2">House rules & policies</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex flex-wrap gap-1">
+                      {formData.houseRules.length > 0 ? (
+                        formData.houseRules.map(rule => (
+                          <span
+                            key={rule}
+                            className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
+                          >
+                            {rule}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-gray-500">No specific house rules selected</p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                      <p className="text-gray-600">
+                        Smoking:{' '}
+                        <span className="font-medium">
+                          {formData.smokingAllowed ? 'Allowed' : 'Not allowed'}
+                        </span>
+                      </p>
+                      <p className="text-gray-600">
+                        Pets:{' '}
+                        <span className="font-medium">
+                          {formData.petsAllowed ? 'Allowed' : 'Not allowed'}
+                        </span>
+                      </p>
+                      <p className="text-gray-600">
+                        Parties:{' '}
+                        <span className="font-medium">
+                          {formData.partiesAllowed ? 'Allowed' : 'Not allowed'}
+                        </span>
+                      </p>
+                      <p className="text-gray-600">
+                        Children:{' '}
+                        <span className="font-medium">
+                          {formData.childrenAllowed ? 'Allowed' : 'Not allowed'}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Photos */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Photos</h4>
+                  {formData.photos && formData.photos.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {formData.photos.map((photo, index) => (
+                        <div key={index} className="relative rounded-lg overflow-hidden">
+                          <img
+                            src={typeof photo === 'string' ? photo : photo.preview || ''}
+                            alt={`Listing view ${index + 1}`}
+                            className="w-full h-24 object-cover"
+                          />
+                          {photo.is_primary && (
+                            <span className="absolute top-1 left-1 bg-primary-600 text-white text-[10px] px-1.5 py-0.5 rounded">
+                              Display
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      No photos added yet. Go back to the Photos step to upload images.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -933,6 +1243,7 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
           ) : (
             <button
               onClick={handleNext}
+              disabled={currentStep === 6 && formData.photos.some((photo) => photo.isLoadingPreview)}
               className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center"
             >
               Next

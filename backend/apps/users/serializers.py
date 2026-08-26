@@ -5,7 +5,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from .models import User, UserProfile, UserAddress, BnBHostProfile, ConciergeHostProfile, HotelRestaurantHostProfile
+from .models import User, UserProfile, UserAddress, BnBHostProfile, HotelRestaurantHostProfile
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -50,7 +50,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("At least one role must be selected.")
         
         # Validate host-specific fields if any host role is selected
-        host_roles = [r for r in selected_roles if r in [User.Role.BNB_HOST, User.Role.HOTEL_HOST, User.Role.TOUR_OPERATOR]]
+        host_roles = [r for r in selected_roles if r in [User.Role.BNB_HOST, User.Role.HOTEL_HOST]]
         if host_roles and not attrs.get('company_name'):
             raise serializers.ValidationError("Company name is required for host roles.")
         
@@ -78,9 +78,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             BnBHostProfile.objects.create(user=user)
         if User.Role.HOTEL_HOST in roles_data:
             HotelRestaurantHostProfile.objects.create(user=user)
-        if User.Role.TOUR_OPERATOR in roles_data:
-            ConciergeHostProfile.objects.create(user=user)
-        
         return user
 
 
@@ -96,12 +93,14 @@ class UserLoginSerializer(serializers.Serializer):
         password = attrs.get('password')
         
         if email and password:
-            # Try to authenticate with email
+            # Try authenticating when username == email (legacy behavior).
             user = authenticate(username=email, password=password)
             
             if not user:
-                # Try with username if email authentication fails
-                user = authenticate(username=email, password=password)
+                # Fallback: resolve username by email, then authenticate.
+                account = User.objects.filter(email__iexact=email).first()
+                if account:
+                    user = authenticate(username=account.username, password=password)
             
             if not user:
                 raise serializers.ValidationError('Invalid credentials')
@@ -185,7 +184,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'id', 'email', 'username', 'first_name', 'last_name', 'phone_number',
             'date_of_birth', 'gender', 'profile_picture', 'bio', 'location', 'city',
             'country', 'user_type', 'host_type', 'roles', 'active_role', 'is_verified', 'is_premium', 'company_name',
-            'business_license', 'tax_id', 'preferred_language', 'preferred_currency',
+            'business_license', 'tax_id', 'preferred_language', 'preferred_currency', 'notification_preferences',
             'referral_code', 'referred_by', 'profile', 'addresses', 'created_at',
             'updated_at', 'last_login'
         ]
@@ -303,21 +302,6 @@ class BnBHostProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
-class ConciergeHostProfileSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Concierge Host Profile
-    """
-    class Meta:
-        model = ConciergeHostProfile
-        fields = [
-            'service_categories', 'service_radius_km', 'service_areas', 'business_license',
-            'tourism_license', 'insurance_coverage', 'languages_spoken', 'certifications',
-            'equipment_available', 'availability_schedule', 'emergency_services',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
-
-
 class HotelRestaurantHostProfileSerializer(serializers.ModelSerializer):
     """
     Serializer for Hotel/Restaurant Host Profile
@@ -332,39 +316,11 @@ class HotelRestaurantHostProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
-class BnBHostProfileSerializer(serializers.ModelSerializer):
-    """
-    Serializer for BnB Host Profile
-    """
-    class Meta:
-        model = BnBHostProfile
-        fields = [
-            'property_count', 'max_properties', 'home_sharing_license', 'insurance_document',
-            'property_management_style', 'guest_interaction_level', 'created_at', 'updated_at'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
-
-
-class ConciergeHostProfileSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Concierge Host Profile
-    """
-    class Meta:
-        model = ConciergeHostProfile
-        fields = [
-            'service_categories', 'service_radius_km', 'service_areas', 'business_license',
-            'tourism_license', 'insurance_coverage', 'languages_spoken', 'certifications',
-            'equipment_available', 'availability_schedule', 'emergency_services',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
-
-
 class HostOnboardingSerializer(serializers.Serializer):
     """
     Serializer for host onboarding process
     """
-    host_type = serializers.ChoiceField(choices=User.HostType.choices)
+    host_type = serializers.ChoiceField(choices=User.HostType.choices, write_only=True)
     
     # Basic information
     property_name = serializers.CharField(max_length=200, required=False)
@@ -439,19 +395,4 @@ class HostOnboardingSerializer(serializers.Serializer):
                 property_management_style=validated_data.get('property_management_style', 'self_managed'),
                 guest_interaction_level=validated_data.get('guest_interaction_level', 'moderate')
             )
-        elif host_type == User.HostType.CONCIERGE_HOST:
-            profile = ConciergeHostProfile.objects.create(
-                user=user,
-                service_categories=validated_data.get('service_categories', []),
-                service_radius_km=validated_data.get('service_radius_km', 50),
-                service_areas=validated_data.get('service_areas', []),
-                business_license=validated_data.get('business_license', ''),
-                tourism_license=validated_data.get('tourism_license', ''),
-                languages_spoken=validated_data.get('languages_spoken', []),
-                certifications=validated_data.get('certifications', []),
-                equipment_available=validated_data.get('equipment_available', []),
-                availability_schedule=validated_data.get('availability_schedule', {}),
-                emergency_services=validated_data.get('emergency_services', False)
-            )
-        
         return profile

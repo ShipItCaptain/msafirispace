@@ -21,6 +21,8 @@ import {
   PhotoIcon,
   CheckIcon
 } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 
 const HotelHostManagementPage = () => {
   const [listings, setListings] = useState([]);
@@ -64,6 +66,8 @@ const HotelHostManagementPage = () => {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hotelToDelete, setHotelToDelete] = useState(null);
+  const [isDeletingHotel, setIsDeletingHotel] = useState(false);
 
   // Form configuration
   const steps = [
@@ -350,9 +354,15 @@ const HotelHostManagementPage = () => {
     }
   };
 
-  const handleDeleteListing = (id) => {
-    if (window.confirm('Are you sure you want to delete this hotel?')) {
-      setListings(listings.filter(listing => listing.id !== id));
+  const handleDeleteListing = async () => {
+    if (!hotelToDelete) return;
+    try {
+      setIsDeletingHotel(true);
+      setListings(listings.filter(listing => listing.id !== hotelToDelete));
+      toast.success('Hotel deleted successfully');
+      setHotelToDelete(null);
+    } finally {
+      setIsDeletingHotel(false);
     }
   };
 
@@ -573,7 +583,7 @@ const HotelHostManagementPage = () => {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => handleDeleteListing(listing.id)}
+                        onClick={() => setHotelToDelete(listing.id)}
                         className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors duration-200"
                       >
                         <TrashIcon className="w-4 h-4 mr-1" />
@@ -1105,6 +1115,18 @@ const HotelHostManagementPage = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        isOpen={Boolean(hotelToDelete)}
+        title="Delete Hotel?"
+        message="This action removes this hotel listing from your dashboard."
+        confirmLabel="Delete Hotel"
+        cancelLabel="Keep Hotel"
+        isLoading={isDeletingHotel}
+        onConfirm={handleDeleteListing}
+        onCancel={() => setHotelToDelete(null)}
+        tone="danger"
+      />
     </div>
   );
 };

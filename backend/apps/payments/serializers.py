@@ -26,6 +26,18 @@ class PaymentIntentCreateSerializer(serializers.Serializer):
         # Basic sanity checks
         if attrs['amount'] <= 0:
             raise serializers.ValidationError({'amount': 'Amount must be positive'})
+        
+        if booking.status in [Booking.BookingStatus.CANCELLED, Booking.BookingStatus.COMPLETED]:
+            raise serializers.ValidationError({'booking_id': 'Cannot pay for cancelled or completed booking'})
+
+        if booking.payment_status == Booking.PaymentStatus.PAID:
+            raise serializers.ValidationError({'booking_id': 'Booking is already paid'})
+
+        # Amount must match total or deposit (if deposit is configured)
+        total_amount = booking.total_amount
+        deposit_amount = booking.deposit_amount
+        if attrs['amount'] != total_amount and (deposit_amount <= 0 or attrs['amount'] != deposit_amount):
+            raise serializers.ValidationError({'amount': 'Amount must match total or deposit amount'})
 
         return attrs
 
@@ -47,5 +59,4 @@ class PaymentSerializer(serializers.ModelSerializer):
             'reference', 'gateway', 'amount', 'currency', 'status',
             'provider_reference', 'description', 'created_at'
         ]
-
 

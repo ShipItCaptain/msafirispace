@@ -7,7 +7,6 @@ A production-ready hospitality marketplace connecting hotels, restaurants, and B
 - **User Management**: Authentication, profiles, dashboards
 - **Host Management**: Listing management, analytics, subscriptions
 - **Search & Discovery**: Smart search with filters and interactive maps
-- **Concierge Services**: Airport transfers, tours, excursions
 - **Booking & Payments**: Mpesa STK Push + Flutterwave integration
 - **Reviews & Ratings**: Verified review system
 - **Referral Program**: User and host referral system
@@ -87,7 +86,6 @@ docker-compose up -d
 - [ ] Booking System
 - [ ] Payment Integration
 - [ ] Search & Discovery
-- [ ] Concierge Services
 - [ ] Reviews & Ratings
 - [ ] Referral Program
 - [ ] Deployment & CI/CD

@@ -5,26 +5,12 @@ import { useAuth } from '../hooks/useAuth';
 import {
   HomeModernIcon,
   BuildingOfficeIcon,
-  SparklesIcon,
-  PlusIcon,
   ChartBarIcon,
-  CalendarIcon,
-  CurrencyDollarIcon,
-  UsersIcon,
-  StarIcon,
-  EyeIcon,
-  PencilIcon,
-  TrashIcon,
-  ArrowTrendingUpIcon,
-  ClockIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon,
   ArrowRightIcon,
   GlobeAltIcon,
   ShieldCheckIcon,
   CreditCardIcon,
-  SparklesIcon as StarSparkleIcon,
-  MapPinIcon,
   DocumentCheckIcon,
   DevicePhoneMobileIcon
 } from '@heroicons/react/24/outline';
@@ -32,10 +18,13 @@ import {
 const HostHomePage = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
+  
+  // All hooks must be called unconditionally at the top level
   const [hasListings, setHasListings] = useState(false);
   const [hasHotel, setHasHotel] = useState(false);
   const [hasBnB, setHasBnB] = useState(false);
   const [loadingCheck, setLoadingCheck] = useState(true);
+  const [showListingChoice, setShowListingChoice] = useState(false);
 
   // Check if user has any listings
   useEffect(() => {
@@ -85,6 +74,13 @@ const HostHomePage = () => {
     checkListings();
   }, [user, isAuthenticated]);
 
+  // If user is explicitly in guest role, redirect to home
+  useEffect(() => {
+    if (user?.active_role === 'guest') {
+      navigate('/', { replace: true });
+    }
+  }, [user?.active_role, navigate]);
+
   if (isLoading || loadingCheck) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -112,8 +108,32 @@ const HostHomePage = () => {
     );
   }
 
-  const handleGetStarted = async () => {
-    // If we already computed presence, route immediately
+  // If user is in guest role, show loading while redirecting
+  if (user?.active_role === 'guest') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleGetStarted = () => {
+    setShowListingChoice(true);
+  };
+
+  const handleChooseListingType = (type) => {
+    setShowListingChoice(false);
+    if (type === 'hotel') {
+      navigate('/become-host/hotel-restaurant');
+      return;
+    }
+    navigate('/become-host/bnb');
+  };
+
+  const handleGoToDashboard = () => {
     if (hasHotel) {
       navigate('/host-dashboard');
       return;
@@ -122,45 +142,13 @@ const HostHomePage = () => {
       navigate('/host/bnb');
       return;
     }
+    navigate('/host-dashboard');
+  };
 
-    // As a fallback, re-check quickly (in case state is stale)
-    try {
-      const { listingsAPI, bnbAPI } = await import('../services/api');
-      const hotelsResponse = await listingsAPI.getListings();
-      const userHotels = hotelsResponse.results?.filter(hotel => String(hotel.host) === String(user?.id)) || [];
-      if (userHotels.length > 0) {
-        navigate('/host-dashboard');
-        return;
-      }
-      const myBnB = await bnbAPI.getMyListings();
-      const bnbList = myBnB?.results || myBnB || [];
-      if ((bnbList?.length || 0) > 0) {
-        navigate('/host/bnb');
-        return;
-      }
-    } catch (_) {
-      // ignore and continue to onboarding
-    }
-
-    // Direct the user to the appropriate onboarding form based on active role/roles
-    // If user came from BecomeHost selection, respect the intended type
-    let intended = null;
-    try { intended = localStorage.getItem('intendedHostType'); } catch (_) {}
-
-    const activeRole = user?.active_role;
-    const roles = user?.roles || [];
-    if (intended === 'hotel_restaurant' || activeRole === 'hotel_host' || roles.includes('hotel_host')) {
-      navigate('/become-host/hotel-restaurant');
-      try { localStorage.removeItem('intendedHostType'); } catch (_) {}
-      return;
-    }
-    if (intended === 'bnb' || activeRole === 'bnb_host' || roles.includes('bnb_host')) {
-      navigate('/become-host/bnb');
-      try { localStorage.removeItem('intendedHostType'); } catch (_) {}
-      return;
-    }
-    // Default onboarding hub
-    navigate('/become-host');
+  const handleBoostVisibility = () => {
+    // For now, take hosts to the promotions area where we’ll later plug in
+    // a full payment + configuration flow for featured listings.
+    navigate('/promotions');
   };
 
   return (
@@ -209,7 +197,7 @@ const HostHomePage = () => {
             )}
 
             {/* Key Benefits */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-8">
               <div className="flex items-start space-x-3 bg-white/10 backdrop-blur rounded-lg p-4">
                 <CheckCircleIcon className="h-6 w-6 text-white flex-shrink-0 mt-1" />
                 <div className="text-left">
@@ -255,21 +243,62 @@ const HostHomePage = () => {
                 </button>
               </motion.div>
             ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-                className="flex flex-col sm:flex-row gap-4 justify-center"
-              >
-                <button
-                  onClick={() => navigate('/host-dashboard')}
-                  className="px-8 py-4 bg-white text-red-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors flex items-center justify-center shadow-xl"
+              <>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                  className="flex flex-col sm:flex-row gap-4 justify-center"
                 >
-                  Go to Dashboard
-                  <ArrowRightIcon className="h-5 w-5 ml-2" />
-                </button>
-              </motion.div>
+                  <button
+                    onClick={handleGoToDashboard}
+                    className="px-8 py-4 bg-white text-red-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors flex items-center justify-center shadow-xl"
+                  >
+                    Go to Dashboard
+                    <ArrowRightIcon className="h-5 w-5 ml-2" />
+                  </button>
+                </motion.div>
+
+                {/* Minimal dashboard shortcut buttons just below the main CTA */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.6 }}
+                  className="mt-4 flex flex-wrap items-center justify-center gap-3"
+                >
+                  <button
+                    onClick={() => navigate('/host-dashboard')}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10 transition-colors"
+                  >
+                    <BuildingOfficeIcon className="h-4 w-4" />
+                    <span>Hotel dashboard</span>
+                  </button>
+                  <button
+                    onClick={() => navigate('/host/bnb')}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/10 transition-colors"
+                  >
+                    <HomeModernIcon className="h-4 w-4" />
+                    <span>BnB dashboard</span>
+                  </button>
+                </motion.div>
+              </>
             )}
+        {showListingChoice && (
+          <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => handleChooseListingType('bnb')}
+              className="px-6 py-3 bg-white text-red-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors flex items-center justify-center shadow"
+            >
+              List a BnB
+            </button>
+            <button
+              onClick={() => handleChooseListingType('hotel')}
+              className="px-6 py-3 bg-white text-red-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors flex items-center justify-center shadow"
+            >
+              List a Hotel
+            </button>
+          </div>
+        )}
           </motion.div>
         </div>
       </div>
@@ -569,39 +598,93 @@ const HostHomePage = () => {
         </>
       )}
 
-      {/* Dashboard Access Section (if has listings) */}
+      {/* Boost visibility section for hosts who already have listings */}
       {hasListings && (
-          <div className="bg-white py-16">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center mb-12">
-                <h2 className="text-4xl font-bold text-black mb-4">Welcome back, {user.first_name || 'Host'}!</h2>
-                <p className="text-xl text-gray-900">You're already on Msafiri Space. Manage your properties and grow your business.</p>
+        <div className="bg-white py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10">
+              <h2 className="text-4xl font-bold text-black mb-3">
+                Boost your visibility
+              </h2>
+              <p className="text-lg md:text-xl text-gray-700">
+                Promotions, deals, and special offers designed to get your listings in front of more travelers.
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-r from-amber-50 via-white to-amber-50 border border-amber-200 rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row gap-6 md:items-center">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-2">
+                  Launch visibility offer
+                </p>
+                <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">
+                  Get featured at the top of search
+                </h3>
+                <p className="text-sm text-gray-700 mb-4 max-w-xl">
+                  Highlight one of your listings in the featured carousel and “Top Picks for Today” sections.
+                  Ideal for new properties, low season, or when you want an extra push.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div className="flex items-start space-x-2">
+                    <div className="mt-1 h-2 w-2 rounded-full bg-amber-500" />
+                    <div>
+                      <p className="font-semibold text-gray-900">Featured badge</p>
+                      <p className="text-gray-600">
+                        Your listing appears with a “Featured” tag in key discovery sections.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="mt-1 h-2 w-2 rounded-full bg-amber-500" />
+                    <div>
+                      <p className="font-semibold text-gray-900">Priority placement</p>
+                      <p className="text-gray-600">
+                        Higher ranking when travelers search in your city or region.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="mt-1 h-2 w-2 rounded-full bg-amber-500" />
+                    <div>
+                      <p className="font-semibold text-gray-900">Smart insights</p>
+                      <p className="text-gray-600">
+                        See extra views and bookings your boost generated in your dashboard.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <button
-                  onClick={() => navigate('/host-dashboard')}
-                  className="bg-red-600 text-white rounded-lg p-6 hover:bg-red-700 transition-colors text-left"
-                >
-                  <BuildingOfficeIcon className="h-8 w-8 mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Hotel Dashboard</h3>
-                  <p className="text-red-100">Manage your hotels and bookings</p>
-                </button>
-
-                <button
-                  onClick={() => navigate('/host/bnb')}
-                  className="bg-gray-800 text-white rounded-lg p-6 hover:bg-black transition-colors text-left"
-                >
-                  <HomeModernIcon className="h-8 w-8 mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">BnB Dashboard</h3>
-                  <p className="text-gray-300">Manage your BnB properties</p>
-                </button>
-
-                {/* concierge dashboard removed */}
+              <div className="w-full md:w-auto md:min-w-[240px]">
+                <div className="bg-white/80 backdrop-blur rounded-xl border border-amber-200 p-5 shadow-md flex flex-col h-full">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-1">
+                    Intro pricing
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 mb-1">
+                    KES 2,500
+                    <span className="text-sm font-medium text-gray-500 ml-1">/ 7 days</span>
+                  </p>
+                  <p className="text-xs text-gray-600 mb-4">
+                    Flat fee per boosted listing. Cancel or switch listings between campaigns later.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleBoostVisibility}
+                    className="inline-flex items-center justify-center w-full px-4 py-2.5 rounded-lg bg-amber-500 text-white text-sm font-semibold shadow hover:bg-amber-600 transition-colors"
+                  >
+                    Explore boost options
+                    <ArrowRightIcon className="h-4 w-4 ml-1" />
+                  </button>
+                  <p className="mt-3 text-[11px] text-gray-500 leading-snug">
+                    No long‑term commitment. You’ll review and confirm the final price before any payment is made.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
+        </div>
       )}
+
     </div>
   );
 };

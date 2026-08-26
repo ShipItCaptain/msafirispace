@@ -5,9 +5,7 @@ import {
   BuildingOfficeIcon,
   ArrowLeftIcon,
   CheckIcon,
-  PhotoIcon,
-  DocumentIcon,
-  StarIcon
+  DocumentIcon
 } from '@heroicons/react/24/outline';
 
 const HotelRestaurantHostPage = () => {

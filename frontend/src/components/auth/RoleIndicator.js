@@ -3,9 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { 
   UserIcon,
   HomeIcon,
-  BuildingOfficeIcon,
-  MapIcon,
-  SparklesIcon
+  BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
 
 const RoleIndicator = ({ showLabel = true, size = 'sm' }) => {
@@ -17,8 +15,6 @@ const RoleIndicator = ({ showLabel = true, size = 'sm' }) => {
     guest: { icon: UserIcon, label: 'Guest', color: 'text-blue-600', bgColor: 'bg-blue-50' },
     bnb_host: { icon: HomeIcon, label: 'BnB Host', color: 'text-green-600', bgColor: 'bg-green-50' },
     hotel_host: { icon: BuildingOfficeIcon, label: 'Hotel Host', color: 'text-purple-600', bgColor: 'bg-purple-50' },
-    tour_operator: { icon: MapIcon, label: 'Tour Operator', color: 'text-orange-600', bgColor: 'bg-orange-50' },
-    
   };
 
   const currentRole = roleConfig[user.active_role] || roleConfig.guest;

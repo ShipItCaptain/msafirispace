@@ -54,6 +54,11 @@ mkdir -p static
 mkdir -p media
 echo "✅ Directories created!"
 
+# Run database migrations
+echo "🗄️  Running database migrations..."
+python manage.py migrate --noinput
+echo "✅ Database migrations completed!"
+
 # Return to root
 cd ..
 

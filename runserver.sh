@@ -119,6 +119,17 @@ print_status "Activating Python virtual environment..."
 source backend/venv/bin/activate
 print_success "Virtual environment activated"
 
+# Normalize DEBUG env for Django/decouple.
+# A shell-level DEBUG value like "release" breaks boolean casting in settings.
+case "${DEBUG:-}" in
+  ""|True|False|true|false|1|0|yes|no|on|off)
+    ;;
+  *)
+    print_warning "Ignoring invalid shell DEBUG='$DEBUG' for local dev run"
+    unset DEBUG
+    ;;
+esac
+
 # Install/update backend dependencies
 print_status "Checking backend dependencies..."
 cd backend
@@ -139,14 +150,14 @@ print_success "Static files collected"
 cd ../frontend
 if [ ! -d "node_modules" ]; then
     print_status "Installing frontend dependencies..."
-    timeout 60 npm install --no-audit --no-fund || {
-        print_warning "npm install timed out or failed, but continuing..."
+    npm install --no-audit --no-fund || {
+        print_warning "npm install failed, but continuing..."
     }
     print_success "Frontend dependencies installed"
 else
     print_status "Checking frontend dependencies..."
-    timeout 30 npm install --no-audit --no-fund --silent || {
-        print_warning "npm install check timed out or failed, but continuing..."
+    npm install --no-audit --no-fund --silent || {
+        print_warning "npm install check failed, but continuing..."
     }
     print_success "Frontend dependencies are up to date"
 fi
@@ -159,7 +170,7 @@ kill_port 3000
 # Start Django backend server
 print_status "Starting Django backend server on port 8000..."
 cd ../backend
-python manage.py runserver 0.0.0.0:8000 &
+python manage.py runserver 127.0.0.1:8000 --noreload &
 BACKEND_PID=$!
 
 # Wait a moment for backend to start
@@ -177,7 +188,7 @@ print_success "Django backend server started successfully (PID: $BACKEND_PID)"
 # Start React frontend server
 print_status "Starting React frontend server on port 3000..."
 cd ../frontend
-npm start &
+DANGEROUSLY_DISABLE_HOST_CHECK=true HOST=127.0.0.1 PORT=3000 WDS_SOCKET_HOST=127.0.0.1 npm start &
 FRONTEND_PID=$!
 
 # Wait a moment for frontend to start

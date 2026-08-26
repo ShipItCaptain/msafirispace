@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { 
   HomeModernIcon,
   BuildingOfficeIcon,
-  SparklesIcon,
   UserIcon,
   CheckCircleIcon
 } from '@heroicons/react/24/outline';

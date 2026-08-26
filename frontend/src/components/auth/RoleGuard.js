@@ -6,8 +6,7 @@ import {
   ExclamationTriangleIcon,
   HomeIcon,
   BuildingOfficeIcon,
-  HomeModernIcon,
-  SparklesIcon
+  HomeModernIcon
 } from '@heroicons/react/24/outline';
 
 const RoleGuard = ({ 

@@ -2,15 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
-import { useBnBListings } from '../contexts/BnBListingsContext';
+import { bnbAPI } from '../services/api';
 import ComprehensiveBnBForm from '../components/forms/ComprehensiveBnBForm';
 import {
   ArrowLeftIcon,
   PencilIcon,
   TrashIcon,
-  CalendarIcon,
-  CurrencyDollarIcon,
-  StarIcon,
   MapPinIcon,
   HomeIcon,
   WifiIcon,
@@ -19,43 +16,38 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
   PhotoIcon,
-  HeartIcon,
-  ShareIcon,
-  XMarkIcon,
-  ShieldCheckIcon,
-  InformationCircleIcon
 } from '@heroicons/react/24/outline';
 
 const BnBListingDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotifications();
-  const { getListingById, updateListing, deleteListing } = useBnBListings();
   const [listing, setListing] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Load listing data from context
+  // Load listing data from API
   useEffect(() => {
     const loadListing = async () => {
       setIsLoading(true);
-      
-      // Simulate API call delay
-      setTimeout(() => {
-        const foundListing = getListingById(id);
-        if (foundListing) {
-          setListing(foundListing);
-        } else {
-          setListing(null);
-        }
+      try {
+        const foundListing = await bnbAPI.getListing(parseInt(id));
+        setListing(foundListing);
+      } catch (error) {
+        console.error('Failed to load listing:', error);
+        showError('Failed to Load Listing', error?.response?.data?.detail || 'Could not load the BnB listing. Please try again.', 7000);
+        setListing(null);
+      } finally {
         setIsLoading(false);
-      }, 500);
+      }
     };
 
-    loadListing();
-  }, [id, getListingById]);
+    if (id) {
+      loadListing();
+    }
+  }, [id, showError]);
 
   const handleEdit = () => {
     setShowEditForm(true);
@@ -65,52 +57,53 @@ const BnBListingDetailPage = () => {
     setIsDeleting(true);
     
     try {
-      // Simulate API call
-      setTimeout(() => {
-        deleteListing(parseInt(id));
-        setIsDeleting(false);
-        setShowDeleteConfirm(false);
-        showSuccess(
-          'Listing Deleted!',
-          'The BnB listing has been successfully deleted.',
-          5000
-        );
-        navigate('/host/bnb');
-      }, 1000);
+      await bnbAPI.remove(parseInt(id));
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      showSuccess(
+        'Listing Deleted!',
+        'The BnB listing has been successfully deleted.',
+        5000
+      );
+      navigate('/host/bnb');
     } catch (error) {
+      console.error('Delete error:', error);
       setIsDeleting(false);
       showError(
         'Delete Failed',
-        'There was an error deleting the listing. Please try again.',
+        error?.response?.data?.detail || 'There was an error deleting the listing. Please try again.',
         7000
       );
     }
   };
 
-  const handleSave = (updatedData) => {
+  const handleSave = async (updatedData) => {
     try {
-      // Simulate API call delay
-      setTimeout(() => {
-        const updatedListing = {
-          ...updatedData,
-          // Map photos to images for compatibility when editing
-          images: updatedData.photos && updatedData.photos.length > 0 ? updatedData.photos : (updatedData.images || ['/api/placeholder/400/300']),
-          // Map pricePerNight to price for compatibility when editing
-          price: updatedData.pricePerNight || updatedData.price || 0,
-        };
-        updateListing(updatedListing);
-        setListing(prev => ({ ...prev, ...updatedListing }));
-        setShowEditForm(false);
-        showSuccess(
-          'Changes Updated!',
-          'Your BnB listing has been successfully updated.',
-          5000
-        );
-      }, 1000);
+      // Map form data to API format
+      const apiData = {
+        title: updatedData.title || updatedData.propertyName || listing?.title || '',
+        description: updatedData.description || listing?.description || '',
+        property_type: updatedData.propertyType || listing?.property_type || 'bnb',
+        address: updatedData.address || listing?.address || '',
+        city: updatedData.city || listing?.city || '',
+        country: updatedData.country || listing?.country || 'Kenya',
+        price_per_night: parseFloat(updatedData.pricePerNight || updatedData.price || listing?.price_per_night || 0),
+        is_active: listing?.is_active !== false
+      };
+
+      const updatedListing = await bnbAPI.update(parseInt(id), apiData);
+      setListing(updatedListing);
+      setShowEditForm(false);
+      showSuccess(
+        'Changes Updated!',
+        'Your BnB listing has been successfully updated.',
+        5000
+      );
     } catch (error) {
+      console.error('Update error:', error);
       showError(
         'Update Failed',
-        'There was an error updating your listing. Please try again.',
+        error?.response?.data?.detail || error?.message || 'There was an error updating your listing. Please try again.',
         7000
       );
     }
@@ -171,16 +164,16 @@ const BnBListingDetailPage = () => {
               </button>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">{listing.title}</h1>
-                <p className="text-gray-600">{listing.location}</p>
+                <p className="text-gray-600">{listing.city}, {listing.country}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
               <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
-                listing.status === 'active' 
+                listing.is_active !== false 
                   ? 'bg-green-100 text-green-800' 
                   : 'bg-gray-100 text-gray-800'
               }`}>
-                {listing.status}
+                {listing.is_active !== false ? 'Active' : 'Inactive'}
               </span>
               <button
                 onClick={handleEdit}
@@ -212,20 +205,24 @@ const BnBListingDetailPage = () => {
               className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-4">
-                {(listing.images || []).map((image, index) => (
-                  <div key={index} className="relative group">
-                    <img
-                      src={image}
-                      alt={`${listing.title} - Image ${index + 1}`}
-                      className="w-full h-48 object-cover rounded-lg"
-                    />
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-center justify-center">
-                      <button className="opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-white/80 rounded-full">
-                        <PhotoIcon className="w-5 h-5 text-gray-600" />
-                      </button>
+                {(listing.images || []).map((image, index) => {
+                  const src = typeof image === 'string' ? image : image?.image;
+                  if (!src) return null;
+                  return (
+                    <div key={image.id || index} className="relative group">
+                      <img
+                        src={src}
+                        alt={`${listing.title} - Slide ${index + 1}`}
+                        className="w-full h-48 object-cover rounded-lg"
+                      />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-center justify-center">
+                        <button className="opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-white/80 rounded-full">
+                          <PhotoIcon className="w-5 h-5 text-gray-600" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </motion.div>
 
@@ -337,17 +334,10 @@ const BnBListingDetailPage = () => {
                 <div className="flex items-start space-x-3">
                   <MapPinIcon className="w-5 h-5 text-gray-400 mt-1" />
                   <div>
-                    <p className="font-medium text-gray-900">{listing.address}</p>
+                    {listing.address && <p className="font-medium text-gray-900">{listing.address}</p>}
                     <p className="text-gray-600">{listing.city}, {listing.country}</p>
                   </div>
                 </div>
-                
-                {listing.nearbyAttractions && (
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-2">Nearby attractions</h3>
-                    <p className="text-gray-700">{listing.nearbyAttractions}</p>
-                  </div>
-                )}
                 
                 {listing.transportation && (
                   <div>
@@ -370,33 +360,41 @@ const BnBListingDetailPage = () => {
             >
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-3xl font-bold text-gray-900">KSh {(listing.price || 0).toLocaleString()}</p>
+                  <p className="text-3xl font-bold text-gray-900">KSh {(listing.price_per_night || 0).toLocaleString()}</p>
                   <p className="text-gray-600">per night</p>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <StarIcon className="w-5 h-5 text-yellow-400 fill-current" />
-                  <span className="font-medium">{listing.rating}</span>
-                  <span className="text-gray-500">({listing.reviews} reviews)</span>
-                </div>
+                {listing.property_type && (
+                  <div className="text-sm px-3 py-1 bg-gray-100 text-gray-600 rounded">
+                    {listing.property_type}
+                  </div>
+                )}
               </div>
               
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Cleaning fee</span>
-                  <span className="font-medium">KSh {(listing.cleaningFee || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Security deposit</span>
-                  <span className="font-medium">KSh {(listing.securityDeposit || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Minimum stay</span>
-                  <span className="font-medium">{listing.minimumNights} nights</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Maximum stay</span>
-                  <span className="font-medium">{listing.maximumNights} nights</span>
-                </div>
+                {listing.cleaningFee && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Cleaning fee</span>
+                    <span className="font-medium">KSh {(listing.cleaningFee || 0).toLocaleString()}</span>
+                  </div>
+                )}
+                {listing.securityDeposit && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Security deposit</span>
+                    <span className="font-medium">KSh {(listing.securityDeposit || 0).toLocaleString()}</span>
+                  </div>
+                )}
+                {listing.minimumNights && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Minimum stay</span>
+                    <span className="font-medium">{listing.minimumNights} nights</span>
+                  </div>
+                )}
+                {listing.maximumNights && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Maximum stay</span>
+                    <span className="font-medium">{listing.maximumNights} nights</span>
+                  </div>
+                )}
               </div>
             </motion.div>
 

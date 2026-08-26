@@ -48,7 +48,6 @@ LOCAL_APPS = [
     'apps.users',
     'apps.listings',
     'apps.bookings',
-    'apps.concierge',
     'apps.payments',
     'apps.reviews',
     'apps.promotions',
@@ -59,6 +58,7 @@ LOCAL_APPS = [
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
+    'msafiri.middleware.RequestIDMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -156,6 +156,7 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'EXCEPTION_HANDLER': 'msafiri.exception_handler.msafiri_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle'
@@ -197,12 +198,18 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
+from corsheaders.defaults import default_headers
+
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
     default='http://localhost:3000,http://127.0.0.1:3000'
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ['X-Request-ID']
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'X-Request-ID',
+]
 
 # Cache Configuration (using local memory for development)
 CACHES = {
@@ -217,6 +224,23 @@ CLOUDINARY_STORAGE = {
     'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME', default=''),
     'API_KEY': config('CLOUDINARY_API_KEY', default=''),
     'API_SECRET': config('CLOUDINARY_API_SECRET', default=''),
+}
+
+# Media storage backend:
+# - Local filesystem in development
+# - Cloudinary in production (or when explicitly enabled)
+USE_CLOUDINARY_STORAGE = config('USE_CLOUDINARY_STORAGE', default=(not DEBUG), cast=bool)
+STORAGES = {
+    'default': {
+        'BACKEND': (
+            'cloudinary_storage.storage.MediaCloudinaryStorage'
+            if USE_CLOUDINARY_STORAGE
+            else 'django.core.files.storage.FileSystemStorage'
+        )
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'
+    },
 }
 
 # Email Configuration
@@ -247,6 +271,7 @@ MPESA_ENVIRONMENT = config('MPESA_ENVIRONMENT', default='sandbox')
 PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY', default='')
 PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY', default='')
 PAYSTACK_ENVIRONMENT = config('PAYSTACK_ENVIRONMENT', default='test')
+WEBHOOK_TEST_TOKEN = config('WEBHOOK_TEST_TOKEN', default='')
 
 # Security Settings
 if not DEBUG:

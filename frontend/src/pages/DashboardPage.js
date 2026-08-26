@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import RoleIndicator from '../components/auth/RoleIndicator';
 import RoleSwitcher from '../components/auth/RoleSwitcher';
 import { 
   CalendarDaysIcon, 
   BuildingOfficeIcon, 
-  SparklesIcon, 
   StarIcon,
   CreditCardIcon,
   PlusIcon,
@@ -14,7 +13,6 @@ import {
   EyeIcon,
   Cog6ToothIcon,
   ChartBarIcon,
-  BellIcon,
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
@@ -23,18 +21,28 @@ import {
   UsersIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
-  MapIcon,
-  ArrowRightIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
-import { authAPI, bookingsAPI, listingsAPI } from '../services/api';
+import { authAPI, bookingsAPI } from '../services/api';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import ConfirmDialog from '../components/common/ConfirmDialog';
+import { useFavorites } from '../contexts/FavoritesContext';
 
 const DashboardPage = () => {
   const { user, isBnBHost, isHotelRestaurantHost } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('overview');
-  const isGuest = user?.active_role === 'guest';
+  const activeRole = user?.active_role || null;
+  const isGuest = activeRole === 'guest';
+  const isHostActiveRole = Boolean(activeRole && activeRole !== 'guest');
+  const hostDashboardPath = isHotelRestaurantHost
+    ? '/host-dashboard'
+    : isBnBHost
+      ? '/host/bnb'
+      : '/host/home';
   const [guestSummary, setGuestSummary] = useState(null);
   const [guestLoading, setGuestLoading] = useState(false);
   const [guestError, setGuestError] = useState(null);
@@ -44,9 +52,28 @@ const DashboardPage = () => {
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsError, setBookingsError] = useState(null);
   const [bookingFilter, setBookingFilter] = useState('all'); // all, upcoming, in_progress, past, pending
-  const [favorites, setFavorites] = useState([]);
-  const [favoritesLoading, setFavoritesLoading] = useState(false);
-  const [favoritesError, setFavoritesError] = useState(null);
+  const [favoritesFilter, setFavoritesFilter] = useState('all');
+  const [bookingToCancel, setBookingToCancel] = useState(null);
+  const [isCancellingBooking, setIsCancellingBooking] = useState(false);
+  const {
+    combinedFavorites,
+    loading: favoritesLoading,
+    error: favoritesError,
+    refreshFavorites,
+    toggleHotelFavorite,
+    toggleBnBFavorite,
+  } = useFavorites();
+
+  const hotelFavorites = combinedFavorites.filter((fav) => fav.type === 'hotel');
+  const bnbFavorites = combinedFavorites.filter((fav) => fav.type === 'bnb');
+
+  useEffect(() => {
+    const initialTab = location.state?.initialTab;
+    if (initialTab && initialTab !== activeTab) {
+      setActiveTab(initialTab);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [activeTab, location.pathname, location.state, navigate]);
 
   useEffect(() => {
     if (!isGuest) return;
@@ -63,6 +90,11 @@ const DashboardPage = () => {
     };
     load();
   }, [isGuest]);
+
+  useEffect(() => {
+    if (!isHostActiveRole) return;
+    navigate(hostDashboardPath, { replace: true });
+  }, [isHostActiveRole, hostDashboardPath, navigate]);
 
   // Load bookings when guest views bookings tab
   useEffect(() => {
@@ -87,55 +119,245 @@ const DashboardPage = () => {
     loadBookings();
   }, [isGuest, activeTab]);
 
-  // Load favorites when favorites tab is active
   useEffect(() => {
     if (!isGuest || activeTab !== 'favorites') return;
-    const loadFavorites = async () => {
-      try {
-        setFavoritesLoading(true);
-        setFavoritesError(null);
-        const data = await listingsAPI.getFavorites();
-        const list = data.results || data || [];
-        setFavorites(list);
-      } catch (err) {
-        setFavoritesError('Failed to load favorites');
-      } finally {
-        setFavoritesLoading(false);
+    refreshFavorites();
+  }, [activeTab, isGuest, refreshFavorites]);
+
+  useEffect(() => {
+    if (activeTab !== 'favorites') return;
+    const queryFilter = searchParams.get('favType');
+    const localFilter = localStorage.getItem('dashboardFavoritesFilter');
+    const nextFilter = queryFilter || localFilter || 'all';
+    if (['all', 'hotel', 'bnb'].includes(nextFilter)) {
+      setFavoritesFilter(nextFilter);
+    }
+  }, [activeTab, searchParams]);
+
+  useEffect(() => {
+    if (activeTab !== 'favorites') return;
+    localStorage.setItem('dashboardFavoritesFilter', favoritesFilter);
+    if (searchParams.get('favType') === favoritesFilter) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('favType', favoritesFilter);
+    setSearchParams(next, { replace: true });
+  }, [activeTab, favoritesFilter, searchParams, setSearchParams]);
+
+  const handleRemoveFavorite = async (favorite) => {
+    if (!favorite) return;
+    const type = favorite.type;
+    if (type === 'hotel') {
+      const hotelId = Number(favorite?.hotel?.id || favorite?.hotel_id);
+      const result = await toggleHotelFavorite(hotelId);
+      if (!result.ok) {
+        toast.error(result.errorMessage);
+        return;
       }
-    };
-    loadFavorites();
-  }, [isGuest, activeTab]);
+      toast.success('Removed from favorites');
+      return;
+    }
+
+    const bnbId = Number(favorite?.bnb_listing?.id || favorite?.bnb_listing_id);
+    const result = await toggleBnBFavorite(bnbId);
+    if (!result.ok) {
+      toast.error(result.errorMessage);
+      return;
+    }
+    toast.success('Removed from favorites');
+  };
+
+  if (isHostActiveRole) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 text-center max-w-lg">
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Redirecting to Host Dashboard</h1>
+          <p className="text-sm text-gray-600 mb-4">
+            Host accounts use dedicated dashboards. If you are not redirected automatically, use the button below.
+          </p>
+          <button
+            onClick={() => navigate(hostDashboardPath)}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            Open Host Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const FavoritesSection = () => {
     if (!isGuest) return null;
+    const visibleFavorites = combinedFavorites.filter((fav) => {
+      if (favoritesFilter === 'all') return true;
+      return fav.type === favoritesFilter;
+    });
+
     return (
       <div className="bg-white rounded-lg shadow p-6">
         {favoritesLoading ? (
-          <div className="text-center p-8">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading favorites...</p>
+          <div>
+            <div className="mb-5 flex flex-wrap gap-2">
+              <div className="h-8 w-16 rounded-full bg-gray-200 animate-pulse" />
+              <div className="h-8 w-24 rounded-full bg-gray-200 animate-pulse" />
+              <div className="h-8 w-20 rounded-full bg-gray-200 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50 animate-pulse">
+                  <div className="h-32 bg-gray-200" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 w-2/3 bg-gray-200 rounded" />
+                    <div className="h-3 w-full bg-gray-200 rounded" />
+                    <div className="h-3 w-1/2 bg-gray-200 rounded" />
+                    <div className="h-3 w-1/3 bg-gray-200 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : favoritesError ? (
-          <p className="text-red-600">{favoritesError}</p>
-        ) : favorites.length === 0 ? (
+          <div className="text-center py-10 border border-red-200 rounded-lg bg-red-50">
+            <p className="text-red-700 mb-4">{favoritesError}</p>
+            <button
+              type="button"
+              onClick={refreshFavorites}
+              className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        ) : combinedFavorites.length === 0 ? (
           <div className="text-center p-8">
             <p className="text-gray-700 mb-4">You have no favorites yet.</p>
             <Link to="/search" className="px-4 py-2 bg-red-600 text-white rounded-lg">Find places to stay</Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {favorites.map((fav) => (
-              <div key={fav.id} className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
-                <Link to={`/hotel/${fav.hotel?.id || fav.hotel_id || ''}`} className="block p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{fav.hotel?.name || 'Hotel'}</h3>
-                    <span className="text-xs text-gray-500">Saved</span>
-                  </div>
-                  <p className="text-sm text-gray-600 line-clamp-2">{fav.hotel?.short_description || ''}</p>
-                  <div className="mt-2 text-sm text-gray-500">{fav.hotel?.city}, {fav.hotel?.country}</div>
-                </Link>
+          <div>
+            <div className="mb-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setFavoritesFilter('all')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  favoritesFilter === 'all'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                All ({combinedFavorites.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFavoritesFilter('hotel')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  favoritesFilter === 'hotel'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Hotels ({hotelFavorites.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFavoritesFilter('bnb')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  favoritesFilter === 'bnb'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                BnBs ({bnbFavorites.length})
+              </button>
+            </div>
+
+            {visibleFavorites.length === 0 ? (
+              <div className="text-center py-10 border border-gray-200 rounded-lg bg-gray-50">
+                <p className="text-gray-600">No favorites in this category yet.</p>
+                {favoritesFilter === 'hotel' ? (
+                  <Link to="/hotels" className="inline-block mt-4 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700">
+                    Browse Hotels
+                  </Link>
+                ) : null}
+                {favoritesFilter === 'bnb' ? (
+                  <Link to="/bnbs" className="inline-block mt-4 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700">
+                    Browse BnBs
+                  </Link>
+                ) : null}
               </div>
-            ))}
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {visibleFavorites.map((fav) => {
+              if (fav.type === 'hotel') {
+                const hotel = fav.hotel || {};
+                return (
+                  <div key={`hotel-${fav.id}`} className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
+                    <Link to={`/hotel/${hotel.id || fav.hotel_id || ''}`} className="block">
+                      <div className="h-32 bg-gray-200">
+                        {hotel.primary_image ? (
+                          <img src={hotel.primary_image} alt={hotel.name || 'Hotel'} className="w-full h-full object-cover" />
+                        ) : null}
+                      </div>
+                      <div className="p-4">
+                      <div className="flex items-start justify-between mb-2 gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{hotel.name || 'Hotel'}</h3>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            handleRemoveFavorite(fav);
+                          }}
+                          className="text-xs text-red-600 hover:text-red-700 font-medium"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <span className="text-xs text-gray-500">Saved • Hotel</span>
+                      <p className="text-sm text-gray-600 line-clamp-2">{hotel.short_description || ''}</p>
+                      <div className="mt-2 text-sm text-gray-500">{hotel.city}, {hotel.country}</div>
+                      <div className="mt-3 text-xs font-medium text-gray-700">
+                        {hotel.base_price || hotel.price ? `From KES ${Number(hotel.base_price || hotel.price).toLocaleString()} / night` : 'Price shown on details'}
+                      </div>
+                      </div>
+                    </Link>
+                  </div>
+                );
+              }
+
+              const listing = fav.bnb_listing || {};
+              return (
+                <div key={`bnb-${fav.id}`} className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
+                  <Link to={`/bnb/${listing.id || fav.bnb_listing_id || ''}`} className="block">
+                    <div className="h-32 bg-gray-200">
+                      {listing.primary_image ? (
+                        <img src={listing.primary_image} alt={listing.title || 'BnB'} className="w-full h-full object-cover" />
+                      ) : null}
+                    </div>
+                    <div className="p-4">
+                    <div className="flex items-start justify-between mb-2 gap-2">
+                      <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{listing.title || 'BnB Stay'}</h3>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          handleRemoveFavorite(fav);
+                        }}
+                        className="text-xs text-red-600 hover:text-red-700 font-medium"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <span className="text-xs text-gray-500">Saved • BnB</span>
+                    <p className="text-sm text-gray-600 line-clamp-2">{listing.description || ''}</p>
+                    <div className="mt-2 text-sm text-gray-500">{listing.city}, {listing.country}</div>
+                    <div className="mt-3 text-xs font-medium text-gray-700">
+                      {listing.price_per_night ? `From KES ${Number(listing.price_per_night).toLocaleString()} / night` : 'Price shown on details'}
+                    </div>
+                    </div>
+                  </Link>
+                </div>
+              );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -454,16 +676,20 @@ const DashboardPage = () => {
     return categorized;
   };
 
-  const handleCancelBooking = async (bookingId) => {
-    if (!window.confirm('Are you sure you want to cancel this booking?')) return;
-    
+  const handleCancelBooking = async () => {
+    if (!bookingToCancel) return;
     try {
-      await bookingsAPI.cancelBooking(bookingId);
+      setIsCancellingBooking(true);
+      await bookingsAPI.cancelBooking(bookingToCancel);
       const data = await bookingsAPI.getBookings();
       setBookings(data.results || data || []);
+      toast.success('Booking cancelled successfully');
+      setBookingToCancel(null);
     } catch (err) {
-      alert('Failed to cancel booking. Please try again.');
+      toast.error('Failed to cancel booking. Please try again.');
       console.error('Error cancelling booking:', err);
+    } finally {
+      setIsCancellingBooking(false);
     }
   };
 
@@ -640,7 +866,7 @@ const DashboardPage = () => {
                         </button>
                         {(booking.status === 'pending' || booking.status === 'confirmed') && (
                           <button
-                            onClick={() => handleCancelBooking(booking.id)}
+                            onClick={() => setBookingToCancel(booking.id)}
                             className="inline-flex items-center px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
                           >
                             <XMarkIcon className="w-4 h-4 mr-2" />
@@ -928,37 +1154,6 @@ const DashboardPage = () => {
     </div>
   );
 
-  const renderServices = () => (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">My Services</h2>
-        <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          <PlusIcon className="w-5 h-5 mr-2" />
-          Add New Service
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center mb-4">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <SparklesIcon className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-lg font-semibold text-gray-900">City Tours</h3>
-              <p className="text-sm text-gray-600">Nairobi City Center</p>
-            </div>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">Guided tours of Nairobi's historic sites and modern attractions.</p>
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-green-600">Active</span>
-            <span className="text-sm text-gray-600">$50/hour</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderEstablishments = () => (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -1146,8 +1341,6 @@ const DashboardPage = () => {
                   guest: { icon: UserIcon, label: 'Guest', color: 'text-blue-600', bgColor: 'bg-blue-100' },
                   bnb_host: { icon: HomeIcon, label: 'BnB Host', color: 'text-green-600', bgColor: 'bg-green-100' },
                   hotel_host: { icon: BuildingOfficeIcon, label: 'Hotel Host', color: 'text-purple-600', bgColor: 'bg-purple-100' },
-                  tour_operator: { icon: MapIcon, label: 'Tour Operator', color: 'text-orange-600', bgColor: 'bg-orange-100' },
-                  concierge_host: { icon: SparklesIcon, label: 'Concierge', color: 'text-pink-600', bgColor: 'bg-pink-100' }
                 };
                 const config = roleConfig[role] || roleConfig.guest;
                 const IconComponent = config.icon;
@@ -1229,8 +1422,6 @@ const DashboardPage = () => {
       // Host-specific tabs
       case 'properties':
         return renderProperties();
-      case 'services':
-        return renderServices();
       case 'establishments':
         return renderEstablishments();
       case 'staff':
@@ -1302,6 +1493,18 @@ const DashboardPage = () => {
 
         {/* Content */}
         {renderContent()}
+
+        <ConfirmDialog
+          isOpen={Boolean(bookingToCancel)}
+          title="Cancel Booking?"
+          message="This will cancel your reservation. If payment was made, refund handling follows your policy."
+          confirmLabel="Confirm Cancel"
+          cancelLabel="Keep Booking"
+          isLoading={isCancellingBooking}
+          onConfirm={handleCancelBooking}
+          onCancel={() => setBookingToCancel(null)}
+          tone="danger"
+        />
       </div>
     </div>
   );

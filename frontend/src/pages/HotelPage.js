@@ -12,26 +12,50 @@ import {
   ChevronRightIcon,
   ShieldCheckIcon,
   HomeIcon,
-  SparklesIcon
+  SparklesIcon,
+  CalendarIcon,
+  UsersIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
-import api from '../services/api';
+import api, { bookingsAPI, getApiErrorDetails } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
+import { toast } from 'react-hot-toast';
+import { useFavorites } from '../contexts/FavoritesContext';
 
 const HotelPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
+  const { isHotelFavorite, isHotelFavoriteBusy, toggleHotelFavorite } = useFavorites();
   const [hotel, setHotel] = useState(null);
+  const [roomTypes, setRoomTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [selectedRoomType, setSelectedRoomType] = useState(null);
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
+  const [numAdults, setNumAdults] = useState(1);
+  const [numChildren, setNumChildren] = useState(0);
+  const [isBooking, setIsBooking] = useState(false);
+  const hotelId = Number(id);
+  const isFavorite = isHotelFavorite(hotelId);
+  const isFavoriteLoading = isHotelFavoriteBusy(hotelId);
 
   useEffect(() => {
     const fetchHotel = async () => {
       try {
         setLoading(true);
-        const response = await api.get(`/listings/hotels/${id}/`);
-        setHotel(response.data);
+        const [hotelResponse, roomsResponse] = await Promise.all([
+          api.get(`/listings/hotels/${id}/`),
+          api.get(`/listings/hotels/${id}/rooms/`)
+        ]);
+        setHotel(hotelResponse.data);
+        const rooms = roomsResponse.data?.results || roomsResponse.data || [];
+        setRoomTypes(rooms);
+        if (rooms.length > 0) {
+          setSelectedRoomType(rooms[0].id);
+        }
       } catch (err) {
         setError('Failed to load hotel details');
         console.error('Error fetching hotel:', err);
@@ -59,9 +83,25 @@ const HotelPage = () => {
     }
   };
 
-  const handleFavoriteToggle = () => {
-    setIsFavorite(!isFavorite);
-    // TODO: Implement favorite functionality
+  const handleFavoriteToggle = async () => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: { pathname: `/hotel/${id}` } } });
+      return;
+    }
+
+    try {
+      const hotelId = Number(id);
+      const result = await toggleHotelFavorite(hotelId);
+      if (!result.ok) {
+        toast.error(result.errorMessage);
+        return;
+      }
+      toast.success(result.isFavorite ? 'Added to favorites' : 'Removed from favorites');
+    } catch (err) {
+      console.error('Failed to update favorite:', err);
+      const message = err?.response?.data?.detail || 'Failed to update favorite. Please try again.';
+      toast.error(message);
+    }
   };
 
   const handleShare = () => {
@@ -74,6 +114,62 @@ const HotelPage = () => {
     } else {
       // Fallback to copying URL
       navigator.clipboard.writeText(window.location.href);
+    }
+  };
+
+  const handleBookNow = async () => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: { pathname: `/hotel/${id}` } } });
+      return;
+    }
+
+    if (!selectedRoomType) {
+      toast.error('Please select a room type');
+      return;
+    }
+
+    if (!checkIn || !checkOut) {
+      toast.error('Please select check-in and check-out dates');
+      return;
+    }
+
+    if (new Date(checkIn) >= new Date(checkOut)) {
+      toast.error('Check-out date must be after check-in date');
+      return;
+    }
+
+    if (numAdults < 1) {
+      toast.error('Please specify at least 1 adult');
+      return;
+    }
+
+    setIsBooking(true);
+    try {
+      const guestFullName = user?.first_name && user?.last_name 
+        ? `${user.first_name} ${user.last_name}`.trim()
+        : user?.email || 'Guest';
+      
+      const bookingData = {
+        room_type_id: selectedRoomType,
+        check_in: checkIn,
+        check_out: checkOut,
+        num_adults: numAdults,
+        num_children: numChildren,
+        guest_full_name: guestFullName,
+        guest_email: user?.email || '',
+        guest_phone: user?.phone_number || '',
+        special_requests: '',
+      };
+
+      const booking = await bookingsAPI.createBooking(bookingData);
+      toast.success('Booking request created. Choose how you want to continue on the next page.');
+      navigate(`/booking/${booking.id}`);
+    } catch (error) {
+      console.error('Booking error:', error);
+      const { fullMessage } = getApiErrorDetails(error, 'Failed to create booking. Please try again.');
+      toast.error(fullMessage);
+    } finally {
+      setIsBooking(false);
     }
   };
 
@@ -208,11 +304,13 @@ const HotelPage = () => {
         <div className="absolute top-4 right-4 flex space-x-2">
           <button
             onClick={handleFavoriteToggle}
+            disabled={isFavoriteLoading}
             className={`p-2 rounded-full backdrop-blur-sm transition-all ${
               isFavorite 
                 ? 'bg-red-600 text-white' 
                 : 'bg-white bg-opacity-80 text-gray-700 hover:bg-opacity-100'
-            }`}
+            } disabled:opacity-60 disabled:cursor-not-allowed`}
+            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
             <HeartIcon className="w-6 h-6" />
           </button>
@@ -355,15 +453,105 @@ const HotelPage = () => {
               </div>
             </div>
 
-            {/* Booking Widget Placeholder */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Ready to Book?</h3>
-              <p className="text-gray-600 mb-4">
-                Check availability and book your stay at this amazing property.
-              </p>
-              <button className="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium">
-                Check Availability
+            {/* Booking Widget */}
+            <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Book Your Stay</h3>
+              
+              {/* Room Type Selection */}
+              {roomTypes.length > 0 && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Room Type
+                  </label>
+                  <select
+                    value={selectedRoomType || ''}
+                    onChange={(e) => setSelectedRoomType(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    {roomTypes.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.name} - KSh {room.base_price?.toLocaleString()}/night
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Date Selection */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Check-in
+                  </label>
+                  <input
+                    type="date"
+                    value={checkIn}
+                    onChange={(e) => setCheckIn(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    data-testid="hotel-booking-checkin"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Check-out
+                  </label>
+                  <input
+                    type="date"
+                    value={checkOut}
+                    onChange={(e) => setCheckOut(e.target.value)}
+                    min={checkIn || new Date().toISOString().split('T')[0]}
+                    data-testid="hotel-booking-checkout"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Guest Count */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Adults
+                  </label>
+                  <div className="relative">
+                    <UsersIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="number"
+                      value={numAdults}
+                      onChange={(e) => setNumAdults(parseInt(e.target.value) || 1)}
+                      min="1"
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Children
+                  </label>
+                  <input
+                    type="number"
+                    value={numChildren}
+                    onChange={(e) => setNumChildren(parseInt(e.target.value) || 0)}
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Book Button */}
+              <button
+                onClick={handleBookNow}
+                disabled={isBooking || !selectedRoomType}
+                data-testid="hotel-booking-submit"
+                className="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                <CalendarIcon className="w-5 h-5" />
+                <span>{isBooking ? 'Processing...' : 'Book Now'}</span>
               </button>
+
+              <p className="mt-4 text-sm text-gray-500 text-center">
+                You will choose to pay now or pay at hotel on the next page.
+              </p>
             </div>
           </div>
         </motion.div>

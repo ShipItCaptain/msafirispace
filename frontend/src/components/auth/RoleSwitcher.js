@@ -7,12 +7,12 @@ import {
   PlusIcon,
   XMarkIcon,
   HomeIcon,
-  SparklesIcon,
   BuildingOfficeIcon,
-  UserIcon,
-  MapIcon
+  UserIcon
 } from '@heroicons/react/24/outline';
 import { switchUserRole, addUserRole, removeUserRole, fetchUserMe } from '../../store/slices/authSlice';
+import { toast } from 'react-hot-toast';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 const RoleSwitcher = () => {
   const dispatch = useDispatch();
@@ -20,6 +20,7 @@ const RoleSwitcher = () => {
   const { user } = useSelector((state) => state.auth);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [roleToRemove, setRoleToRemove] = useState(null);
 
   const roleConfig = {
     guest: {
@@ -37,30 +38,62 @@ const RoleSwitcher = () => {
       icon: BuildingOfficeIcon,
       description: 'Manage hotel accommodations'
     },
-    tour_operator: {
-      label: 'Tour Operator',
-      icon: MapIcon,
-      description: 'Offer tour services'
-    }
   };
 
-  const availableRoles = ['guest', 'bnb_host', 'hotel_host', 'tour_operator'];
+  const availableRoles = ['guest', 'bnb_host', 'hotel_host'];
   const userRoles = user?.roles || ['guest']; // Default to guest role
+  // Always use active_role from backend as source of truth, default to 'guest'
   const activeRole = user?.active_role || 'guest'; // Default to guest role
 
   const handleRoleSwitch = async (role) => {
-    if (role === activeRole) return;
+    // If already on the target role, don't switch
+    if (role === activeRole) {
+      console.log('Already on target role:', activeRole);
+      return;
+    }
     
     setIsLoading(true);
     try {
+      // Check if user has the role in their roles array
+      // If not, add it first before switching
+      const userHasRole = userRoles.includes(role);
+      
+      if (!userHasRole && role !== 'guest') {
+        // Add the role first if user doesn't have it
+        try {
+          await dispatch(addUserRole({ role })).unwrap();
+        } catch (addError) {
+          console.error('Failed to add role:', addError);
+          // If adding role fails, still try to switch (might work if backend auto-adds)
+        }
+      }
+      
+      // Now switch to the role
       const result = await dispatch(switchUserRole({ role })).unwrap();
-      // Optimistically update Redux user immediately
-      const updatedUser = result?.user ? result.user : { ...(user || {}), active_role: role };
-      dispatch({ type: 'auth/updateUser', payload: updatedUser });
-      // Persist selection so all pages read the same active role immediately
-      try { localStorage.setItem('userActiveRole', role); } catch (_) {}
-      // Refresh user state to ensure all pages re-render with new role
-      try { await dispatch(fetchUserMe()).unwrap(); } catch (_) {}
+      
+      // Use the user data from backend response as source of truth
+      if (result?.user) {
+        dispatch({ type: 'auth/updateUser', payload: result.user });
+        // Persist active_role from backend response
+        if (result.user.active_role) {
+          try { localStorage.setItem('userActiveRole', result.user.active_role); } catch (_) {}
+        }
+      } else {
+        // Fallback: use the role we tried to switch to
+        const updatedUser = { ...(user || {}), active_role: role };
+        dispatch({ type: 'auth/updateUser', payload: updatedUser });
+        try { localStorage.setItem('userActiveRole', role); } catch (_) {}
+      }
+      
+      // Always refresh user state from backend to ensure consistency
+      try { 
+        const freshUserData = await dispatch(fetchUserMe()).unwrap();
+        // Update localStorage with fresh data from backend
+        if (freshUserData?.active_role) {
+          try { localStorage.setItem('userActiveRole', freshUserData.active_role); } catch (_) {}
+        }
+      } catch (_) {}
+      
       setIsOpen(false);
       
       // Check if switching to host role and redirect to host home if new
@@ -85,6 +118,9 @@ const RoleSwitcher = () => {
       setTimeout(() => { if (document.visibilityState) { try { window.location.reload(); } catch (_) {} } }, 25);
     } catch (error) {
       console.error('Failed to switch role:', error);
+      // Show user-friendly error message
+      const errorMessage = error?.detail || error?.message || 'Failed to switch role. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -127,27 +163,38 @@ const RoleSwitcher = () => {
       }
     } catch (error) {
       console.error('Failed to add role:', error);
+      const errorMessage = error?.detail || error?.message || 'Failed to add role. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleRemoveRole = async (role) => {
+  const requestRemoveRole = (role) => {
     if (role === activeRole) {
-      alert('Cannot remove active role. Please switch to another role first.');
+      toast.error('Cannot remove active role. Switch to another role first.');
       return;
     }
     
     if (userRoles.length === 1) {
-      alert('Cannot remove the last remaining role.');
+      toast.error('Cannot remove the last remaining role.');
       return;
     }
+    setRoleToRemove(role);
+  };
+
+  const handleRemoveRole = async () => {
+    if (!roleToRemove) return;
 
     setIsLoading(true);
     try {
-      await dispatch(removeUserRole(role)).unwrap();
+      await dispatch(removeUserRole(roleToRemove)).unwrap();
+      toast.success('Role removed successfully');
+      setRoleToRemove(null);
     } catch (error) {
       console.error('Failed to remove role:', error);
+      const errorMessage = error?.detail || error?.message || 'Failed to remove role. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -254,7 +301,7 @@ const RoleSwitcher = () => {
                   return (
                     <button
                       key={role}
-                      onClick={() => handleRemoveRole(role)}
+                      onClick={() => requestRemoveRole(role)}
                       disabled={isLoading}
                       className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200 disabled:opacity-50"
                     >
@@ -270,6 +317,18 @@ const RoleSwitcher = () => {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={Boolean(roleToRemove)}
+        title="Remove Role?"
+        message="You can add this role again later. Continue removing this role from your account?"
+        confirmLabel="Remove Role"
+        cancelLabel="Keep Role"
+        isLoading={isLoading}
+        onConfirm={handleRemoveRole}
+        onCancel={() => setRoleToRemove(null)}
+        tone="danger"
+      />
     </div>
   );
 };

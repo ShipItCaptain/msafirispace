@@ -13,6 +13,8 @@ import SearchPage from './pages/SearchPage';
 import ListingDetailPage from './pages/ListingDetailPage';
 import HotelPage from './pages/HotelPage';
 import HotelsPage from './pages/HotelsPage';
+import BnBsPage from './pages/BnBsPage';
+import BnBDetailPage from './pages/BnBDetailPage';
 import ListHotelPage from './pages/ListHotelPage';
 import DashboardPage from './pages/DashboardPage';
 import ProfilePage from './pages/ProfilePage';
@@ -21,13 +23,13 @@ import RegisterPage from './pages/RegisterPage';
 import BookingDetailPage from './pages/BookingDetailPage';
 import BecomeHostPage from './pages/BecomeHostPage';
 // Removed HotelRestaurantHostPage form route usage
-import BnBHostPage from './pages/BnBHostPage';
+import BnBCreatePage from './pages/BnBCreatePage';
 import HotelHostDashboard from './pages/HotelHostDashboardPlaceholder';
 import BnBHostManagementPage from './pages/BnBHostManagementPage';
 import BnBListingDetailPage from './pages/BnBListingDetailPage';
-import HotelHostManagementPage from './pages/HotelHostManagementPage';
 // Concierge pages removed
 import HostHomePage from './pages/HostHomePage';
+import RoomTypeEditPage from './pages/RoomTypeEditPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 // Protected Route Component
@@ -38,12 +40,12 @@ import RoleGuard from './components/auth/RoleGuard';
 import { useAuth } from './hooks/useAuth';
 import AuthInitializer from './components/auth/AuthInitializer';
 import { NotificationProvider, useNotifications } from './contexts/NotificationContext';
-import { BnBListingsProvider } from './contexts/BnBListingsContext';
+import { FavoritesProvider } from './contexts/FavoritesContext';
 import NotificationContainer from './components/notifications/NotificationContainer';
 
 // App Content Component
 function AppContent() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { notifications, removeNotification } = useNotifications();
 
   return (
@@ -109,7 +111,7 @@ function AppContent() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <HotelsPage />
+                <BnBsPage />
               </motion.div>
               <Footer />
             </Layout>
@@ -143,6 +145,21 @@ function AppContent() {
                 transition={{ duration: 0.3 }}
               >
                 <HotelPage />
+              </motion.div>
+              <Footer />
+            </Layout>
+          } />
+          
+          <Route path="/bnb/:id" element={
+            <Layout>
+              <Header />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <BnBDetailPage />
               </motion.div>
               <Footer />
             </Layout>
@@ -292,102 +309,130 @@ function AppContent() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <BnBHostPage />
+                  <BnBCreatePage />
                 </motion.div>
                 <Footer />
               </Layout>
             </ProtectedRoute>
           } />
           
-          {/* Become-host concierge flow removed */}
           
           <Route path="/host-dashboard" element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Layout>
-                <Header />
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <HotelHostDashboard />
-                </motion.div>
-                <Footer />
-              </Layout>
+              <RoleGuard allowedRoles={['bnb_host','hotel_host']} fallbackPath="/" showAccessDenied={false}>
+                <Layout>
+                  <Header />
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <HotelHostDashboard />
+                  </motion.div>
+                  <Footer />
+                </Layout>
+              </RoleGuard>
             </ProtectedRoute>
           } />
           
           {/* Host Management Routes */}
           <Route path="/host/bnb" element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Layout>
-                <Header />
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <BnBHostManagementPage />
-                </motion.div>
-                <Footer />
-              </Layout>
+              <RoleGuard allowedRoles={['bnb_host','hotel_host']} fallbackPath="/" showAccessDenied={false}>
+                <Layout>
+                  <Header />
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <BnBHostManagementPage />
+                  </motion.div>
+                  <Footer />
+                </Layout>
+              </RoleGuard>
             </ProtectedRoute>
           } />
           
           <Route path="/host/bnb/:id" element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Layout>
-                <Header />
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <BnBListingDetailPage />
-                </motion.div>
-                <Footer />
-              </Layout>
+              <RoleGuard allowedRoles={['bnb_host','hotel_host']} fallbackPath="/" showAccessDenied={false}>
+                <Layout>
+                  <Header />
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <BnBListingDetailPage />
+                  </motion.div>
+                  <Footer />
+                </Layout>
+              </RoleGuard>
             </ProtectedRoute>
           } />
           
           <Route path="/host/hotels" element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Layout>
-                <Header />
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <HotelHostDashboard />
-                </motion.div>
-                <Footer />
-              </Layout>
+              <RoleGuard allowedRoles={['bnb_host','hotel_host']} fallbackPath="/" showAccessDenied={false}>
+                <Layout>
+                  <Header />
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <HotelHostDashboard />
+                  </motion.div>
+                  <Footer />
+                </Layout>
+              </RoleGuard>
             </ProtectedRoute>
           } />
 
           <Route path="/host/home" element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Layout>
-                <Header />
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <HostHomePage />
-                </motion.div>
-                <Footer />
-              </Layout>
+              <RoleGuard allowedRoles={['bnb_host','hotel_host']} fallbackPath="/" showAccessDenied={false}>
+                <Layout>
+                  <Header />
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <HostHomePage />
+                  </motion.div>
+                  <Footer />
+                </Layout>
+              </RoleGuard>
+            </ProtectedRoute>
+          } />
+
+          {/* Room Type Edit Page */}
+          <Route path="/host/rooms/:id/edit" element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <RoleGuard allowedRoles={['bnb_host','hotel_host']} fallbackPath="/" showAccessDenied={false}>
+                <Layout>
+                  <Header />
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <RoomTypeEditPage />
+                  </motion.div>
+                  <Footer />
+                </Layout>
+              </RoleGuard>
             </ProtectedRoute>
           } />
           
-          {/* Host concierge management removed */}
           
           {/* 404 Route */}
           <Route path="*" element={
@@ -414,9 +459,9 @@ function App() {
   return (
     <AuthInitializer>
       <NotificationProvider>
-        <BnBListingsProvider>
+        <FavoritesProvider>
           <AppContent />
-        </BnBListingsProvider>
+        </FavoritesProvider>
       </NotificationProvider>
     </AuthInitializer>
   );

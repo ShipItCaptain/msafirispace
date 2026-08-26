@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
-from cloudinary_storage.storage import MediaCloudinaryStorage
 
 User = get_user_model()
 
@@ -60,6 +59,11 @@ class Hotel(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     website = models.URLField(blank=True)
+
+    # Stay Rules
+    check_in_time = models.TimeField(default='14:00:00')
+    check_out_time = models.TimeField(default='11:00:00')
+    maximum_nights = models.PositiveIntegerField(default=30)
     
     # Host Information
     host = models.ForeignKey(
@@ -101,17 +105,86 @@ class Hotel(models.Model):
 # --- New: BnB Listing ---
 class BnBListing(models.Model):
     """
-    Simple BnB listing model (separate from Hotel) to support API-based BnB flow
+    Comprehensive BnB listing model with amenities, house rules, and property details
     """
+    
+    class PropertyType(models.TextChoices):
+        APARTMENT = 'apartment', 'Apartment'
+        HOUSE = 'house', 'House'
+        VILLA = 'villa', 'Villa'
+        CONDO = 'condo', 'Condominium'
+        STUDIO = 'studio', 'Studio'
+        LOFT = 'loft', 'Loft'
+        TOWNHOUSE = 'townhouse', 'Townhouse'
+        CABIN = 'cabin', 'Cabin'
+        OTHER = 'other', 'Other'
+    
     host = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bnb_listings')
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    property_type = models.CharField(max_length=50, default='bnb')
+    property_type = models.CharField(
+        max_length=50,
+        choices=PropertyType.choices,
+        default=PropertyType.APARTMENT
+    )
+    
+    # Location
     address = models.CharField(max_length=255, blank=True)
     city = models.CharField(max_length=100)
+    state_province = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, default='Kenya')
+    postal_code = models.CharField(max_length=20, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    
+    # Pricing
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cleaning_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    security_deposit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency = models.CharField(max_length=3, default='KES')
+    
+    # Property Details
+    bedrooms = models.PositiveIntegerField(default=1)
+    bathrooms = models.PositiveIntegerField(default=1)
+    beds = models.PositiveIntegerField(default=1)
+    max_guests = models.PositiveIntegerField(default=2)
+    square_footage = models.PositiveIntegerField(null=True, blank=True)
+    year_built = models.PositiveIntegerField(null=True, blank=True)
+    
+    # Check-in/out
+    check_in_time = models.TimeField(default='15:00:00')
+    check_out_time = models.TimeField(default='11:00:00')
+    minimum_nights = models.PositiveIntegerField(default=1)
+    maximum_nights = models.PositiveIntegerField(default=30)
+    
+    # Amenities (stored as JSON array)
+    amenities = models.JSONField(default=list, help_text="List of amenity names")
+    
+    # House Rules
+    house_rules = models.JSONField(default=list, help_text="List of house rules")
+    smoking_allowed = models.BooleanField(default=False)
+    pets_allowed = models.BooleanField(default=False)
+    parties_allowed = models.BooleanField(default=False)
+    children_allowed = models.BooleanField(default=True)
+    
+    # Additional Info
+    highlights = models.JSONField(default=list, help_text="List of property highlights")
+    nearby_attractions = models.TextField(blank=True)
+    transportation = models.TextField(blank=True)
+    special_instructions = models.TextField(blank=True)
+    
+    # Contact Info
+    host_name = models.CharField(max_length=100, blank=True)
+    host_phone = models.CharField(max_length=20, blank=True)
+    host_email = models.EmailField(blank=True)
+    emergency_contact = models.CharField(max_length=20, blank=True)
+    
+    # Status
     is_active = models.BooleanField(default=True)
+    is_verified = models.BooleanField(default=False)
+    is_featured = models.BooleanField(default=False)
+    
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -119,9 +192,131 @@ class BnBListing(models.Model):
         ordering = ['-created_at']
         verbose_name = 'BnB Listing'
         verbose_name_plural = 'BnB Listings'
+        indexes = [
+            models.Index(fields=['city', 'country']),
+            models.Index(fields=['is_active', 'is_verified']),
+            models.Index(fields=['price_per_night']),
+        ]
 
     def __str__(self) -> str:
         return f"{self.title} - {self.city}, {self.country}"
+    
+    @property
+    def full_address(self):
+        """Return formatted full address"""
+        parts = [self.address, self.city]
+        if self.state_province:
+            parts.append(self.state_province)
+        parts.append(self.country)
+        if self.postal_code:
+            parts.append(self.postal_code)
+        return ', '.join(filter(None, parts))
+
+
+class BnBImage(models.Model):
+    """
+    BnB listing images model for photo gallery
+    """
+    
+    class ImageType(models.TextChoices):
+        EXTERIOR = 'exterior', 'Exterior'
+        INTERIOR = 'interior', 'Interior'
+        BEDROOM = 'bedroom', 'Bedroom'
+        BATHROOM = 'bathroom', 'Bathroom'
+        KITCHEN = 'kitchen', 'Kitchen'
+        LIVING_AREA = 'living_area', 'Living Area'
+        BALCONY = 'balcony', 'Balcony'
+        GARDEN = 'garden', 'Garden'
+        VIEW = 'view', 'View'
+        AMENITY = 'amenity', 'Amenity'
+        OTHER = 'other', 'Other'
+    
+    bnb_listing = models.ForeignKey(
+        BnBListing,
+        on_delete=models.CASCADE,
+        related_name='images'
+    )
+    image = models.ImageField(
+        upload_to='bnb/images/',
+        help_text="BnB listing image"
+    )
+    image_type = models.CharField(
+        max_length=20,
+        choices=ImageType.choices,
+        default=ImageType.EXTERIOR
+    )
+    caption = models.CharField(max_length=200, blank=True)
+    is_primary = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = 'BnB Image'
+        verbose_name_plural = 'BnB Images'
+    
+    def __str__(self):
+        return f"{self.bnb_listing.title} - {self.get_image_type_display()}"
+
+
+class BnBAvailability(models.Model):
+    """
+    BnB availability model for date-based availability calendar
+    """
+    
+    class AvailabilityStatus(models.TextChoices):
+        AVAILABLE = 'available', 'Available'
+        OCCUPIED = 'occupied', 'Occupied'
+        MAINTENANCE = 'maintenance', 'Maintenance'
+        BLOCKED = 'blocked', 'Blocked'
+        OUT_OF_ORDER = 'out_of_order', 'Out of Order'
+    
+    bnb_listing = models.ForeignKey(
+        BnBListing,
+        on_delete=models.CASCADE,
+        related_name='availability'
+    )
+    date = models.DateField(help_text="Availability date")
+    status = models.CharField(
+        max_length=20,
+        choices=AvailabilityStatus.choices,
+        default=AvailabilityStatus.AVAILABLE
+    )
+    price_override = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Override price for this specific date"
+    )
+    min_stay = models.PositiveIntegerField(default=1, help_text="Minimum stay required")
+    max_stay = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum stay allowed")
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['bnb_listing', 'date']
+        ordering = ['date']
+        verbose_name = 'BnB Availability'
+        verbose_name_plural = 'BnB Availability'
+        indexes = [
+            models.Index(fields=['bnb_listing', 'date']),
+            models.Index(fields=['status', 'date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.bnb_listing.title} - {self.date} ({self.status})"
+    
+    @property
+    def is_available(self):
+        return self.status == self.AvailabilityStatus.AVAILABLE
+    
+    @property
+    def current_price(self):
+        return self.price_override if self.price_override else self.bnb_listing.price_per_night
+
 
 class HotelImage(models.Model):
     """
@@ -146,7 +341,6 @@ class HotelImage(models.Model):
     )
     image = models.ImageField(
         upload_to='hotels/images/',
-        storage=MediaCloudinaryStorage(),
         help_text="Hotel image"
     )
     image_type = models.CharField(
@@ -338,7 +532,6 @@ class RoomImage(models.Model):
     )
     image = models.ImageField(
         upload_to='rooms/images/',
-        storage=MediaCloudinaryStorage(),
         help_text="Room image"
     )
     image_type = models.CharField(
@@ -497,3 +690,24 @@ class Favorite(models.Model):
 
     def __str__(self):
         return f"{self.user_id} -> {self.hotel_id}"
+
+
+class BnBFavorite(models.Model):
+    """
+    User favorites for BnB listings
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bnb_favorites')
+    bnb_listing = models.ForeignKey(BnBListing, on_delete=models.CASCADE, related_name='favorited_by_users')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'bnb_listing']
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['bnb_listing']),
+        ]
+        verbose_name = 'BnB Favorite'
+        verbose_name_plural = 'BnB Favorites'
+
+    def __str__(self):
+        return f"{self.user_id} -> {self.bnb_listing_id}"

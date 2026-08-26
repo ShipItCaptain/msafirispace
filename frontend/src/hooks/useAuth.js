@@ -58,6 +58,31 @@ export const useAuth = () => {
     try {
       const result = await dispatch(loginUser(credentials)).unwrap();
       toast.success('Login successful!');
+
+      // Ensure that after login the default experience is always the Guest role.
+      // If the backend reports a different active_role (e.g. a host role from a previous session),
+      // immediately switch the active role back to 'guest' so the UI and header text
+      // both reflect that we're browsing as a guest.
+      try {
+        const loggedInUser = result?.user;
+        const activeRoleFromServer = loggedInUser?.active_role;
+
+        if (loggedInUser) {
+          if (activeRoleFromServer && activeRoleFromServer !== 'guest') {
+            // Ask the backend to switch us back to the guest role
+            await dispatch(switchUserRole({ role: 'guest' })).unwrap();
+            try { localStorage.setItem('userActiveRole', 'guest'); } catch (_) {}
+          } else if (!activeRoleFromServer) {
+            // If server didn't provide an active_role, default to guest on the client
+            try { localStorage.setItem('userActiveRole', 'guest'); } catch (_) {}
+          }
+        }
+      } catch (roleError) {
+        // Failing to normalize the role should not break login;
+        // log it for debugging but keep the user logged in.
+        console.error('Failed to normalize active role to guest after login:', roleError);
+      }
+
       return result;
     } catch (error) {
       const errorMessage = extractErrorMessage(error) || 'Login failed';
@@ -165,16 +190,14 @@ export const useAuth = () => {
   };
 
   // Check if user has any host role
-  const isHost = user?.roles?.some(role => ['bnb_host', 'hotel_host', 'tour_operator'].includes(role));
+  const isHost = user?.roles?.some(role => ['bnb_host', 'hotel_host'].includes(role));
   
   // Check if user is a guest
   const isGuest = user?.active_role === 'guest' || user?.roles?.includes('guest');
   
   // Check specific roles based on active role
   const isBnBHost = user?.active_role === 'bnb_host';
-  // concierge removed
   const isHotelRestaurantHost = user?.active_role === 'hotel_host';
-  const isTourOperator = user?.active_role === 'tour_operator';
   
   // Check if user is verified
   const isVerified = user?.is_verified;
@@ -210,7 +233,6 @@ export const useAuth = () => {
     isGuest,
     isBnBHost,
     isHotelRestaurantHost,
-    isTourOperator,
     isVerified,
     isPremium,
   };
