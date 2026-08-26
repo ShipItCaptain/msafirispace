@@ -25,13 +25,14 @@ class BookingSerializer(serializers.ModelSerializer):
             'bnb_listing', 'bnb_listing_id',
             'check_in', 'check_out', 'num_adults', 'num_children',
             'special_requests', 'nightly_price', 'currency', 'total_nights',
-            'total_amount', 'deposit_amount', 'status', 'payment_method',
-            'payment_status', 'guest_full_name', 'guest_email', 'guest_phone',
-            'created_at', 'updated_at'
+            'total_amount', 'deposit_amount', 'status', 'host_approval_status',
+            'payment_method', 'payment_status', 'guest_full_name', 'guest_email',
+            'guest_phone', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'traveler', 'hotel', 'nightly_price', 'currency', 'total_nights',
-            'total_amount', 'status', 'payment_status', 'created_at', 'updated_at'
+            'total_amount', 'status', 'host_approval_status', 'payment_status',
+            'created_at', 'updated_at'
         ]
 
     def validate(self, attrs):
@@ -281,8 +282,8 @@ class BookingListSerializer(serializers.ModelSerializer):
         model = Booking
         fields = [
             'id', 'check_in', 'check_out', 'total_nights', 'total_amount',
-            'currency', 'status', 'payment_status', 'room_type', 'bnb_listing',
-            'booking_type', 'created_at'
+            'currency', 'status', 'host_approval_status', 'payment_status',
+            'room_type', 'bnb_listing', 'booking_type', 'created_at'
         ]
 
     def get_booking_type(self, obj):
@@ -315,7 +316,8 @@ class HostBookingListSerializer(serializers.ModelSerializer):
         model = Booking
         fields = [
             'id', 'check_in', 'check_out', 'total_nights', 'total_amount', 'currency',
-            'status', 'payment_status', 'payment_method', 'created_at', 'updated_at',
+            'status', 'host_approval_status', 'payment_status', 'payment_method',
+            'created_at', 'updated_at',
             'traveler_name', 'traveler_email',
             'guest_full_name', 'guest_email', 'guest_phone',
             'hotel_id', 'hotel_name', 'room_name',

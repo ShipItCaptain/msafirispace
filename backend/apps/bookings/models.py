@@ -30,6 +30,11 @@ class Booking(models.Model):
         PAID = 'paid', 'Paid'
         REFUNDED = 'refunded', 'Refunded'
 
+    class HostApprovalStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending Host Confirmation'
+        APPROVED = 'approved', 'Approved'
+        DECLINED = 'declined', 'Declined'
+
     # Relations
     traveler = models.ForeignKey(
         User,
@@ -81,6 +86,15 @@ class Booking(models.Model):
     status = models.CharField(max_length=20, choices=BookingStatus.choices, default=BookingStatus.PENDING)
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.PAY_AT_PREMISES)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
+    # Tracks whether the host has confirmed real-world room/listing availability
+    # for a pending request. Decoupled from `status` because the host's
+    # yes/no decision happens before payment, and `status` only becomes
+    # CONFIRMED once payment is settled (online or pay-at-premises).
+    host_approval_status = models.CharField(
+        max_length=20,
+        choices=HostApprovalStatus.choices,
+        default=HostApprovalStatus.PENDING,
+    )
 
     # Contact snapshot
     guest_full_name = models.CharField(max_length=150)
@@ -98,6 +112,7 @@ class Booking(models.Model):
             models.Index(fields=['hotel']),
             models.Index(fields=['bnb_listing']),
             models.Index(fields=['status']),
+            models.Index(fields=['host_approval_status']),
             models.Index(fields=['created_at'])
         ]
 

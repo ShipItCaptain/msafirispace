@@ -55,6 +55,8 @@ jest.mock('../../services/api', () => ({
     getBookings: jest.fn(),
     createBooking: jest.fn(),
     cancelBooking: jest.fn(),
+    confirmPayAtPremises: jest.fn(),
+    updateBooking: jest.fn(),
   },
   listingsAPI: {
     getCombinedFavorites: jest.fn(),
@@ -158,6 +160,115 @@ describe('Critical booking flows', () => {
     await waitForCondition(() => container.textContent.includes('bookings'));
     const probe = container.querySelector('#dashboard-state');
     expect(probe && probe.textContent).toBe('bookings');
+  });
+
+  const baseBooking = {
+    id: 10,
+    payment_status: 'unpaid',
+    payment_method: 'pay_at_premises',
+    check_in: '2026-03-10',
+    check_out: '2026-03-12',
+    total_nights: 2,
+    num_adults: 1,
+    num_children: 0,
+    guest_full_name: 'Brian Mutunga',
+    guest_email: 'brian@example.com',
+    guest_phone: '+254700000000',
+    currency: 'KES',
+    nightly_price: 1000,
+    total_amount: 2200,
+    deposit_amount: 0,
+    bnb_listing: {
+      id: 11,
+      title: 'Savannah Stay',
+      city: 'Wote',
+      country: 'Kenya',
+      address: 'Wote, Makueni',
+      description: 'Comfortable stay',
+      primary_image: null,
+      images: [],
+    },
+  };
+
+  it('shows a waiting message and no payment actions while host has not responded', async () => {
+    bookingsAPI.getBooking.mockResolvedValue({
+      ...baseBooking,
+      status: 'pending',
+      host_approval_status: 'pending',
+    });
+
+    harness.render(
+      <MemoryRouter initialEntries={['/booking/10']} future={routerFutureFlags}>
+        <Routes>
+          <Route path="/booking/:id" element={<BookingDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitForCondition(() => container.textContent.includes('Waiting for host confirmation'));
+    expect(container.textContent).not.toContain('Payment Choice');
+    expect(
+      Array.from(container.querySelectorAll('button')).some((btn) => btn.textContent.includes('Complete Reservation'))
+    ).toBe(false);
+  });
+
+  it('shows payment choice and confirms pay-at-premises once host approves', async () => {
+    bookingsAPI.getBooking.mockResolvedValue({
+      ...baseBooking,
+      status: 'pending',
+      host_approval_status: 'approved',
+    });
+    bookingsAPI.confirmPayAtPremises.mockResolvedValue({
+      ...baseBooking,
+      status: 'confirmed',
+      host_approval_status: 'approved',
+    });
+
+    harness.render(
+      <MemoryRouter initialEntries={['/booking/10']} future={routerFutureFlags}>
+        <Routes>
+          <Route path="/booking/:id" element={<BookingDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitForCondition(() => container.textContent.includes('Payment Choice'));
+    const completeButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent.includes('Complete Reservation')
+    );
+    expect(completeButton).toBeTruthy();
+
+    click(completeButton);
+
+    await waitForCondition(() => bookingsAPI.confirmPayAtPremises.mock.calls.length > 0);
+    expect(bookingsAPI.confirmPayAtPremises).toHaveBeenCalledWith(10);
+  });
+
+  it('offers a continue-searching CTA when the host declines availability', async () => {
+    bookingsAPI.getBooking.mockResolvedValue({
+      ...baseBooking,
+      status: 'cancelled',
+      host_approval_status: 'declined',
+    });
+
+    harness.render(
+      <MemoryRouter initialEntries={['/booking/10']} future={routerFutureFlags}>
+        <Routes>
+          <Route path="/booking/:id" element={<BookingDetailPage />} />
+          <Route path="/bnbs" element={<div>BnBs search page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitForCondition(() => container.textContent.includes("isn't available for your selected dates"));
+    const continueButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent.includes('Continue Searching')
+    );
+    expect(continueButton).toBeTruthy();
+
+    click(continueButton);
+
+    await waitForCondition(() => container.textContent.includes('BnBs search page'));
   });
 
   it('opens DashboardPage on bookings tab when initialTab state is provided', async () => {

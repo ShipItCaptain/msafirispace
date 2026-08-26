@@ -162,7 +162,7 @@ const HotelPage = () => {
       };
 
       const booking = await bookingsAPI.createBooking(bookingData);
-      toast.success('Booking request created. Choose how you want to continue on the next page.');
+      toast.success("Reservation requested! We've notified the host — you'll be prompted to pay once they confirm availability.");
       navigate(`/booking/${booking.id}`);
     } catch (error) {
       console.error('Booking error:', error);
@@ -546,7 +546,7 @@ const HotelPage = () => {
                 className="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
                 <CalendarIcon className="w-5 h-5" />
-                <span>{isBooking ? 'Processing...' : 'Book Now'}</span>
+                <span>{isBooking ? 'Processing...' : 'Request Reservation'}</span>
               </button>
 
               <p className="mt-4 text-sm text-gray-500 text-center">

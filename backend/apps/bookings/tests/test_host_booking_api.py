@@ -153,7 +153,10 @@ def test_host_can_update_owned_booking_status(user_model):
     )
     assert response.status_code == 200
     booking.refresh_from_db()
-    assert booking.status == Booking.BookingStatus.CONFIRMED
+    # Approving a pending booking confirms availability but does not finalize
+    # it yet — the guest still has to pay or choose pay-at-premises.
+    assert booking.status == Booking.BookingStatus.PENDING
+    assert booking.host_approval_status == Booking.HostApprovalStatus.APPROVED
 
 
 @pytest.mark.django_db
@@ -261,6 +264,146 @@ def test_hotel_booking_pay_at_hotel_stays_unpaid_and_pending(user_model):
     booking = Booking.objects.get(pk=response.data['id'])
     assert booking.status == Booking.BookingStatus.PENDING
     assert booking.payment_status == Booking.PaymentStatus.UNPAID
+
+
+@pytest.mark.django_db
+def test_host_declining_pending_booking_frees_it_up_for_other_guests(user_model):
+    host = _create_user(user_model, 'host_decline', 'hostdecline@example.com')
+    traveler = _create_user(user_model, 'trav_decline', 'travdecline@example.com')
+    hotel, room = _create_hotel_with_room(host)
+
+    booking = Booking.objects.create(
+        traveler=traveler,
+        hotel=hotel,
+        room_type=room,
+        check_in=date.today() + timedelta(days=3),
+        check_out=date.today() + timedelta(days=4),
+        num_adults=1,
+        num_children=0,
+        nightly_price=room.base_price,
+        currency='KES',
+        total_nights=1,
+        total_amount=room.base_price,
+        guest_full_name='Traveler Decline',
+        guest_email=traveler.email,
+        guest_phone='+254711111111',
+        status=Booking.BookingStatus.PENDING,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=host)
+    response = client.post(
+        f'/api/v1/bookings/{booking.id}/host-status/',
+        {'status': 'cancelled'},
+        format='json',
+    )
+    assert response.status_code == 200
+    booking.refresh_from_db()
+    assert booking.status == Booking.BookingStatus.CANCELLED
+    assert booking.host_approval_status == Booking.HostApprovalStatus.DECLINED
+
+    notification = Notification.objects.get(user=traveler, data__booking_id=booking.id)
+    assert 'not available' in notification.title.lower()
+
+
+@pytest.mark.django_db
+def test_guest_cannot_confirm_pay_at_premises_before_host_approval(user_model):
+    host = _create_user(user_model, 'host_gate', 'hostgate@example.com')
+    traveler = _create_user(user_model, 'trav_gate', 'travgate@example.com')
+    hotel, room = _create_hotel_with_room(host)
+
+    booking = Booking.objects.create(
+        traveler=traveler,
+        hotel=hotel,
+        room_type=room,
+        check_in=date.today() + timedelta(days=3),
+        check_out=date.today() + timedelta(days=4),
+        num_adults=1,
+        num_children=0,
+        nightly_price=room.base_price,
+        currency='KES',
+        total_nights=1,
+        total_amount=room.base_price,
+        guest_full_name='Traveler Gate',
+        guest_email=traveler.email,
+        guest_phone='+254711111111',
+        status=Booking.BookingStatus.PENDING,
+        payment_method=Booking.PaymentMethod.PAY_AT_PREMISES,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=traveler)
+    response = client.post(f'/api/v1/bookings/{booking.id}/confirm-pay-at-premises/')
+    assert response.status_code == 400
+    booking.refresh_from_db()
+    assert booking.status == Booking.BookingStatus.PENDING
+
+
+@pytest.mark.django_db
+def test_guest_can_confirm_pay_at_premises_after_host_approval(user_model):
+    host = _create_user(user_model, 'host_approve', 'hostapprove@example.com')
+    traveler = _create_user(user_model, 'trav_approve', 'travapprove@example.com')
+    hotel, room = _create_hotel_with_room(host)
+
+    booking = Booking.objects.create(
+        traveler=traveler,
+        hotel=hotel,
+        room_type=room,
+        check_in=date.today() + timedelta(days=3),
+        check_out=date.today() + timedelta(days=4),
+        num_adults=1,
+        num_children=0,
+        nightly_price=room.base_price,
+        currency='KES',
+        total_nights=1,
+        total_amount=room.base_price,
+        guest_full_name='Traveler Approve',
+        guest_email=traveler.email,
+        guest_phone='+254711111111',
+        status=Booking.BookingStatus.PENDING,
+        payment_method=Booking.PaymentMethod.PAY_AT_PREMISES,
+        host_approval_status=Booking.HostApprovalStatus.APPROVED,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=traveler)
+    response = client.post(f'/api/v1/bookings/{booking.id}/confirm-pay-at-premises/')
+    assert response.status_code == 200
+    booking.refresh_from_db()
+    assert booking.status == Booking.BookingStatus.CONFIRMED
+
+
+@pytest.mark.django_db
+def test_bnb_booking_creates_host_notification(user_model):
+    host = _create_user(user_model, 'host_bnb_notify', 'hostbnbnotify@example.com')
+    traveler = _create_user(user_model, 'trav_bnb_notify', 'travbnbnotify@example.com')
+    bnb = _create_bnb(host)
+
+    client = APIClient()
+    client.force_authenticate(user=traveler)
+
+    check_in = date.today() + timedelta(days=4)
+    check_out = check_in + timedelta(days=2)
+    response = client.post(
+        '/api/v1/bookings/',
+        {
+            'bnb_listing_id': bnb.id,
+            'check_in': check_in.isoformat(),
+            'check_out': check_out.isoformat(),
+            'num_adults': 1,
+            'num_children': 0,
+            'guest_full_name': 'Traveler BnB Notify',
+            'guest_email': traveler.email,
+            'guest_phone': '+254733333333',
+            'payment_method': 'online',
+        },
+        format='json',
+    )
+
+    assert response.status_code == 201, response.data
+    booking = Booking.objects.get(pk=response.data['id'])
+    notification = Notification.objects.get(user=host, data__booking_id=booking.id)
+    assert notification.title == 'New BnB booking request'
 
 
 @pytest.mark.django_db

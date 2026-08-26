@@ -594,6 +594,12 @@ export const bookingsAPI = {
     return response.data;
   },
 
+  // Finalize a host-approved booking as pay-at-premises (no online payment)
+  confirmPayAtPremises: async (id) => {
+    const response = await api.post(`/bookings/${id}/confirm-pay-at-premises/`);
+    return response.data;
+  },
+
   // Get user's bookings
   getUserBookings: async () => {
     const response = await api.get('/bookings/my-bookings/');

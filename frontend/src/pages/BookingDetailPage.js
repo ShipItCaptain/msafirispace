@@ -246,21 +246,17 @@ const BookingDetailPage = () => {
     if (!booking) return;
     setIsCompletingReservation(true);
     try {
-      let refreshedBooking = booking;
-      if (booking.payment_method !== 'pay_at_premises') {
-        refreshedBooking = await bookingsAPI.updateBooking(booking.id, {
-          payment_method: 'pay_at_premises',
-        });
-        setBooking(refreshedBooking);
-      }
-      toast.success('Reservation completed. It is now waiting for host approval.');
+      const refreshedBooking = await bookingsAPI.confirmPayAtPremises(booking.id);
+      setBooking(refreshedBooking);
+      toast.success('Reservation confirmed! Pay at check-in.');
       setSuccessState({
         type: 'reservation',
-        title: 'Reservation request sent',
-        message: 'Your reservation is now waiting for host approval. The host will review it, then confirm or decline it.',
+        title: 'Reservation confirmed',
+        message: 'Your stay is confirmed. Pay in cash or card when you arrive at the property.',
       });
-    } catch (_) {
-      toast.error('Could not complete reservation');
+    } catch (err) {
+      const message = err?.response?.data?.detail || 'Could not complete reservation';
+      toast.error(message);
     } finally {
       setIsCompletingReservation(false);
     }
@@ -269,13 +265,20 @@ const BookingDetailPage = () => {
   const timeline = useMemo(() => {
     const status = booking?.status;
     const paymentStatus = booking?.payment_status;
+    const hostApproval = booking?.host_approval_status;
     const isCancelled = status === 'cancelled';
+    const isHostApproved = hostApproval === 'approved';
     return [
       { label: 'Requested', complete: true, current: false },
       {
+        label: 'Host Confirmation',
+        complete: isHostApproved,
+        current: hostApproval === 'pending' && !isCancelled,
+      },
+      {
         label: 'Payment',
         complete: paymentStatus === 'paid' || paymentStatus === 'partially_paid',
-        current: ['pending_payment', 'unpaid'].includes(paymentStatus) && status === 'pending' && !isCancelled,
+        current: isHostApproved && ['pending_payment', 'unpaid'].includes(paymentStatus) && status === 'pending' && !isCancelled,
       },
       {
         label: 'Confirmed',
@@ -288,7 +291,7 @@ const BookingDetailPage = () => {
         current: status === 'completed' && !isCancelled,
       },
     ];
-  }, [booking?.status, booking?.payment_status]);
+  }, [booking?.status, booking?.payment_status, booking?.host_approval_status]);
 
   if (loading) {
     return (
@@ -354,8 +357,9 @@ const BookingDetailPage = () => {
   const roomSubtotal = nightlyPrice * nights;
   const serviceAndFees = Math.max(totalAmount - roomSubtotal, 0);
 
-  const canPayOnline = selectedPaymentChoice === 'online' && ['pending_payment', 'unpaid'].includes(booking.payment_status) && booking.status === 'pending';
-  const canCompleteReservation = selectedPaymentChoice === 'pay_at_premises' && booking.status === 'pending';
+  const isHostApproved = booking.host_approval_status === 'approved';
+  const canPayOnline = isHostApproved && selectedPaymentChoice === 'online' && ['pending_payment', 'unpaid'].includes(booking.payment_status) && booking.status === 'pending';
+  const canCompleteReservation = isHostApproved && selectedPaymentChoice === 'pay_at_premises' && booking.status === 'pending';
   const canCancel = booking.status === 'pending';
   const isOnlineChoice = selectedPaymentChoice === 'online';
 
@@ -395,7 +399,26 @@ const BookingDetailPage = () => {
             </div>
           </div>
 
-          {booking.status === 'cancelled' && (
+          {booking.status === 'cancelled' && booking.host_approval_status === 'declined' && (
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-800">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <XCircleIcon className="w-5 h-5 flex-shrink-0" />
+                This place isn't available for your selected dates.
+              </div>
+              <p className="mt-1 text-sm text-rose-700">
+                The host confirmed there's no vacancy for these dates. No payment was taken — please continue your search for another option.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate(booking.hotel ? '/hotels' : '/bnbs')}
+                className="mt-3 px-4 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700"
+              >
+                Continue Searching
+              </button>
+            </div>
+          )}
+
+          {booking.status === 'cancelled' && booking.host_approval_status !== 'declined' && (
             <div className="mt-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-700 text-sm">
               <XCircleIcon className="w-5 h-5" />
               This booking is cancelled.
@@ -435,7 +458,7 @@ const BookingDetailPage = () => {
             </div>
           )}
 
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-3">
             {timeline.map((item) => (
               <div key={item.label} className="rounded-lg border border-gray-200 p-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -568,14 +591,29 @@ const BookingDetailPage = () => {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-              {booking.status === 'pending' && (
+              {booking.status === 'pending' && booking.host_approval_status === 'pending' && (
+                <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                  <div className="flex items-start gap-3">
+                    <ClockIcon className="mt-0.5 h-6 w-6 flex-shrink-0 text-amber-600" />
+                    <div>
+                      <h3 className="text-lg font-semibold text-amber-900">Waiting for host confirmation</h3>
+                      <p className="mt-1 text-sm text-amber-800">
+                        We've sent your reservation request to the host to confirm availability. Once they respond,
+                        you'll be prompted to choose how to pay. You can cancel this request at any time before then.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {booking.status === 'pending' && booking.host_approval_status === 'approved' && (
                 <div className="mb-5 overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-slate-50 via-white to-slate-100">
                   <div className="border-b border-gray-200 px-5 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-xl font-semibold text-gray-900">Payment Choice</h3>
                         <p className="mt-1 text-sm text-gray-500">
-                          Choose how you want to finish this reservation.
+                          The host confirmed this is available. Choose how you want to pay.
                         </p>
                       </div>
                       <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
@@ -633,11 +671,11 @@ const BookingDetailPage = () => {
                           <span className="flex items-center justify-between gap-3">
                             <span className="block text-lg font-semibold text-gray-900">Pay at Hotel</span>
                             <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-blue-700 border border-blue-200">
-                              Host approves first
+                              Confirm now, pay at check-in
                             </span>
                           </span>
                           <span className="mt-1 block text-sm text-gray-600">
-                            Send the booking request now and wait for the host to approve it.
+                            Lock in your reservation now and pay in cash or card when you arrive.
                           </span>
                         </span>
                       </label>
@@ -661,7 +699,7 @@ const BookingDetailPage = () => {
                           <p className="mt-1">
                             {isOnlineChoice
                               ? 'Click Complete Payment below to open the payment window and finish your booking.'
-                              : 'Click Complete Reservation below to keep this booking pending while the host reviews it.'}
+                              : 'Click Complete Reservation below to confirm your stay — no payment is taken now.'}
                           </p>
                         </div>
                       </div>

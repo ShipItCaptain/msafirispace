@@ -200,7 +200,7 @@ const BnBDetailPage = () => {
       };
 
       const booking = await bookingsAPI.createBooking(bookingData);
-      toast.success('Booking created successfully!');
+      toast.success("Reservation requested! We've notified the host — you'll be prompted to pay once they confirm availability.");
       
       // Navigate to booking detail page
       navigate(`/booking/${booking.id}`);
@@ -773,7 +773,7 @@ const BnBDetailPage = () => {
                   className="mt-6 w-full bg-red-600 text-white py-3 px-4 rounded-xl font-semibold hover:bg-red-700 transition-colors flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <CalendarIcon className="w-5 h-5" />
-                  <span>{isBooking ? 'Processing...' : (isAuthenticated ? 'Reserve Now' : 'Log In To Reserve')}</span>
+                  <span>{isBooking ? 'Processing...' : (isAuthenticated ? 'Request Reservation' : 'Log In To Reserve')}</span>
                 </button>
 
                 <p className="mt-3 text-xs text-gray-500 text-center">

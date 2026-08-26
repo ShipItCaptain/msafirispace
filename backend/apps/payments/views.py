@@ -44,6 +44,9 @@ class CreatePaymentIntentView(APIView):
         amount = Decimal(serializer.validated_data['amount'])
         is_debug = getattr(settings, 'DEBUG', False)
 
+        if booking.host_approval_status != Booking.HostApprovalStatus.APPROVED:
+            raise ValidationError({'booking_id': 'This booking is still awaiting host confirmation.'})
+
         if booking.payment_method != Booking.PaymentMethod.ONLINE:
             booking.payment_method = Booking.PaymentMethod.ONLINE
         booking.payment_status = Booking.PaymentStatus.PENDING

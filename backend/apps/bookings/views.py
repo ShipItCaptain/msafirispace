@@ -25,15 +25,16 @@ logger = logging.getLogger(__name__)
 
 
 def notify_host_about_booking(booking: Booking):
-    host = getattr(booking.hotel, 'host', None)
+    is_hotel_booking = bool(booking.hotel_id)
+    host = getattr(booking.hotel, 'host', None) if is_hotel_booking else getattr(booking.bnb_listing, 'host', None)
     if not host:
         return
 
-    stay_name = booking.hotel.name if booking.hotel_id else 'your property'
-    title = 'New hotel booking request'
+    stay_name = booking.hotel.name if is_hotel_booking else (booking.bnb_listing.title if booking.bnb_listing_id else 'your property')
+    title = 'New hotel booking request' if is_hotel_booking else 'New BnB booking request'
     message = (
         f'{booking.guest_full_name} requested to book {stay_name} '
-        f'from {booking.check_in} to {booking.check_out}.'
+        f'from {booking.check_in} to {booking.check_out}. Please confirm availability.'
     )
 
     Notification.objects.create(
@@ -44,6 +45,7 @@ def notify_host_about_booking(booking: Booking):
         data={
             'booking_id': booking.id,
             'hotel_id': booking.hotel_id,
+            'bnb_listing_id': booking.bnb_listing_id,
             'channel_status': {
                 'in_app': 'sent',
                 'email': 'queued',
@@ -65,6 +67,53 @@ def notify_host_about_booking(booking: Booking):
             logger.exception(
                 "Booking host email failed",
                 extra={"booking_id": booking.id, "host_id": host.id},
+            )
+
+
+def notify_guest_about_host_decision(booking: Booking, *, approved: bool):
+    is_hotel_booking = bool(booking.hotel_id)
+    stay_name = booking.hotel.name if is_hotel_booking else (booking.bnb_listing.title if booking.bnb_listing_id else 'your stay')
+
+    if approved:
+        title = 'Reservation approved — choose how to pay'
+        message = (
+            f'Good news! {stay_name} is available for your dates. '
+            f'Choose to pay now or pay at check-in to secure your reservation.'
+        )
+        notification_type = Notification.Type.SUCCESS
+    else:
+        title = 'Reservation not available'
+        message = (
+            f'Unfortunately {stay_name} is not available for your selected dates. '
+            f'Please continue your search for another option.'
+        )
+        notification_type = Notification.Type.WARNING
+
+    Notification.objects.create(
+        user=booking.traveler,
+        title=title,
+        message=message,
+        notification_type=notification_type,
+        data={
+            'booking_id': booking.id,
+            'hotel_id': booking.hotel_id,
+            'bnb_listing_id': booking.bnb_listing_id,
+        },
+    )
+
+    if booking.traveler.email:
+        try:
+            send_mail(
+                title,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [booking.traveler.email],
+                fail_silently=True,
+            )
+        except Exception:
+            logger.exception(
+                "Booking decision email failed",
+                extra={"booking_id": booking.id, "traveler_id": booking.traveler_id},
             )
 
 
@@ -90,7 +139,7 @@ class BookingListCreateView(generics.ListCreateAPIView):
         # The serializer's create method handles pricing and totals
         # Just set the traveler here
         booking = serializer.save(traveler=self.request.user)
-        if booking.hotel_id:
+        if booking.hotel_id or booking.bnb_listing_id:
             notify_host_about_booking(booking)
 
     def create(self, request, *args, **kwargs):
@@ -200,25 +249,60 @@ def host_update_booking_status(request, pk):
     if booking.status == Booking.BookingStatus.CANCELLED and new_status != Booking.BookingStatus.CANCELLED:
         return Response({'detail': 'Cancelled bookings cannot be changed.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    booking.status = new_status
-    booking.save(update_fields=['status', 'updated_at'])
+    if booking.status == Booking.BookingStatus.PENDING:
+        # The booking hasn't been approved yet, so this action is the host's
+        # yes/no answer to "is this room/listing actually available?" rather
+        # than a direct status change. `status` only moves to CONFIRMED once
+        # the guest has actually paid (or confirmed pay-at-premises).
+        if new_status == Booking.BookingStatus.CONFIRMED:
+            booking.host_approval_status = Booking.HostApprovalStatus.APPROVED
+            booking.save(update_fields=['host_approval_status', 'updated_at'])
+            notify_guest_about_host_decision(booking, approved=True)
+        elif new_status == Booking.BookingStatus.CANCELLED:
+            booking.host_approval_status = Booking.HostApprovalStatus.DECLINED
+            booking.status = Booking.BookingStatus.CANCELLED
+            booking.save(update_fields=['host_approval_status', 'status', 'updated_at'])
+            notify_guest_about_host_decision(booking, approved=False)
+        else:
+            return Response(
+                {'detail': 'A pending booking must be approved or declined before it can be completed.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    else:
+        # Booking was already approved and finalized (confirmed/completed);
+        # this is the host managing its lifecycle after the fact.
+        booking.status = new_status
+        booking.save(update_fields=['status', 'updated_at'])
+        if new_status == Booking.BookingStatus.CANCELLED:
+            notify_guest_about_host_decision(booking, approved=False)
 
-    if new_status == Booking.BookingStatus.CONFIRMED:
-        Notification.objects.create(
-            user=booking.traveler,
-            title='Booking approved',
-            message=f'Your booking #{booking.id} has been approved by the host.',
-            notification_type=Notification.Type.SUCCESS,
-            data={'booking_id': booking.id},
+    serializer = BookingDetailSerializer(booking)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def confirm_pay_at_premises(request, pk):
+    """
+    Guest-facing action: finalize a host-approved booking as pay-at-premises,
+    without going through the online payment flow.
+    """
+    try:
+        booking = Booking.objects.select_related('hotel', 'bnb_listing').get(pk=pk, traveler=request.user)
+    except Booking.DoesNotExist:
+        return Response({'detail': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if booking.host_approval_status != Booking.HostApprovalStatus.APPROVED:
+        return Response(
+            {'detail': 'This booking is still awaiting host confirmation.'},
+            status=status.HTTP_400_BAD_REQUEST,
         )
-    elif new_status == Booking.BookingStatus.CANCELLED:
-        Notification.objects.create(
-            user=booking.traveler,
-            title='Booking update',
-            message=f'Your booking #{booking.id} was declined or cancelled by the host.',
-            notification_type=Notification.Type.WARNING,
-            data={'booking_id': booking.id},
-        )
+    if booking.status != Booking.BookingStatus.PENDING:
+        return Response({'detail': 'This booking has already been finalized.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    booking.payment_method = Booking.PaymentMethod.PAY_AT_PREMISES
+    booking.status = Booking.BookingStatus.CONFIRMED
+    booking.save(update_fields=['payment_method', 'status', 'updated_at'])
 
     serializer = BookingDetailSerializer(booking)
     return Response(serializer.data, status=status.HTTP_200_OK)
