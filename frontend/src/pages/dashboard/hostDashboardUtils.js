@@ -7,8 +7,12 @@ export const normalizeHostBooking = (booking) => {
   const totalAmount = Number(booking?.total_amount ?? booking?.amount ?? 0);
   const paymentMethod = booking?.payment_method || 'pay_at_premises';
   const paymentStatus = booking?.payment_status || 'unpaid';
-  const needsApproval = booking?.status === 'pending' && paymentMethod === 'pay_at_premises';
-  const needsPayment = booking?.status === 'pending' && paymentMethod === 'online';
+  const hostApprovalStatus = booking?.host_approval_status || 'pending';
+  // A booking stays `status: 'pending'` both while awaiting the host's yes/no
+  // and afterward while awaiting the guest's payment — host_approval_status
+  // is what actually distinguishes whose turn it is, not payment_method.
+  const needsApproval = booking?.status === 'pending' && hostApprovalStatus === 'pending';
+  const needsPayment = booking?.status === 'pending' && hostApprovalStatus === 'approved';
   const requestStage = needsApproval
     ? 'Awaiting host approval'
     : needsPayment
@@ -29,6 +33,7 @@ export const normalizeHostBooking = (booking) => {
     total_amount: totalAmount,
     payment_method: paymentMethod,
     payment_status: paymentStatus,
+    host_approval_status: hostApprovalStatus,
     needsApproval,
     needsPayment,
     requestStage,

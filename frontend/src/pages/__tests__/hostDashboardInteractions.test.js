@@ -66,6 +66,7 @@ const setupMocks = () => {
       {
         id: 100,
         status: 'pending',
+        host_approval_status: 'pending',
         payment_method: 'pay_at_premises',
         payment_status: 'unpaid',
         check_in: '2026-03-10',
@@ -85,6 +86,7 @@ const setupMocks = () => {
       {
         id: 101,
         status: 'pending',
+        host_approval_status: 'approved',
         payment_method: 'online',
         payment_status: 'pending_payment',
         check_in: '2026-03-13',
@@ -196,7 +198,10 @@ describe('Host dashboard interactions', () => {
   it('keeps booking detail modal open and updates status inline', async () => {
     bookingsAPI.updateHostBookingStatus.mockResolvedValue({
       id: 100,
-      status: 'confirmed',
+      // Approving a pending booking confirms availability but keeps
+      // `status` pending until the guest actually pays.
+      status: 'pending',
+      host_approval_status: 'approved',
       payment_method: 'pay_at_premises',
       payment_status: 'unpaid',
       check_in: '2026-03-10',
@@ -238,7 +243,12 @@ describe('Host dashboard interactions', () => {
     const confirmButtons = Array.from(harness.container.querySelectorAll('button')).filter((btn) => btn.textContent.trim() === 'Approve Booking');
     harness.click(confirmButtons[confirmButtons.length - 1]);
 
-    await harness.waitForCondition(() => harness.container.querySelector('[data-testid="booking-detail-status"]').textContent.includes('confirmed'));
+    // Approving keeps `status` pending (payment is still outstanding) but
+    // flips the request stage to reflect that the host has said yes.
+    await harness.waitForCondition(() =>
+      harness.container.querySelector('[data-testid="booking-detail-request-stage"]').textContent.includes('Awaiting guest payment')
+    );
+    expect(harness.container.querySelector('[data-testid="booking-detail-status"]').textContent).toContain('pending');
     expect(harness.container.querySelector('[data-testid="booking-detail-modal"]')).toBeTruthy();
     expect(bookingsAPI.updateHostBookingStatus).toHaveBeenCalledWith(100, 'confirmed');
   });

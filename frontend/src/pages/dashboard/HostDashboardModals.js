@@ -1445,7 +1445,7 @@ const HostDashboardModals = ({
                   </div>
                   <div className="col-span-2">
                     <p className="text-gray-500">Request Stage</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.requestStage || selectedBooking.status || 'pending'}</p>
+                    <p data-testid="booking-detail-request-stage" className="font-medium text-gray-900">{selectedBooking.requestStage || selectedBooking.status || 'pending'}</p>
                   </div>
                 </div>
 
