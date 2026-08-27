@@ -870,11 +870,14 @@ class HostDashboardView(APIView):
     def get(self, request):
         """Get host dashboard statistics"""
         user = request.user
-        
-        # Check if user is a host
-        if not user.is_host:
+
+        # Check if user is a host. `roles` (not the legacy `user_type`/`is_host`
+        # field) is the actual source of truth used everywhere else in the app
+        # (RoleGuard, RoleSwitcher, listing creation) — a user can hold a host
+        # role there without user_type ever having been set to HOST.
+        if not set(user.roles or []) & {User.Role.BNB_HOST, User.Role.HOTEL_HOST}:
             return Response({'error': 'User is not a host'}, status=status.HTTP_403_FORBIDDEN)
-        
+
         from apps.bookings.models import Booking
         from apps.listings.models import BnBListing, Hotel, RoomType
         from apps.reviews.models import Review

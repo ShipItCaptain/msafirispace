@@ -47,6 +47,12 @@ class HotelListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         """Assign the current user as the host"""
         serializer.save(host=self.request.user)
+        user = self.request.user
+        if not user.has_role(user.Role.HOTEL_HOST):
+            user.add_role(user.Role.HOTEL_HOST)
+            if user.active_role == user.Role.GUEST:
+                user.active_role = user.Role.HOTEL_HOST
+            user.save()
 
 
 class HotelDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -508,6 +514,12 @@ class BnBListingListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(host=self.request.user)
+        user = self.request.user
+        if not user.has_role(user.Role.BNB_HOST):
+            user.add_role(user.Role.BNB_HOST)
+            if user.active_role == user.Role.GUEST:
+                user.active_role = user.Role.BNB_HOST
+            user.save()
 
 
 class MyBnBListingsView(generics.ListAPIView):

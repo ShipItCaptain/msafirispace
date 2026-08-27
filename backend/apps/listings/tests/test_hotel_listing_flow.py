@@ -186,3 +186,43 @@ def test_hotel_listing_create_rooms_images_amenities_and_visibility():
     assert hotel_id in featured_ids
     featured_row = next(row for row in featured.json() if row["id"] == hotel_id)
     assert featured_row["primary_image"] is not None
+
+
+@pytest.mark.django_db
+def test_creating_a_hotel_grants_hotel_host_role():
+    """
+    A plain guest creating their first hotel should be recognized as a
+    hotel host afterward — otherwise host-only endpoints they now legitimately
+    need (e.g. the host dashboard) reject them despite owning a hotel.
+    """
+    User = get_user_model()
+    user = User.objects.create_user(
+        username="new_hotel_owner",
+        email="new_hotel_owner@example.com",
+        password="testpass123",
+    )
+    assert user.active_role == User.Role.GUEST
+    assert User.Role.HOTEL_HOST not in user.roles
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.post(
+        "/api/v1/listings/hotels/",
+        {
+            "name": "Freshly Listed Hotel",
+            "description": "A brand new hotel.",
+            "short_description": "New hotel.",
+            "property_type": "hotel",
+            "star_rating": 3,
+            "address": "1 New Street",
+            "city": "Nairobi",
+            "country": "Kenya",
+        },
+        format="json",
+    )
+    assert response.status_code == 201
+
+    user.refresh_from_db()
+    assert User.Role.HOTEL_HOST in user.roles
+    assert user.active_role == User.Role.HOTEL_HOST

@@ -129,6 +129,32 @@ def test_host_dashboard_summary_requires_host():
 
 
 @pytest.mark.django_db
+def test_host_dashboard_summary_allows_host_role_without_legacy_user_type():
+    """
+    A user can hold a host role (via listing creation or "add role") without
+    the legacy user_type field ever being set to HOST — that field is only
+    touched by the separate host-onboarding flow. The dashboard must key off
+    `roles`, the actual source of truth, not user_type.
+    """
+    User = get_user_model()
+    host = User.objects.create_user(
+        username='role_only_host',
+        email='role_only_host@example.com',
+        password='testpass123',
+        roles=[User.Role.GUEST, User.Role.HOTEL_HOST],
+        active_role=User.Role.GUEST,
+    )
+    assert host.user_type == User.UserType.TRAVELER
+    assert host.is_host is False
+
+    client = APIClient()
+    client.force_authenticate(user=host)
+
+    response = client.get('/api/v1/auth/host/dashboard/summary/')
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
 def test_host_dashboard_summary_respects_range_filter():
     User = get_user_model()
     host = User.objects.create_user(
