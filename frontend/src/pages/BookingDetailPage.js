@@ -756,17 +756,17 @@ const BookingDetailPage = () => {
               </div>
             </div>
 
-            {booking.status === 'pending' && selectedPaymentChoice === 'online' && ['pending_payment', 'unpaid'].includes(booking.payment_status) && (
+            {isHostApproved && booking.status === 'pending' && selectedPaymentChoice === 'online' && ['pending_payment', 'unpaid'].includes(booking.payment_status) && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex gap-2">
                 <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
                 Your booking is waiting for payment. Complete payment to confirm it.
               </div>
             )}
 
-            {booking.status === 'pending' && selectedPaymentChoice === 'pay_at_premises' && (
+            {isHostApproved && booking.status === 'pending' && selectedPaymentChoice === 'pay_at_premises' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 flex gap-2">
                 <ClockIcon className="w-5 h-5 flex-shrink-0" />
-                Your booking is waiting for host approval. You chose to pay at the hotel on arrival.
+                You chose to pay at the hotel on arrival. Click Complete Reservation above to confirm your stay.
               </div>
             )}
           </div>
