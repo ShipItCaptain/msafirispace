@@ -162,7 +162,7 @@ const HotelPage = () => {
       };
 
       const booking = await bookingsAPI.createBooking(bookingData);
-      toast.success("Reservation requested! We've notified the host — you'll be prompted to pay once they confirm availability.");
+      toast.success('Reservation requested!');
       navigate(`/booking/${booking.id}`);
     } catch (error) {
       console.error('Booking error:', error);

@@ -200,7 +200,7 @@ const BnBDetailPage = () => {
       };
 
       const booking = await bookingsAPI.createBooking(bookingData);
-      toast.success("Reservation requested! We've notified the host — you'll be prompted to pay once they confirm availability.");
+      toast.success('Reservation requested!');
       
       // Navigate to booking detail page
       navigate(`/booking/${booking.id}`);
