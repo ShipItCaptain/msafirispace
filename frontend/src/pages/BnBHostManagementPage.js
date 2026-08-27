@@ -6,6 +6,7 @@ import { bnbAPI, bookingsAPI, reviewsAPI } from '../services/api';
 import ComprehensiveBnBForm from '../components/forms/ComprehensiveBnBForm';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import AvailabilityCalendarModal from '../components/bnb/AvailabilityCalendarModal';
+import BnBBookingsPanel from './dashboard/BnBBookingsPanel';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -46,6 +47,7 @@ const BnBHostManagementPage = () => {
   const [listingToDelete, setListingToDelete] = useState(null);
   const [isDeletingListing, setIsDeletingListing] = useState(false);
   const [availabilityListing, setAvailabilityListing] = useState(null);
+  const [activeSection, setActiveSection] = useState('listings');
 
   // Load data from API when component mounts
   useEffect(() => {
@@ -216,6 +218,36 @@ const BnBHostManagementPage = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Section Tabs */}
+        <div className="flex gap-2 mb-8 border-b border-gray-200">
+          <button
+            type="button"
+            onClick={() => setActiveSection('listings')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              activeSection === 'listings'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Listings
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection('bookings')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              activeSection === 'bookings'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Bookings
+          </button>
+        </div>
+
+        {activeSection === 'bookings' && <BnBBookingsPanel />}
+
+        {activeSection === 'listings' && (
+        <>
         {/* Analytics Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -523,6 +555,8 @@ const BnBHostManagementPage = () => {
               Add Your First BnB
             </button>
           </motion.div>
+        )}
+        </>
         )}
       </div>
 

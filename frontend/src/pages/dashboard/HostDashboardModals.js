@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import BookingDetailModal from './BookingDetailModal';
 import { listingsAPI } from '../../services/api';
 import {
   CheckCircleIcon,
@@ -1361,152 +1362,16 @@ const HostDashboardModals = ({
         </AnimatePresence>
       )}
 
-      {selectedBooking && (
-        <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-            onClick={() => setSelectedBooking(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(event) => event.stopPropagation()}
-              className="bg-white rounded-xl shadow-xl max-w-xl w-full"
-              data-testid="booking-detail-modal"
-            >
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Booking Details</h3>
-                  <p className="text-sm text-gray-500">Booking #{selectedBooking.id}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBooking(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <XMarkIcon className="h-6 w-6" />
-                </button>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Guest</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.guest_full_name || selectedBooking.guest_name || 'Guest'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Email</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.guest_email || selectedBooking.traveler_email || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Phone</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.guest_phone || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Property</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.hotel_name || 'Property'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Room</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.room_name || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Type</p>
-                    <p className="font-medium text-gray-900">{(selectedBooking.booking_type || 'hotel').toUpperCase()}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Check-in</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.check_in || selectedBooking.checkIn || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Check-out</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.check_out || selectedBooking.checkOut || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Amount</p>
-                    <p className="font-medium text-gray-900">{formatCurrency(selectedBooking.total_amount || selectedBooking.amount || 0)}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Status</p>
-                    <span data-testid="booking-detail-status" className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(selectedBooking.status)}`}>
-                      {selectedBooking.status}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Payment Choice</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.payment_method === 'online' ? 'Pay Now' : 'Pay at Hotel'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Payment Status</p>
-                    <p className="font-medium text-gray-900">{String(selectedBooking.payment_status || 'unpaid').replace('_', ' ')}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-gray-500">Request Stage</p>
-                    <p data-testid="booking-detail-request-stage" className="font-medium text-gray-900">{selectedBooking.requestStage || selectedBooking.status || 'pending'}</p>
-                  </div>
-                </div>
-
-                {(bookingActivityLog[selectedBooking.id] || selectedBooking.updated_at) && (
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-                    {bookingActivityLog[selectedBooking.id] ? (
-                      <p>
-                        Last status change: {bookingActivityLog[selectedBooking.id].from || 'pending'} -> {bookingActivityLog[selectedBooking.id].to} by {bookingActivityLog[selectedBooking.id].by} ({timeAgo(bookingActivityLog[selectedBooking.id].at)})
-                      </p>
-                    ) : null}
-                    {selectedBooking.updated_at ? (
-                      <p className="mt-1">Booking updated {timeAgo(selectedBooking.updated_at)}.</p>
-                    ) : null}
-                  </div>
-                )}
-
-                <div className="border-t border-gray-200 pt-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Status Actions</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={
-                        selectedBooking.status === 'confirmed' ||
-                        selectedBooking.status === 'cancelled' ||
-                        bookingActionLoadingId === selectedBooking.id
-                      }
-                      onClick={() => handleBookingStatusUpdate(selectedBooking.id, 'confirmed')}
-                      className="px-3 py-1.5 text-sm rounded bg-green-100 text-green-700 hover:bg-green-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
-                    >
-                      {selectedBooking.status === 'pending' ? 'Approve Booking' : 'Confirm'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        selectedBooking.status === 'cancelled' ||
-                        selectedBooking.status === 'completed' ||
-                        bookingActionLoadingId === selectedBooking.id
-                      }
-                      onClick={() => handleBookingStatusUpdate(selectedBooking.id, 'cancelled')}
-                      className="px-3 py-1.5 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
-                    >
-                      {selectedBooking.status === 'pending' ? 'Decline Booking' : 'Cancel'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        selectedBooking.status !== 'confirmed' ||
-                        bookingActionLoadingId === selectedBooking.id
-                      }
-                      onClick={() => handleBookingStatusUpdate(selectedBooking.id, 'completed')}
-                      className="px-3 py-1.5 text-sm rounded bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
-                    >
-                      Mark Complete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        </AnimatePresence>
-      )}
+      <BookingDetailModal
+        selectedBooking={selectedBooking}
+        onClose={() => setSelectedBooking(null)}
+        bookingActionLoadingId={bookingActionLoadingId}
+        bookingActivityLog={bookingActivityLog}
+        handleBookingStatusUpdate={handleBookingStatusUpdate}
+        getStatusColor={getStatusColor}
+        formatCurrency={formatCurrency}
+        timeAgo={timeAgo}
+      />
 
       <ConfirmDialog
         isOpen={Boolean(hotelToDelete)}

@@ -15,13 +15,15 @@ const HostBookingActionButtons = ({
 
   return (
     <div className="flex flex-wrap gap-2">
-      <button
-        type="button"
-        onClick={() => onView(booking)}
-        className="px-2.5 py-1 text-xs rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200"
-      >
-        View
-      </button>
+      {onView && (
+        <button
+          type="button"
+          onClick={() => onView(booking)}
+          className="px-2.5 py-1 text-xs rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200"
+        >
+          View
+        </button>
+      )}
       <button
         type="button"
         disabled={
