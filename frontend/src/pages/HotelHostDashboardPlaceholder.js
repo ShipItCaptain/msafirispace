@@ -1417,6 +1417,7 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
       setError={setError}
       setSuccess={setSuccess}
       setActiveTab={setActiveTab}
+      setSelectedHotelForRooms={setSelectedHotelForRooms}
     />
   );
 
@@ -1752,7 +1753,15 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => {
+                      // Landing on Manage Rooms directly (not via a specific
+                      // hotel's card) with no hotel picked yet: skip the
+                      // ambiguity entirely when there's only one to pick.
+                      if (tab.id === 'rooms' && !selectedHotelForRooms && hotels.length === 1) {
+                        setSelectedHotelForRooms(hotels[0].id);
+                      }
+                      setActiveTab(tab.id);
+                    }}
                     className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === tab.id
                         ? 'border-blue-500 text-blue-600'

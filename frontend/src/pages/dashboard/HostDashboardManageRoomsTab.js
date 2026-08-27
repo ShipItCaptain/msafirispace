@@ -37,6 +37,7 @@ const HostDashboardManageRoomsTab = ({
   setError,
   setSuccess,
   setActiveTab,
+  setSelectedHotelForRooms,
 }) => {
     const [basicInfoError, setBasicInfoError] = useState('');
     const isRoomConfigured = (room) => {
@@ -200,9 +201,13 @@ const HostDashboardManageRoomsTab = ({
         {/* Hotels with Room Types */}
         {(() => {
           // If filtering by a specific hotel, ensure we show it even if it has no room types in allRoomTypes
-          const hotelsToShow = selectedHotelForRooms 
+          // Without a specific hotel picked, don't silently show only whichever
+          // hotels happen to already have a room type — that hides room-less
+          // hotels entirely with no indication they exist. The picker below
+          // handles hotel selection uniformly instead.
+          const hotelsToShow = selectedHotelForRooms
             ? [{ id: selectedHotelForRooms, ...hotels.find(h => h.id === selectedHotelForRooms) }]
-            : Array.from(roomsByHotel.keys()).map(id => hotels.find(h => h.id === id)).filter(Boolean);
+            : [];
           
           return hotelsToShow.map((hotel) => {
             if (!hotel) return null;
@@ -1132,18 +1137,47 @@ const HostDashboardManageRoomsTab = ({
           });
         })()}
 
-        {Array.from(roomsByHotel.entries()).length === 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <div className="text-6xl mb-4" aria-hidden>🏨✨</div>
-            <p className="text-gray-700 mb-4">Nothing to show yet — add your first room type.</p>
-            <button
-              onClick={() => setActiveTab('hotels')}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <PlusIcon className="h-5 w-5 mr-2" />
-              Add Hotel
-            </button>
-          </div>
+        {/* Once a specific hotel is picked, the section above already renders
+            it (with its own "Add Room Type" button, even if it has zero rooms
+            so far). Without a pick, always resolve which hotel first — rather
+            than only listing whichever hotels already happen to have a room
+            type and silently hiding the rest. */}
+        {!selectedHotelForRooms && (
+          hotels.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+              <div className="text-6xl mb-4" aria-hidden>🏨✨</div>
+              <p className="text-gray-700 mb-4">Add a hotel first, then come back here to add its room types.</p>
+              <button
+                onClick={() => setActiveTab('hotels')}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <PlusIcon className="h-5 w-5 mr-2" />
+                Add Hotel
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+              <div className="text-center mb-6">
+                <div className="text-6xl mb-4" aria-hidden>🏨✨</div>
+                <p className="text-gray-700">Which hotel do you want to add room types for?</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
+                {hotels.map((hotel) => (
+                  <button
+                    key={hotel.id}
+                    onClick={() => setSelectedHotelForRooms(hotel.id)}
+                    className="flex items-center justify-between px-4 py-3 border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+                  >
+                    <span>
+                      <span className="block font-medium text-gray-900">{hotel.name}</span>
+                      <span className="block text-xs text-gray-500">{hotel.city}, {hotel.country}</span>
+                    </span>
+                    <BuildingOfficeIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
         )}
       </div>
     );
