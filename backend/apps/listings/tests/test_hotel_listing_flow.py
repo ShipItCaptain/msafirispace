@@ -44,8 +44,10 @@ def test_hotel_listing_create_rooms_images_amenities_and_visibility():
         password="testpass123",
     )
 
-    amenity_wifi = HotelAmenity.objects.create(name="Free WiFi", category="general")
-    amenity_pool = HotelAmenity.objects.create(name="Swimming Pool", category="recreation")
+    # These two are already seeded by the listings 0012 migration; get rather
+    # than create so this test doesn't collide with that seed data.
+    amenity_wifi, _ = HotelAmenity.objects.get_or_create(name="Free WiFi", defaults={"category": "general"})
+    amenity_pool, _ = HotelAmenity.objects.get_or_create(name="Swimming Pool", defaults={"category": "recreation"})
 
     client = APIClient()
     client.force_authenticate(user=host)
@@ -226,3 +228,81 @@ def test_creating_a_hotel_grants_hotel_host_role():
     user.refresh_from_db()
     assert User.Role.HOTEL_HOST in user.roles
     assert user.active_role == User.Role.HOTEL_HOST
+
+
+# Must match ListHotelPage.js's `availableAmenities` list — the hotel creation
+# form posts these exact names, and looks each one up against HotelAmenity by
+# name (see utils/hotelAmenities.js). The table used to have zero rows, so
+# every amenity a host selected was silently dropped with no error anywhere.
+FRONTEND_AMENITY_NAMES = [
+    "Free WiFi", "Parking", "Swimming Pool", "Fitness Center", "Restaurant",
+    "Bar", "Room Service", "Business Center", "Meeting Rooms",
+    "Conference Facilities", "Spa", "Tennis Court", "Airport Shuttle",
+    "24/7 Front Desk", "Air Conditioning", "Minibar", "Safe",
+    "Breakfast Included",
+]
+
+
+@pytest.mark.django_db
+def test_hotel_amenity_reference_data_is_seeded():
+    """
+    Regression test for the empty HotelAmenity table: every amenity name the
+    hotel creation form can post must exist, or that amenity silently fails
+    to attach to the hotel with no error surfaced anywhere in the UI.
+    """
+    for name in FRONTEND_AMENITY_NAMES:
+        assert HotelAmenity.objects.filter(name=name).exists(), (
+            f"HotelAmenity '{name}' is missing — the hotel creation form "
+            "posts this exact name and it will silently fail to attach."
+        )
+
+
+@pytest.mark.django_db
+def test_hotel_amenity_selected_during_creation_actually_persists():
+    """
+    End-to-end version of the same regression: create a hotel, then attach
+    amenities the same way the frontend does (look up by name, POST the id),
+    and confirm they actually show up on the hotel afterward.
+    """
+    User = get_user_model()
+    user = User.objects.create_user(
+        username="amenity_flow_host",
+        email="amenity_flow_host@example.com",
+        password="testpass123",
+    )
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    hotel_response = client.post(
+        "/api/v1/listings/hotels/",
+        {
+            "name": "Amenity Flow Hotel",
+            "description": "A hotel for testing amenity attachment.",
+            "short_description": "Amenity flow hotel.",
+            "property_type": "hotel",
+            "star_rating": 3,
+            "address": "1 Amenity Street",
+            "city": "Nairobi",
+            "country": "Kenya",
+        },
+        format="json",
+    )
+    assert hotel_response.status_code == 201
+    hotel_id = hotel_response.json()["id"]
+
+    wifi = HotelAmenity.objects.get(name="Free WiFi")
+    pool = HotelAmenity.objects.get(name="Swimming Pool")
+    for amenity in (wifi, pool):
+        mapping_response = client.post(
+            f"/api/v1/listings/hotels/{hotel_id}/amenities/",
+            {"amenity_id": amenity.id, "is_available": True},
+            format="json",
+        )
+        assert mapping_response.status_code == 201, mapping_response.data
+
+    detail_response = client.get(f"/api/v1/listings/hotels/{hotel_id}/")
+    assert detail_response.status_code == 200
+    amenity_names = {
+        row["amenity"]["name"] for row in detail_response.json()["amenity_mappings"]
+    }
+    assert amenity_names == {"Free WiFi", "Swimming Pool"}
