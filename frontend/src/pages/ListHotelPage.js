@@ -8,6 +8,7 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
+import { toast } from 'react-hot-toast';
 import { buildAmenityIndex, normalizeAmenityToken, resolveHotelAmenityName } from '../utils/hotelAmenities';
 
 const ListHotelPage = () => {
@@ -189,10 +190,26 @@ const ListHotelPage = () => {
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
+  const extractErrorMessage = (error) => {
+    const data = error?.response?.data;
+    if (!data) return error?.message || 'Failed to create listing. Please try again.';
+    if (typeof data === 'string') return data;
+    if (data.detail) return data.detail;
+    const firstKey = Object.keys(data)[0];
+    if (firstKey && Array.isArray(data[firstKey]) && data[firstKey].length > 0) {
+      return `${firstKey}: ${data[firstKey][0]}`;
+    }
+    if (firstKey && typeof data[firstKey] === 'string') {
+      return `${firstKey}: ${data[firstKey]}`;
+    }
+    return error?.message || 'Failed to create listing. Please try again.';
+  };
+
   const handleSubmit = async () => {
     if (!validateStep(currentStep)) return;
-    
+
     setLoading(true);
+    let created = null;
     try {
       const { listingsAPI } = await import('../services/api');
 
@@ -213,47 +230,75 @@ const ListHotelPage = () => {
         email: formData.email,
       };
 
-      const created = await listingsAPI.createListing(payload);
-      const hotelId = created?.id;
+      // Only this call can fail with nothing yet created — everything past
+      // this point operates on a hotel that already exists, so a failure
+      // here must never be reported the same way as a failure later on.
+      created = await listingsAPI.createListing(payload);
+      const hotelId = created.id;
 
-      if (hotelId) {
-        // Upload images after hotel creation
-        const imageUploads = (formData.images || [])
-          .filter((img) => img?.file)
-          .map((img, index) => listingsAPI.uploadHotelImage(hotelId, {
-            file: img.file,
-            image_type: img.image_type || 'exterior',
-            is_primary: Boolean(img.is_primary),
-            order: index,
-            caption: img.caption || '',
-          }));
-        if (imageUploads.length) {
-          await Promise.all(imageUploads);
+      const problems = [];
+
+      const imageUploads = (formData.images || [])
+        .filter((img) => img?.file)
+        .map((img, index) => listingsAPI.uploadHotelImage(hotelId, {
+          file: img.file,
+          image_type: img.image_type || 'exterior',
+          is_primary: Boolean(img.is_primary),
+          order: index,
+          caption: img.caption || '',
+        }));
+      if (imageUploads.length) {
+        const results = await Promise.allSettled(imageUploads);
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          problems.push(`${failed} of ${imageUploads.length} photo${imageUploads.length > 1 ? 's' : ''} failed to upload`);
         }
+      }
 
-        // Map amenity IDs to backend amenity IDs by name
-        if ((formData.amenities || []).length) {
-          const amenityResponse = await listingsAPI.getHotelAmenities();
-          const amenityRows = amenityResponse?.results || amenityResponse || [];
-          const amenityIndex = buildAmenityIndex(amenityRows);
-          const selectedAmenityNames = formData.amenities
-            .map((amenityId) => availableAmenities.find((a) => a.id === amenityId)?.name)
-            .map(resolveHotelAmenityName)
-            .filter(Boolean);
-          const amenityUploads = selectedAmenityNames
-            .map((name) => amenityIndex.get(normalizeAmenityToken(name)))
-            .filter(Boolean)
-            .map((amenityId) => listingsAPI.addHotelAmenity(hotelId, amenityId));
-          if (amenityUploads.length) {
-            await Promise.all(amenityUploads);
+      if ((formData.amenities || []).length) {
+        const amenityResponse = await listingsAPI.getHotelAmenities();
+        const amenityRows = amenityResponse?.results || amenityResponse || [];
+        const amenityIndex = buildAmenityIndex(amenityRows);
+        const selectedAmenityNames = formData.amenities
+          .map((amenityId) => availableAmenities.find((a) => a.id === amenityId)?.name)
+          .map(resolveHotelAmenityName)
+          .filter(Boolean);
+        const resolvedAmenityIds = selectedAmenityNames
+          .map((name) => amenityIndex.get(normalizeAmenityToken(name)))
+          .filter(Boolean);
+        if (resolvedAmenityIds.length) {
+          const results = await Promise.allSettled(
+            resolvedAmenityIds.map((amenityId) => listingsAPI.addHotelAmenity(hotelId, amenityId))
+          );
+          const failed = results.filter((r) => r.status === 'rejected').length;
+          if (failed > 0) {
+            problems.push(`${failed} of ${resolvedAmenityIds.length} amenit${resolvedAmenityIds.length > 1 ? 'ies' : 'y'} failed to save`);
           }
         }
+        if (resolvedAmenityIds.length < selectedAmenityNames.length) {
+          problems.push(`${selectedAmenityNames.length - resolvedAmenityIds.length} amenity selection(s) couldn't be matched`);
+        }
+      }
+
+      if (problems.length) {
+        toast.error(`Hotel created, but ${problems.join(' and ')}. You can fix this from Manage Rooms / Edit Hotel.`, { duration: 8000 });
+      } else {
+        toast.success('Hotel listed successfully!');
       }
 
       navigate(`/hotel/${created.id}`);
     } catch (error) {
       console.error('Error creating hotel listing:', error);
-      setErrors({ submit: 'Failed to create listing. Please try again.' });
+      if (created?.id) {
+        // The hotel itself was created; only something after it failed.
+        // Sending the host back to a blank step-1 form here would invite a
+        // duplicate hotel on retry, so take them to the one that already
+        // exists instead and tell them what still needs attention.
+        toast.error(`Hotel created, but: ${extractErrorMessage(error)}. You can finish setup from Manage Rooms / Edit Hotel.`, { duration: 8000 });
+        navigate(`/hotel/${created.id}`);
+        return;
+      }
+      setErrors({ submit: extractErrorMessage(error) });
     } finally {
       setLoading(false);
     }
