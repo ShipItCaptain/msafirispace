@@ -1,12 +1,27 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import { bnbAPI } from '../services/api';
 import ComprehensiveBnBForm from '../components/forms/ComprehensiveBnBForm';
 import { useNotifications } from '../contexts/NotificationContext';
+import { fetchUserMe } from '../store/slices/authSlice';
 
 const BnBCreatePage = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { showSuccess, showError } = useNotifications();
+
+  // Creating a hotel/BnB listing can grant the host role server-side (see
+  // HotelListCreateView/BnBListingListCreateView.perform_create), but the
+  // Redux user state we already have in memory doesn't know that yet. The
+  // dashboard we're about to redirect to is behind RoleGuard, which reads
+  // that stale state — without refreshing it first, a first-time host gets
+  // silently bounced back to the guest homepage right after their listing
+  // was created successfully.
+  const goToBnBDashboard = async () => {
+    await dispatch(fetchUserMe()).unwrap().catch(() => {});
+    navigate('/host/bnb');
+  };
 
   const extractErrorMessage = (error) => {
     const data = error?.response?.data;
@@ -102,7 +117,7 @@ const BnBCreatePage = () => {
       }
 
       showSuccess('Listing Created', 'Your BnB listing has been successfully created.', 5000);
-      navigate('/host/bnb');
+      await goToBnBDashboard();
     } catch (error) {
       if (savedListing?.id) {
         showError(
@@ -110,7 +125,7 @@ const BnBCreatePage = () => {
           `Listing was created, but image upload failed: ${extractErrorMessage(error)}`,
           8000
         );
-        navigate('/host/bnb');
+        await goToBnBDashboard();
         return;
       }
       showError(
