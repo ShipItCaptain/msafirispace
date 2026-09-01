@@ -210,6 +210,12 @@ export const authAPI = {
     return response.data;
   },
 
+  // Get the current user's referral code/link and who they've referred
+  getReferralStats: async () => {
+    const response = await api.get('/auth/referral-stats/');
+    return response.data;
+  },
+
   // Get user stats
   getUserStats: async () => {
     const response = await api.get('/auth/stats/');

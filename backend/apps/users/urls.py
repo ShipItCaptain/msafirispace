@@ -39,6 +39,7 @@ urlpatterns = [
     
     # Referral system
     path('apply-referral/', views.ReferralView.as_view(), name='apply-referral'),
+    path('referral-stats/', views.ReferralStatsView.as_view(), name='referral-stats'),
     
     # Host onboarding
     path('host/onboard/', views.HostOnboardingView.as_view(), name='host-onboard'),

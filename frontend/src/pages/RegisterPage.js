@@ -13,6 +13,9 @@ const RegisterPage = () => {
   const { register, isLoading, error, clearAuthError } = useAuth();
   // Intended destination (if user was redirected to register/login from a protected page)
   const from = location.state?.from?.pathname || '/';
+  // A referral link looks like /register?ref=CODE -- pre-fill the existing
+  // referral_code field on the form with it (still editable/overridable).
+  const referralCodeFromLink = new URLSearchParams(location.search).get('ref') || '';
   
   // Form state management
   const [isHostForm, setIsHostForm] = useState(false);
@@ -29,9 +32,9 @@ const RegisterPage = () => {
     confirm_password: '',
     country: 'Kenya',
     city: '',
-    referral_code: ''
+    referral_code: referralCodeFromLink
   });
-  
+
   // Host form data
   const [hostFormData, setHostFormData] = useState({
     first_name: '',
@@ -46,7 +49,7 @@ const RegisterPage = () => {
     tax_id: '',
     country: 'Kenya',
     city: '',
-    referral_code: ''
+    referral_code: referralCodeFromLink
   });
 
   // Get current form data based on form type
@@ -162,6 +165,7 @@ const RegisterPage = () => {
         company_name,
         business_license,
         tax_id,
+        referral_code,
       } = formDataToSubmit;
 
       const registrationData = {
@@ -176,6 +180,7 @@ const RegisterPage = () => {
         company_name,
         business_license,
         tax_id,
+        ...(referral_code ? { referral_code: referral_code.trim() } : {}),
       };
 
       await register(registrationData);

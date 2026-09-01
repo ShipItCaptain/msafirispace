@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useFavorites } from '../contexts/FavoritesContext';
+import ReferralsPanel from '../components/referrals/ReferralsPanel';
 
 const DashboardPage = () => {
   const { user, isBnBHost, isHotelRestaurantHost } = useAuth();
@@ -418,6 +419,7 @@ const DashboardPage = () => {
       { id: 'overview', name: 'Overview', icon: ChartBarIcon },
       { id: 'roles', name: 'Manage Roles', icon: Cog6ToothIcon },
       { id: 'payments', name: 'Payment Dashboard', icon: CreditCardIcon },
+      { id: 'referrals', name: 'Referrals', icon: UsersIcon },
       { id: 'profile', name: isGuest ? 'Profile Settings' : 'Provider Profile', icon: UserIcon }
     ];
 
@@ -427,6 +429,7 @@ const DashboardPage = () => {
         { id: 'bookings', name: 'My Bookings', icon: CalendarDaysIcon },
         { id: 'favorites', name: 'Favorites', icon: StarIcon },
         { id: 'payments', name: 'Payments', icon: CreditCardIcon },
+        { id: 'referrals', name: 'Referrals', icon: UsersIcon },
         { id: 'profile', name: 'Profile Settings', icon: Cog6ToothIcon },
       ];
     }
@@ -1417,6 +1420,8 @@ const DashboardPage = () => {
         return renderClientNeeds();
       case 'payments':
         return renderPayments();
+      case 'referrals':
+        return <ReferralsPanel />;
       case 'profile':
         return renderProfile();
       // Host-specific tabs

@@ -432,6 +432,31 @@ class ReferralView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class ReferralStatsView(APIView):
+    """
+    A user's own referral code/link plus who they've referred so far.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        referred_users = User.objects.filter(referred_by=user).order_by('-created_at')
+
+        return Response({
+            'referral_code': user.referral_code,
+            'referral_link': f'{settings.SITE_URL}/register?ref={user.referral_code}',
+            'referred_count': referred_users.count(),
+            'referred_by': user.referred_by.get_display_name() if user.referred_by_id else None,
+            'referred_users': [
+                {
+                    'name': referred.get_display_name(),
+                    'joined_at': referred.created_at,
+                }
+                for referred in referred_users
+            ],
+        })
+
+
 class UserStatsView(APIView):
     """
     User statistics endpoint

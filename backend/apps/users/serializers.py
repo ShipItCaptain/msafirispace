@@ -15,12 +15,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
     roles = serializers.MultipleChoiceField(choices=User.Role.choices, required=False, default=[User.Role.GUEST])
-    
+    referral_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         model = User
         fields = [
             'email', 'username', 'first_name', 'last_name', 'password', 'password_confirm',
-            'phone_number', 'roles', 'company_name', 'business_license', 'tax_id'
+            'phone_number', 'roles', 'company_name', 'business_license', 'tax_id', 'referral_code'
         ]
         extra_kwargs = {
             'username': {'required': False},
@@ -60,9 +61,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         # Remove password_confirm from validated data
         validated_data.pop('password_confirm')
         roles_data = validated_data.pop('roles', [User.Role.GUEST])
-        
+        referral_code = (validated_data.pop('referral_code', '') or '').strip()
+
         # Create user
         user = User.objects.create_user(**validated_data)
+
+        # A typo'd or expired referral code shouldn't block registration --
+        # silently skip it rather than raising a validation error.
+        if referral_code:
+            referrer = User.objects.filter(referral_code=referral_code, is_active=True).exclude(pk=user.pk).first()
+            if referrer:
+                user.referred_by = referrer
         
         # Create user profile
         UserProfile.objects.create(user=user)
