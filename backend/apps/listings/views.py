@@ -171,15 +171,31 @@ class HotelAmenityMappingDetailView(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([IsAuthenticatedOrReadOnly])
 def featured_hotels(request):
     """
-    Get featured hotels
+    Get featured hotels for the homepage. Prefers hotels an admin has
+    explicitly flagged is_featured/is_verified, but backfills with the
+    most recently listed active hotels when there aren't enough of those --
+    there's no self-service (or even admin) UI to set is_featured, so
+    without this backfill every new hotel is permanently invisible on the
+    homepage the moment it's created, with no way for anyone to fix it
+    short of a direct database edit.
     """
-    hotels = Hotel.objects.filter(
-        is_active=True,
-        is_featured=True,
-        is_verified=True
-    ).select_related('host').prefetch_related('images', 'amenity_mappings__amenity')[:6]
-    
-    serializer = HotelListSerializer(hotels, many=True)
+    limit = 6
+    curated = list(
+        Hotel.objects.filter(is_active=True, is_featured=True, is_verified=True)
+        .select_related('host').prefetch_related('images', 'amenity_mappings__amenity')
+        .order_by('-created_at')[:limit]
+    )
+
+    if len(curated) < limit:
+        backfill = (
+            Hotel.objects.filter(is_active=True)
+            .exclude(id__in=[hotel.id for hotel in curated])
+            .select_related('host').prefetch_related('images', 'amenity_mappings__amenity')
+            .order_by('-created_at')[:limit - len(curated)]
+        )
+        curated.extend(backfill)
+
+    serializer = HotelListSerializer(curated, many=True)
     return Response(serializer.data)
 
 
