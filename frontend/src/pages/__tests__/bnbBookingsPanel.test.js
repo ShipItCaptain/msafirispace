@@ -96,6 +96,11 @@ describe('BnBBookingsPanel', () => {
       );
       return Boolean(btn);
     });
+
+    // handleStatusChange's finally-block setBookingActionLoadingId(null) lands
+    // in a microtask after the button text has already updated, so flush it
+    // inside act() before the test ends to avoid a stray warning.
+    await harness.settle();
   });
 
   it('declining a pending booking calls the API with cancelled', async () => {
@@ -121,5 +126,6 @@ describe('BnBBookingsPanel', () => {
       bookingsAPI.updateHostBookingStatus.mock.calls.length > 0
     );
     expect(bookingsAPI.updateHostBookingStatus).toHaveBeenCalledWith(200, 'cancelled');
+    await harness.settle();
   });
 });

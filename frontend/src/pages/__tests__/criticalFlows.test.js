@@ -242,6 +242,14 @@ describe('Critical booking flows', () => {
 
     await waitForCondition(() => bookingsAPI.confirmPayAtPremises.mock.calls.length > 0);
     expect(bookingsAPI.confirmPayAtPremises).toHaveBeenCalledWith(10);
+
+    // The mocked promise resolves after the call-count check above, so the
+    // resulting setBooking/setSuccessState updates land in a later
+    // microtask. Flush it inside act() before the test ends, otherwise
+    // React logs "not wrapped in act(...)" once those updates fire on an
+    // unmounted tree.
+    await harness.settle();
+    expect(container.textContent).toContain('Reservation confirmed');
   });
 
   it('offers a continue-searching CTA when the host declines availability', async () => {

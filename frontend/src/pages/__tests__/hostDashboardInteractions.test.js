@@ -251,6 +251,11 @@ describe('Host dashboard interactions', () => {
     expect(harness.container.querySelector('[data-testid="booking-detail-status"]').textContent).toContain('pending');
     expect(harness.container.querySelector('[data-testid="booking-detail-modal"]')).toBeTruthy();
     expect(bookingsAPI.updateHostBookingStatus).toHaveBeenCalledWith(100, 'confirmed');
+
+    // handleStatusChange's finally-block setBookingActionLoadingId(null) lands
+    // in a microtask after the request-stage text has already updated, so
+    // flush it inside act() before the test ends to avoid a stray warning.
+    await harness.settle();
   });
 
   it('alert center pending action opens bookings with pending filter', async () => {
