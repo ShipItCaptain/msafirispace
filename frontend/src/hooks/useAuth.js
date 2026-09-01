@@ -56,33 +56,13 @@ export const useAuth = () => {
 
   const login = async (credentials) => {
     try {
+      // Land the user wherever their active_role last was (guest or a host
+      // role) instead of forcing everyone back to guest on every login --
+      // loginUser's reducer already persists whatever active_role the
+      // backend reports, and HomePage/RoleGuard read that to route
+      // accordingly, so no extra role-switch call is needed here.
       const result = await dispatch(loginUser(credentials)).unwrap();
       toast.success('Login successful!');
-
-      // Ensure that after login the default experience is always the Guest role.
-      // If the backend reports a different active_role (e.g. a host role from a previous session),
-      // immediately switch the active role back to 'guest' so the UI and header text
-      // both reflect that we're browsing as a guest.
-      try {
-        const loggedInUser = result?.user;
-        const activeRoleFromServer = loggedInUser?.active_role;
-
-        if (loggedInUser) {
-          if (activeRoleFromServer && activeRoleFromServer !== 'guest') {
-            // Ask the backend to switch us back to the guest role
-            await dispatch(switchUserRole({ role: 'guest' })).unwrap();
-            try { localStorage.setItem('userActiveRole', 'guest'); } catch (_) {}
-          } else if (!activeRoleFromServer) {
-            // If server didn't provide an active_role, default to guest on the client
-            try { localStorage.setItem('userActiveRole', 'guest'); } catch (_) {}
-          }
-        }
-      } catch (roleError) {
-        // Failing to normalize the role should not break login;
-        // log it for debugging but keep the user logged in.
-        console.error('Failed to normalize active role to guest after login:', roleError);
-      }
-
       return result;
     } catch (error) {
       const errorMessage = extractErrorMessage(error) || 'Login failed';
