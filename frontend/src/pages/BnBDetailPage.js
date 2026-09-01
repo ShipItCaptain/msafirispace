@@ -585,11 +585,11 @@ const BnBDetailPage = () => {
                     </span>
                   )}
                 </h2>
-                {reviewStats && reviewStats.average_rating > 0 && (
+                {reviewStats && Number(reviewStats.average_rating) > 0 && (
                   <div className="flex items-center space-x-2">
                     <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />
                     <span className="text-xl font-bold text-gray-900">
-                      {reviewStats.average_rating.toFixed(1)}
+                      {Number(reviewStats.average_rating).toFixed(1)}
                     </span>
                   </div>
                 )}

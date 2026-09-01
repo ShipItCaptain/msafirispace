@@ -9,8 +9,10 @@ import {
   ExclamationTriangleIcon,
   MapPinIcon,
   ShieldCheckIcon,
+  StarIcon as StarIconOutline,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { bookingsAPI, reviewsAPI } from '../services/api';
 import PaymentModal from '../components/payment/PaymentModal';
 import { toast } from 'react-hot-toast';
@@ -31,6 +33,11 @@ const BookingDetailPage = () => {
   const [reviews, setReviews] = useState([]);
   const [reviewStats, setReviewStats] = useState(null);
   const [selectedPaymentChoice, setSelectedPaymentChoice] = useState('online');
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewTitle, setReviewTitle] = useState('');
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -49,12 +56,19 @@ const BookingDetailPage = () => {
 
   useEffect(() => {
     const run = async () => {
-      if (!booking?.hotel?.id) return;
+      const hotelId = booking?.hotel?.id;
+      const bnbId = booking?.bnb_listing?.id;
+      if (!hotelId && !bnbId) return;
       try {
-        const [reviewsData, statsData] = await Promise.all([
-          reviewsAPI.getHotelReviews(booking.hotel.id),
-          reviewsAPI.getHotelReviewStats(booking.hotel.id),
-        ]);
+        const [reviewsData, statsData] = hotelId
+          ? await Promise.all([
+              reviewsAPI.getHotelReviews(hotelId),
+              reviewsAPI.getHotelReviewStats(hotelId),
+            ])
+          : await Promise.all([
+              reviewsAPI.getBnBReviews(bnbId),
+              reviewsAPI.getBnBReviewStats(bnbId),
+            ]);
         setReviews(Array.isArray(reviewsData) ? reviewsData : []);
         setReviewStats(statsData || null);
       } catch (_) {
@@ -62,7 +76,54 @@ const BookingDetailPage = () => {
       }
     };
     run();
-  }, [booking?.hotel?.id]);
+  }, [booking?.hotel?.id, booking?.bnb_listing?.id]);
+
+  const canWriteReview = useMemo(() => {
+    if (!booking || booking.review) return false;
+    if (!['confirmed', 'completed'].includes(booking.status)) return false;
+    if (!booking.check_out) return false;
+    return new Date(booking.check_out) < new Date();
+  }, [booking]);
+
+  const handleSubmitReview = async () => {
+    if (!booking || reviewRating < 1) return;
+    setIsSubmittingReview(true);
+    try {
+      const created = await reviewsAPI.createReview({
+        booking_id: booking.id,
+        rating: reviewRating,
+        title: reviewTitle,
+        comment: reviewComment,
+      });
+      setBooking((prev) => ({
+        ...prev,
+        review: {
+          id: created.id,
+          rating: created.rating,
+          title: created.title,
+          comment: created.comment,
+          created_at: created.created_at,
+        },
+      }));
+      setShowReviewForm(false);
+      toast.success('Thanks for your review!');
+      const hotelId = booking?.hotel?.id;
+      const bnbId = booking?.bnb_listing?.id;
+      const [reviewsData, statsData] = hotelId
+        ? await Promise.all([reviewsAPI.getHotelReviews(hotelId), reviewsAPI.getHotelReviewStats(hotelId)])
+        : await Promise.all([reviewsAPI.getBnBReviews(bnbId), reviewsAPI.getBnBReviewStats(bnbId)]);
+      setReviews(Array.isArray(reviewsData) ? reviewsData : []);
+      setReviewStats(statsData || null);
+    } catch (err) {
+      const message = err?.response?.data?.non_field_errors?.[0]
+        || err?.response?.data?.booking_id?.[0]
+        || err?.response?.data?.detail
+        || 'Could not submit your review';
+      toast.error(message);
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   useEffect(() => {
     if (!booking?.payment_method) return;
@@ -534,9 +595,95 @@ const BookingDetailPage = () => {
               )}
             </div>
 
-            {booking.hotel && reviewStats && (
+            {(booking.hotel || booking.bnb_listing) && (booking.review || canWriteReview) && (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-3">Recent Hotel Feedback</h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-3">
+                  {booking.review ? 'Your Review' : 'Share Your Experience'}
+                </h2>
+
+                {booking.review ? (
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-0.5 mb-1">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        n <= booking.review.rating ? (
+                          <StarIconSolid key={n} className="w-5 h-5 text-yellow-400" />
+                        ) : (
+                          <StarIconOutline key={n} className="w-5 h-5 text-gray-300" />
+                        )
+                      ))}
+                    </div>
+                    {booking.review.title && (
+                      <p className="text-sm font-semibold text-gray-900">{booking.review.title}</p>
+                    )}
+                    {booking.review.comment && (
+                      <p className="text-sm text-gray-700 mt-1">{booking.review.comment}</p>
+                    )}
+                  </div>
+                ) : showReviewForm ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1" role="radiogroup" aria-label="Rating">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setReviewRating(n)}
+                          aria-label={`Rate ${n} star${n > 1 ? 's' : ''}`}
+                        >
+                          {n <= reviewRating ? (
+                            <StarIconSolid className="w-7 h-7 text-yellow-400" />
+                          ) : (
+                            <StarIconOutline className="w-7 h-7 text-gray-300" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Title (optional)"
+                      value={reviewTitle}
+                      onChange={(e) => setReviewTitle(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                    <textarea
+                      placeholder="Tell other travelers about your stay..."
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowReviewForm(false)}
+                        className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSubmitReview}
+                        disabled={reviewRating < 1 || isSubmittingReview}
+                        className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-60"
+                      >
+                        {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowReviewForm(true)}
+                    className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700"
+                  >
+                    Write a Review
+                  </button>
+                )}
+              </div>
+            )}
+
+            {(booking.hotel || booking.bnb_listing) && reviewStats && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-3">Recent Feedback</h2>
                 <p className="text-sm text-gray-600 mb-3">
                   Average rating: <span className="font-semibold text-gray-900">{reviewStats.average_rating || '—'}</span> ({reviewStats.total_reviews || 0} reviews)
                 </p>

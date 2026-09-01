@@ -11,6 +11,14 @@ class Review(models.Model):
     """
 
     traveler = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
+    # Links the review to the specific completed stay it's about. One review
+    # per booking (enforced by OneToOne), and lets us verify the reviewer
+    # actually stayed there instead of trusting a client-supplied hotel/bnb id.
+    # Nullable to tolerate any pre-existing reviews created before this field
+    # existed.
+    booking = models.OneToOneField(
+        'bookings.Booking', on_delete=models.CASCADE, related_name='review', null=True, blank=True
+    )
     # Hotel booking review fields (nullable for BnB reviews)
     hotel = models.ForeignKey('listings.Hotel', on_delete=models.CASCADE, related_name='reviews', null=True, blank=True)
     room_type = models.ForeignKey('listings.RoomType', on_delete=models.SET_NULL, null=True, blank=True, related_name='reviews')

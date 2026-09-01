@@ -293,10 +293,23 @@ class BookingListSerializer(serializers.ModelSerializer):
 
 class BookingDetailSerializer(BookingSerializer):
     booking_type = serializers.SerializerMethodField()
-    
+    review = serializers.SerializerMethodField()
+
     class Meta(BookingSerializer.Meta):
-        fields = BookingSerializer.Meta.fields + ['booking_type']
-    
+        fields = BookingSerializer.Meta.fields + ['booking_type', 'review']
+
+    def get_review(self, obj):
+        review = getattr(obj, 'review', None)
+        if not review:
+            return None
+        return {
+            'id': review.id,
+            'rating': review.rating,
+            'title': review.title,
+            'comment': review.comment,
+            'created_at': review.created_at,
+        }
+
     def get_booking_type(self, obj):
         """Return 'hotel' or 'bnb' based on booking type"""
         return 'hotel' if obj.hotel else 'bnb'
