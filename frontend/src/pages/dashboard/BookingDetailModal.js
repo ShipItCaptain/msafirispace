@@ -2,6 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import HostBookingActionButtons from './HostBookingActionButtons';
+import MessageThread from '../../components/messaging/MessageThread';
 
 const BookingDetailModal = ({
   selectedBooking,
@@ -29,7 +30,7 @@ const BookingDetailModal = ({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(event) => event.stopPropagation()}
-          className="bg-white rounded-xl shadow-xl max-w-xl w-full"
+          className="bg-white rounded-xl shadow-xl max-w-xl w-full max-h-[90vh] overflow-y-auto"
           data-testid="booking-detail-modal"
         >
           <div className="p-6 border-b border-gray-200 flex items-center justify-between">
@@ -124,6 +125,8 @@ const BookingDetailModal = ({
                 onStatusChange={handleBookingStatusUpdate}
               />
             </div>
+
+            <MessageThread bookingId={selectedBooking.id} />
           </div>
         </motion.div>
       </motion.div>

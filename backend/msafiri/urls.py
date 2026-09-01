@@ -48,6 +48,7 @@ urlpatterns = [
         path('promotions/', include('apps.promotions.urls')),
         # path('referrals/', include('apps.referrals.urls')),
         path('notifications/', include('apps.notifications.urls')),
+        path('messaging/', include('apps.messaging.urls')),
     ])),
     
     # Allauth URLs (for social authentication)

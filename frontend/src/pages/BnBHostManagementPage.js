@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
 import { bnbAPI, bookingsAPI, reviewsAPI } from '../services/api';
 import ComprehensiveBnBForm from '../components/forms/ComprehensiveBnBForm';
@@ -28,6 +28,7 @@ import {
 const BnBHostManagementPage = () => {
   const FALLBACK_IMAGE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="100%" height="100%" fill="%23e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%236b7280" font-family="Arial" font-size="28">No image</text></svg>';
   const navigate = useNavigate();
+  const location = useLocation();
   const { showSuccess, showError } = useNotifications();
   const [listings, setListings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,7 +48,15 @@ const BnBHostManagementPage = () => {
   const [listingToDelete, setListingToDelete] = useState(null);
   const [isDeletingListing, setIsDeletingListing] = useState(false);
   const [availabilityListing, setAvailabilityListing] = useState(null);
-  const [activeSection, setActiveSection] = useState('listings');
+  const [activeSection, setActiveSection] = useState(location.state?.initialTab === 'bookings' ? 'bookings' : 'listings');
+
+  useEffect(() => {
+    if (location.state?.initialTab) {
+      setActiveSection(location.state.initialTab);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   // Load data from API when component mounts
   useEffect(() => {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BellIcon } from '@heroicons/react/24/outline';
 import { notificationsAPI } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 const POLL_INTERVAL_MS = 30000;
 
@@ -19,6 +20,7 @@ const timeAgo = (isoString) => {
 
 const NotificationBell = ({ isScrolled }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -76,7 +78,17 @@ const NotificationBell = ({ isScrolled }) => {
     }
     setIsOpen(false);
     const bookingId = notification.data?.booking_id;
-    if (bookingId) {
+    if (!bookingId) return;
+
+    // /booking/:id is guest-only (the booking is scoped to its traveler
+    // server-side); a host clicking through would just hit a 404. Route
+    // hosts to their own bookings tab instead, where the same booking (and
+    // its message thread) is reachable via "View".
+    const isHostViewer = user?.active_role === 'bnb_host' || user?.active_role === 'hotel_host';
+    if (isHostViewer) {
+      const destination = notification.data?.hotel_id ? '/host/hotels' : '/host/bnb';
+      navigate(destination, { state: { initialTab: 'bookings' } });
+    } else {
       navigate(`/booking/${bookingId}`);
     }
   };

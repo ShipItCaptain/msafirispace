@@ -15,6 +15,7 @@ import {
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { bookingsAPI, reviewsAPI } from '../services/api';
 import PaymentModal from '../components/payment/PaymentModal';
+import MessageThread from '../components/messaging/MessageThread';
 import { toast } from 'react-hot-toast';
 
 const BookingDetailPage = () => {
@@ -702,6 +703,8 @@ const BookingDetailPage = () => {
                 )}
               </div>
             )}
+
+            <MessageThread bookingId={booking.id} />
           </div>
 
           <div className="space-y-6">

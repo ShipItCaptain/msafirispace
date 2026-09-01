@@ -757,6 +757,17 @@ export const promotionsAPI = {
 };
 
 // Notifications API
+export const messagingAPI = {
+  getMessages: async (bookingId) => {
+    const response = await api.get(`/messaging/bookings/${bookingId}/messages/`);
+    return response.data;
+  },
+  sendMessage: async (bookingId, body) => {
+    const response = await api.post(`/messaging/bookings/${bookingId}/messages/`, { body });
+    return response.data;
+  },
+};
+
 export const notificationsAPI = {
   // Get user notifications
   getNotifications: async (params = {}) => {
