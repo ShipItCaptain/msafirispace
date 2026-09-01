@@ -6,16 +6,16 @@ import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { switchUserRole, addUserRole, fetchUserMe } from '../../store/slices/authSlice';
 import { toast } from 'react-hot-toast';
-import { 
-  Bars3Icon, 
-  XMarkIcon, 
-  UserIcon, 
-  BellIcon,
+import {
+  Bars3Icon,
+  XMarkIcon,
+  UserIcon,
   HomeIcon,
   BuildingOfficeIcon,
   HomeModernIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
+import NotificationBell from '../notifications/NotificationBell';
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -254,6 +254,7 @@ const Header = () => {
             {isAuthenticated ? (
               <div className="flex items-center space-x-3">
 
+                <NotificationBell isScrolled={isScrolled} />
 
                 {/* User Menu */}
                 <div className="relative user-menu-container">
@@ -316,19 +317,6 @@ const Header = () => {
                         </span>
                         <ChevronDownIcon className="w-4 h-4" />
                       </button>
-                    </div>
-                    
-                    {/* Notifications */}
-                    <div className="px-4 py-2 border-b border-secondary-100">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-secondary-500 uppercase tracking-wide">
-                          Notifications
-                        </span>
-                        <div className="relative">
-                          <BellIcon className="w-4 h-4 text-secondary-600" />
-                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary-500 rounded-full"></span>
-                        </div>
-                      </div>
                     </div>
                     
                     <Link
@@ -458,12 +446,9 @@ const Header = () => {
                     <span className="text-lg font-medium text-secondary-700">
                       Notifications
                     </span>
-                    <div className="relative">
-                      <BellIcon className="w-5 h-5 text-secondary-600" />
-                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary-500 rounded-full"></span>
-                    </div>
+                    <NotificationBell isScrolled />
                   </div>
-                  
+
                   <Link
                     to={user?.is_host ? "/host-dashboard" : "/dashboard"}
                     className="block text-lg font-medium text-secondary-700 hover:text-primary-500 transition-colors duration-200"

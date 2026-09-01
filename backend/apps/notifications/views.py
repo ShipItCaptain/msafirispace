@@ -2,6 +2,7 @@
 Views for notifications app
 """
 from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -14,6 +15,8 @@ from .serializers import NotificationSerializer
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['is_read', 'notification_type']
 
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user)
