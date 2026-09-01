@@ -314,11 +314,26 @@ class BnBListingSerializer(serializers.ModelSerializer):
             'smoking_allowed', 'pets_allowed', 'parties_allowed', 'children_allowed',
             'highlights', 'nearby_attractions', 'transportation', 'special_instructions',
             'host_name', 'host_phone', 'host_email', 'emergency_contact',
+            'number_of_units',
+            'is_company_operated', 'owner_id_number', 'owner_kra_pin', 'owner_permit',
+            'company_name', 'company_kra_pin', 'company_contact_phone', 'company_contact_email',
+            'company_permit',
             'is_active', 'is_verified', 'is_featured',
             'images', 'primary_image',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'host', 'created_at', 'updated_at', 'full_address', 'primary_image']
+        # Government ID numbers, tax PINs, and scanned permit documents are
+        # submitted once by the host for platform compliance/verification --
+        # this endpoint's GET is public (IsAuthenticatedOrReadOnly), so these
+        # must never be echoed back to any viewer, including the owning host.
+        extra_kwargs = {
+            'owner_id_number': {'write_only': True},
+            'owner_kra_pin': {'write_only': True},
+            'owner_permit': {'write_only': True},
+            'company_kra_pin': {'write_only': True},
+            'company_permit': {'write_only': True},
+        }
 
     def _absolute_url(self, url):
         request = self.context.get('request')
@@ -336,6 +351,18 @@ class BnBListingSerializer(serializers.ModelSerializer):
         if first_image:
             return self._absolute_url(first_image.image.url)
         return None
+
+    def update(self, instance, validated_data):
+        # owner_id_number/owner_kra_pin/company_kra_pin are write_only, so
+        # the edit form (which re-sends the *entire* form on every save)
+        # can never pre-populate them and will submit them blank unless the
+        # host retypes them on every unrelated edit. Blank on update means
+        # "unchanged", not "clear this" -- only a real create actually
+        # requires these; only overwrite when a non-blank value is sent.
+        for field in ('owner_id_number', 'owner_kra_pin', 'company_kra_pin'):
+            if field in validated_data and not validated_data[field]:
+                validated_data.pop(field)
+        return super().update(instance, validated_data)
 
 
 class BnBListingListSerializer(serializers.ModelSerializer):

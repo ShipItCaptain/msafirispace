@@ -474,6 +474,20 @@ export const bnbAPI = {
     const response = await api.patch(`/listings/bnb/${id}/`, data);
     return response.data;
   },
+  // Upload a compliance permit document (owner_permit or company_permit)
+  uploadPermit: async (id, fieldName, file) => {
+    const formData = new FormData();
+    formData.append(fieldName, file);
+    const config = {
+      timeout: 60000,
+      transformRequest: [(data, headers) => {
+        delete headers['Content-Type'];
+        return data;
+      }],
+    };
+    const response = await api.patch(`/listings/bnb/${id}/`, formData, config);
+    return response.data;
+  },
   // Delete
   remove: async (id) => {
     const response = await api.delete(`/listings/bnb/${id}/`);

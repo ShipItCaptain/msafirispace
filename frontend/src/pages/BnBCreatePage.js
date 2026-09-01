@@ -80,10 +80,34 @@ const BnBCreatePage = () => {
         host_phone: listingData.hostPhone || '',
         host_email: listingData.hostEmail || '',
         emergency_contact: listingData.emergencyContact || '',
+        number_of_units: parseInt(listingData.numberOfUnits || 1, 10),
+        is_company_operated: Boolean(listingData.isCompanyOperated),
+        owner_id_number: listingData.ownerIdNumber || '',
+        owner_kra_pin: listingData.ownerKraPin || '',
+        company_name: listingData.companyName || '',
+        company_kra_pin: listingData.companyKraPin || '',
+        company_contact_phone: listingData.companyContactPhone || '',
+        company_contact_email: listingData.companyContactEmail || '',
         is_active: true,
       };
 
       savedListing = await bnbAPI.create(apiData);
+
+      // Permit files must go through a separate multipart request the same
+      // way images do -- the create call above is plain JSON.
+      const permitFile = listingData.isCompanyOperated ? listingData.companyPermit : listingData.ownerPermit;
+      if (permitFile instanceof File) {
+        const permitField = listingData.isCompanyOperated ? 'company_permit' : 'owner_permit';
+        try {
+          await bnbAPI.uploadPermit(savedListing.id, permitField, permitFile);
+        } catch (permitError) {
+          showError(
+            'Permit Upload Failed',
+            'Listing was created, but the permit document failed to upload. You can attach it by editing the listing.',
+            8000
+          );
+        }
+      }
 
       if (listingData.photos && listingData.photos.length > 0) {
         const uploadPromises = listingData.photos

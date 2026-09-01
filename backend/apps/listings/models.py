@@ -178,7 +178,28 @@ class BnBListing(models.Model):
     host_phone = models.CharField(max_length=20, blank=True)
     host_email = models.EmailField(blank=True)
     emergency_contact = models.CharField(max_length=20, blank=True)
-    
+
+    # Units
+    number_of_units = models.PositiveIntegerField(
+        default=1, help_text="How many independently bookable units this listing includes"
+    )
+
+    # Owner / operator compliance details. Whoever creates the listing is
+    # either the individual owner or is submitting on behalf of a licensed
+    # company/business operating it -- exactly one of the two field groups
+    # below applies, selected via is_company_operated.
+    is_company_operated = models.BooleanField(
+        default=False, help_text="True if a licensed company/business operates this listing"
+    )
+    owner_id_number = models.CharField(max_length=50, blank=True, help_text="Individual owner's national ID number")
+    owner_kra_pin = models.CharField(max_length=20, blank=True, help_text="Individual owner's KRA PIN")
+    owner_permit = models.FileField(upload_to='bnb/permits/', blank=True, null=True)
+    company_name = models.CharField(max_length=200, blank=True)
+    company_kra_pin = models.CharField(max_length=20, blank=True)
+    company_contact_phone = models.CharField(max_length=20, blank=True)
+    company_contact_email = models.EmailField(blank=True)
+    company_permit = models.FileField(upload_to='bnb/permits/', blank=True, null=True)
+
     # Status
     is_active = models.BooleanField(default=True)
     is_verified = models.BooleanField(default=False)
