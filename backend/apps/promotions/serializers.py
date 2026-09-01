@@ -41,9 +41,9 @@ class PromotionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Promotion
         fields = [
-            'id', 'hotel_name', 'hotel_city', 'hotel_image', 'promotion_type',
-            'title', 'original_price', 'discounted_price', 'discount_percentage',
-            'currency', 'is_active', 'views_count', 'clicks_count'
+            'id', 'hotel', 'hotel_name', 'hotel_city', 'hotel_image', 'promotion_type',
+            'title', 'description', 'original_price', 'discounted_price', 'discount_percentage',
+            'currency', 'start_date', 'end_date', 'status', 'is_active', 'views_count', 'clicks_count'
         ]
 
     def get_hotel_image(self, obj):

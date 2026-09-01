@@ -19,7 +19,8 @@ import HostDashboardModals from './dashboard/HostDashboardModals';
 import HostDashboardAnalyticsTab from './dashboard/HostDashboardAnalyticsTab';
 import HostDashboardReviewsTab from './dashboard/HostDashboardReviewsTab';
 import HostDashboardSettingsTab from './dashboard/HostDashboardSettingsTab';
-import { 
+import PromotionsManager from './dashboard/PromotionsManager';
+import {
   ChartBarIcon,
   CalendarIcon,
   BuildingOfficeIcon,
@@ -27,6 +28,7 @@ import {
   CogIcon,
   ArrowTrendingUpIcon,
   HomeIcon,
+  MegaphoneIcon,
 } from '@heroicons/react/24/outline';
 
 const HotelHostDashboard = () => {
@@ -836,6 +838,7 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
     { id: 'hotels', name: 'My Hotels', icon: BuildingOfficeIcon },
     { id: 'rooms', name: 'Manage Rooms', icon: HomeIcon },
     { id: 'bookings', name: 'Bookings', icon: CalendarIcon },
+    { id: 'promotions', name: 'Promotions', icon: MegaphoneIcon },
     { id: 'analytics', name: 'Analytics', icon: ArrowTrendingUpIcon },
     { id: 'reviews', name: 'Reviews', icon: StarIcon },
     { id: 'settings', name: 'Settings', icon: CogIcon }
@@ -1439,6 +1442,7 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
       case 'hotels': return renderHotels();
       case 'rooms': return renderManageRooms();
       case 'bookings': return renderBookings();
+      case 'promotions': return <PromotionsManager hotels={hotels} />;
       case 'analytics': return renderAnalytics();
       case 'reviews': return renderReviews();
       case 'settings': return renderSettings();

@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import FeaturedHotels from '../components/hotel/FeaturedHotels';
 import FeaturedBnBs from '../components/bnb/FeaturedBnBs';
+import DealsSection from '../components/promotions/DealsSection';
 
 const HomePage = () => {
   const { user } = useAuth();
@@ -188,6 +189,7 @@ const HomePage = () => {
       </section>
 
       {/* Real listings sections */}
+      <DealsSection />
       <FeaturedHotels />
       <FeaturedBnBs />
 

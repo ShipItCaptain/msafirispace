@@ -4,9 +4,11 @@ Views for promotions app
 from django.utils import timezone
 from rest_framework import generics, permissions, filters
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
+from apps.listings.models import Hotel
 from .models import Promotion, PromotionSlot
 from .serializers import PromotionSerializer, PromotionListSerializer, PromotionSlotSerializer
 
@@ -26,6 +28,15 @@ class PromotionListCreateView(generics.ListCreateAPIView):
         return PromotionSerializer
 
     def perform_create(self, serializer):
+        hotel_id = serializer.validated_data.get('hotel_id')
+        try:
+            hotel = Hotel.objects.get(pk=hotel_id)
+        except Hotel.DoesNotExist:
+            raise ValidationError({'hotel_id': 'Hotel not found.'})
+        # Without this check any authenticated user could create a
+        # promotion against a hotel_id they don't own.
+        if hotel.host_id != self.request.user.id:
+            raise PermissionDenied("You can only create promotions for your own hotels.")
         serializer.save(provider=self.request.user)
 
 
@@ -39,8 +50,11 @@ class PromotionDetailView(generics.RetrieveUpdateDestroyAPIView):
         return PromotionSerializer
 
     def get_queryset(self):
-        # Users can only edit their own promotions
-        if self.request.user.is_authenticated:
+        # Anyone can view a promotion's detail; only the owning provider can
+        # edit/delete it. Scoping the queryset on GET too (as this used to)
+        # meant an authenticated non-owner got a 404 on someone else's
+        # promotion while a logged-out visitor could see it fine.
+        if self.request.method not in permissions.SAFE_METHODS and self.request.user.is_authenticated:
             return super().get_queryset().filter(provider=self.request.user)
         return super().get_queryset()
 

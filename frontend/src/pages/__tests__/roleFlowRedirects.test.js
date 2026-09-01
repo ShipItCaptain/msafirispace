@@ -11,6 +11,7 @@ jest.mock('../../hooks/useAuth', () => ({
 jest.mock('../HostHomePage', () => () => <div data-testid="host-home-page">Host Home</div>);
 jest.mock('../../components/hotel/FeaturedHotels', () => () => <div data-testid="featured-hotels" />);
 jest.mock('../../components/bnb/FeaturedBnBs', () => () => <div data-testid="featured-bnbs" />);
+jest.mock('../../components/promotions/DealsSection', () => () => <div data-testid="deals-section" />);
 
 jest.mock('framer-motion', () => {
   const ReactLocal = require('react');
