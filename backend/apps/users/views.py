@@ -295,28 +295,30 @@ class PasswordResetRequestView(APIView):
         serializer = PasswordResetRequestSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            user = User.objects.get(email=email)
-            
-            # Generate reset token
-            token = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
-            user.password_reset_token = token
-            user.password_reset_expires = timezone.now() + timezone.timedelta(hours=24)
-            user.save()
-            
-            # Send reset email (in production, use Celery task)
-            if settings.EMAIL_BACKEND != 'django.core.mail.backends.console.EmailBackend':
-                send_mail(
-                    'Password Reset - Msafiri Space',
-                    f'Click here to reset your password: {settings.SITE_URL}/reset-password/{token}',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    fail_silently=True,
-                )
-            
+            user = User.objects.filter(email=email, is_active=True).first()
+
+            # Only generate a token and send mail if the account actually
+            # exists, but respond identically either way -- the response
+            # itself must not reveal whether the email is registered.
+            if user:
+                token = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+                user.password_reset_token = token
+                user.password_reset_expires = timezone.now() + timezone.timedelta(hours=24)
+                user.save()
+
+                if settings.EMAIL_BACKEND != 'django.core.mail.backends.console.EmailBackend':
+                    send_mail(
+                        'Password Reset - Msafiri Space',
+                        f'Click here to reset your password: {settings.SITE_URL}/reset-password/{token}',
+                        settings.DEFAULT_FROM_EMAIL,
+                        [user.email],
+                        fail_silently=True,
+                    )
+
             return Response({
-                'message': 'Password reset email sent. Please check your email.'
+                'message': 'If an account exists with that email, a password reset link has been sent.'
             }, status=status.HTTP_200_OK)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

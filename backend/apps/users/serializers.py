@@ -228,14 +228,13 @@ class PasswordChangeSerializer(serializers.Serializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     """
-    Serializer for password reset request
+    Serializer for password reset request. Deliberately does NOT validate
+    that the email belongs to a real account -- doing so would let an
+    attacker enumerate registered emails by watching which addresses this
+    endpoint accepts vs rejects. The view sends the response unconditionally
+    and only sends mail when a matching account actually exists.
     """
     email = serializers.EmailField()
-    
-    def validate_email(self, value):
-        if not User.objects.filter(email=value, is_active=True).exists():
-            raise serializers.ValidationError("No active user found with this email address")
-        return value
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):

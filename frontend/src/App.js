@@ -20,6 +20,9 @@ import DashboardPage from './pages/DashboardPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import BookingDetailPage from './pages/BookingDetailPage';
 import BecomeHostPage from './pages/BecomeHostPage';
 // Removed HotelRestaurantHostPage form route usage
@@ -212,7 +215,52 @@ function AppContent() {
               <Footer />
             </Layout>
           } />
-          
+
+          <Route path="/forgot-password" element={
+            <Layout>
+              <Header />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ForgotPasswordPage />
+              </motion.div>
+              <Footer />
+            </Layout>
+          } />
+
+          <Route path="/reset-password/:token" element={
+            <Layout>
+              <Header />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ResetPasswordPage />
+              </motion.div>
+              <Footer />
+            </Layout>
+          } />
+
+          <Route path="/verify-email/:token" element={
+            <Layout>
+              <Header />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+              >
+                <VerifyEmailPage />
+              </motion.div>
+              <Footer />
+            </Layout>
+          } />
+
           {/* Protected Routes */}
           <Route path="/dashboard" element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
