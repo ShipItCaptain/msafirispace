@@ -188,6 +188,11 @@ const authSlice = createSlice({
     updateUser: (state, action) => {
       state.user = action.payload;
     },
+    setSession: (state, action) => {
+      state.isAuthenticated = true;
+      state.user = action.payload.user;
+      state.tokens = action.payload.tokens;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -392,7 +397,7 @@ const authSlice = createSlice({
 });
 
 // Export actions
-export const { clearError, setUser, clearAuth, updateTokens } = authSlice.actions;
+export const { clearError, setUser, clearAuth, updateTokens, setSession } = authSlice.actions;
 
 // Export selectors
 export const selectAuth = (state) => state.auth;

@@ -796,8 +796,13 @@ class HostOnboardingView(APIView):
     HotelListCreateView/BnBListingListCreateView.perform_create), so
     completing KYC alone doesn't unlock host-only routes before the host has
     actually published anything.
+
+    Reachable while signed out: the wizard's KYC fields (name, contact
+    email/phone, plus a password collected only in this case) double as the
+    account's registration details, so a first-time host never has to fill
+    out a separate sign-up form with the same information a second time.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = HostOnboardingSerializer(data=request.data, context={'user': request.user})
@@ -805,7 +810,15 @@ class HostOnboardingView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            user = request.user
+            tokens = None
+            if request.user.is_authenticated:
+                user = request.user
+            else:
+                user = serializer.create_account(serializer.validated_data)
+                serializer.context['user'] = user
+                refresh = RefreshToken.for_user(user)
+                tokens = {'access': str(refresh.access_token), 'refresh': str(refresh)}
+
             host_category = serializer.validated_data['host_category']
             user.user_type = User.UserType.HOST
             user.host_type = (
@@ -821,11 +834,15 @@ class HostOnboardingView(APIView):
             else:
                 profile_data = BnBHostProfileSerializer(host_profile).data
 
-            return Response({
+            response_data = {
                 'message': 'Host onboarding completed successfully',
                 'host_category': host_category,
                 'host_profile': profile_data,
-            }, status=status.HTTP_201_CREATED)
+            }
+            if tokens:
+                response_data['tokens'] = tokens
+                response_data['user'] = UserDetailSerializer(user).data
+            return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])

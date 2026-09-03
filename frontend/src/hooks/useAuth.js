@@ -20,6 +20,7 @@ import {
   switchUserRole,
   removeUserRole,
   clearError,
+  setSession,
 } from '../store/slices/authSlice';
 
 export const useAuth = () => {
@@ -122,6 +123,15 @@ export const useAuth = () => {
     dispatch(clearError());
   };
 
+  // Establishes a session from tokens/user data the backend already
+  // returned (e.g. the become-host wizard creating an account inline) --
+  // no extra login round-trip needed.
+  const establishSession = ({ user: sessionUser, tokens: sessionTokens }) => {
+    if (sessionTokens?.access) localStorage.setItem('accessToken', sessionTokens.access);
+    if (sessionTokens?.refresh) localStorage.setItem('refreshToken', sessionTokens.refresh);
+    dispatch(setSession({ user: sessionUser, tokens: sessionTokens }));
+  };
+
   const getMe = async () => {
     try {
       const result = await dispatch(fetchUserMe()).unwrap();
@@ -207,7 +217,8 @@ export const useAuth = () => {
     switchRole,
     removeRole,
     clearAuthError,
-    
+    establishSession,
+
     // Computed values
     isHost,
     isGuest,

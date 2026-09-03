@@ -353,6 +353,12 @@ class HostOnboardingSerializer(serializers.Serializer):
     contact_email = serializers.EmailField(required=False, allow_blank=True)
     contact_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
+    # Only collected when the wizard is being completed by a signed-out
+    # visitor -- the KYC details being typed here double as the account's
+    # registration info, so there's no separate sign-up screen (see
+    # create_account() below).
+    password = serializers.CharField(write_only=True, required=False, min_length=8)
+
     def validate(self, attrs):
         host_category = attrs.get('host_category')
         account_type = attrs.get('account_type')
@@ -381,9 +387,41 @@ class HostOnboardingSerializer(serializers.Serializer):
                 for field in ('company_name', 'company_kra_pin', 'company_permit', 'contact_email', 'contact_phone'):
                     require(field)
 
+        requesting_user = self.context.get('user')
+        if not (requesting_user and requesting_user.is_authenticated):
+            require('password')
+            contact_email = attrs.get('contact_email')
+            if contact_email and User.objects.filter(email__iexact=contact_email).exists():
+                errors['contact_email'] = 'An account with this email already exists. Please sign in instead.'
+
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+    def create_account(self, validated_data):
+        """
+        Builds the User account itself for a signed-out visitor completing
+        the wizard, reusing the KYC contact/name fields as the account's
+        registration details instead of asking for them a second time.
+        """
+        name_source = (
+            validated_data.get('owner_name')
+            or validated_data.get('manager_name')
+            or validated_data.get('company_name')
+            or ''
+        ).strip()
+        first_name, _, last_name = name_source.partition(' ')
+        email = validated_data['contact_email']
+        user = User.objects.create_user(
+            email=email,
+            username=email,
+            password=validated_data['password'],
+            first_name=first_name,
+            last_name=last_name,
+            phone_number=validated_data.get('contact_phone', ''),
+        )
+        UserProfile.objects.create(user=user)
+        return user
 
     def create(self, validated_data):
         user = self.context['user']

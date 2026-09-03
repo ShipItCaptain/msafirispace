@@ -235,3 +235,100 @@ def test_onboarding_status_requires_auth():
     client = APIClient()
     response = client.get('/api/v1/auth/host/onboarding-status/')
     assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_anonymous_onboarding_creates_account_from_kyc_details():
+    """
+    A signed-out visitor completing the wizard shouldn't need a separate
+    sign-up step -- the KYC contact/name fields plus a password double as
+    their account's registration details, and the response hands back JWTs
+    so the frontend can treat them as logged in immediately.
+    """
+    User = get_user_model()
+    client = APIClient()
+    response = client.post('/api/v1/auth/host/onboard/', {
+        'account_type': 'individual',
+        'host_category': 'bnb',
+        'owner_name': 'Wanda Wizard',
+        'owner_kra_pin': 'A123456789Z',
+        'owner_id_number': '99887766',
+        'owner_id_front': _file('front.png'),
+        'owner_id_back': _file('back.png'),
+        'contact_email': 'wanda.new@example.com',
+        'contact_phone': '+254700111222',
+        'password': 'StrongPass123',
+    }, format='multipart')
+
+    assert response.status_code == 201, response.data
+    data = response.json()
+    assert 'tokens' in data and data['tokens']['access']
+    assert data['user']['email'] == 'wanda.new@example.com'
+
+    user = User.objects.get(email='wanda.new@example.com')
+    assert user.first_name == 'Wanda'
+    assert user.last_name == 'Wizard'
+    assert user.check_password('StrongPass123')
+    assert user.host_type == User.HostType.BNB_HOST
+    assert user.bnb_profile.owner_name == 'Wanda Wizard'
+
+
+@pytest.mark.django_db
+def test_anonymous_onboarding_requires_password():
+    client = APIClient()
+    response = client.post('/api/v1/auth/host/onboard/', {
+        'account_type': 'individual',
+        'host_category': 'bnb',
+        'owner_name': 'No Password',
+        'owner_kra_pin': 'A123456789Z',
+        'owner_id_number': '11223344',
+        'owner_id_front': _file('front.png'),
+        'owner_id_back': _file('back.png'),
+        'contact_email': 'nopassword@example.com',
+        'contact_phone': '+254700333444',
+    }, format='multipart')
+
+    assert response.status_code == 400
+    assert 'password' in response.data
+
+
+@pytest.mark.django_db
+def test_anonymous_onboarding_rejects_email_already_registered():
+    _create_user('existing_user', 'existing@example.com')
+    client = APIClient()
+    response = client.post('/api/v1/auth/host/onboard/', {
+        'account_type': 'individual',
+        'host_category': 'bnb',
+        'owner_name': 'Duplicate Email',
+        'owner_kra_pin': 'A123456789Z',
+        'owner_id_number': '55667788',
+        'owner_id_front': _file('front.png'),
+        'owner_id_back': _file('back.png'),
+        'contact_email': 'existing@example.com',
+        'contact_phone': '+254700555666',
+        'password': 'StrongPass123',
+    }, format='multipart')
+
+    assert response.status_code == 400
+    assert 'contact_email' in response.data
+
+
+@pytest.mark.django_db
+def test_authenticated_onboarding_does_not_return_tokens():
+    user = _create_user('already_logged_in', 'already_logged_in@example.com')
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.post('/api/v1/auth/host/onboard/', {
+        'account_type': 'individual',
+        'host_category': 'bnb',
+        'owner_name': 'Jane Owner',
+        'owner_kra_pin': 'A123456789Z',
+        'owner_id_number': '12345678',
+        'owner_id_front': _file('front.png'),
+        'owner_id_back': _file('back.png'),
+        'contact_email': 'jane.logged.in@example.com',
+        'contact_phone': '+254700000000',
+    }, format='multipart')
+
+    assert response.status_code == 201, response.data
+    assert 'tokens' not in response.data

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import {
@@ -40,6 +39,12 @@ const SCREENS = {
   ],
 };
 
+// Signed-out visitors get this prepended to whichever branch list applies --
+// same minimal one-screen pattern Booking.com uses for "Create your partner
+// account" right at the start of their host flow, so account creation reads
+// as the first KYC screen rather than a detour to a separate page.
+const ACCOUNT_SCREEN = { key: 'account', label: "Let's create your host account", type: 'account' };
+
 const emptyData = () => ({
   company_name: '', contact_email: '', contact_phone: '', kra_pin: '',
   manager_name: '', manager_contact: '', manager_role: '',
@@ -47,11 +52,11 @@ const emptyData = () => ({
   owner_name: '', owner_kra_pin: '', owner_id_number: '',
   owner_id_front: null, owner_id_back: null, owner_permit: null,
   company_kra_pin: '', company_permit: null,
+  password: '',
 });
 
 const HostOnboardingWizard = ({ onComplete }) => {
-  const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, establishSession } = useAuth();
   const [outerStep, setOuterStep] = useState(1); // 1 = account type, 2 = host category, 3 = KYC sub-stepper
   const [accountType, setAccountType] = useState(null);
   const [hostCategory, setHostCategory] = useState(null);
@@ -63,8 +68,12 @@ const HostOnboardingWizard = ({ onComplete }) => {
   const branchKey = hostCategory === 'hotel_restaurant'
     ? 'hotel_restaurant'
     : accountType === 'company' ? 'bnb_company' : 'bnb_individual';
-  const screens = SCREENS[branchKey] || [];
+  const baseScreens = SCREENS[branchKey] || [];
+  const screens = isAuthenticated ? baseScreens : [ACCOUNT_SCREEN, ...baseScreens];
   const screen = screens[kycIndex];
+  // Signed-out visitors already gave their email on the account screen, so
+  // the shared "contact" screen that follows is really just asking for phone.
+  const screenLabel = screen?.type === 'contact' && !isAuthenticated ? 'What is your phone number?' : screen?.label;
 
   const setField = (key, value) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -73,21 +82,20 @@ const HostOnboardingWizard = ({ onComplete }) => {
 
   const isScreenFilled = () => {
     if (!screen) return false;
-    if (screen.type === 'contact') return Boolean(data.contact_email.trim() && data.contact_phone.trim());
+    if (screen.type === 'account') return Boolean(data.contact_email.trim() && data.password.length >= 8);
+    if (screen.type === 'contact') {
+      // Signed-out visitors already gave their email on the account screen
+      // that precedes this one -- only phone is still needed here.
+      return isAuthenticated
+        ? Boolean(data.contact_email.trim() && data.contact_phone.trim())
+        : Boolean(data.contact_phone.trim());
+    }
     if (screen.type === 'manager') return Boolean(data.manager_name.trim() && data.manager_contact.trim() && data.manager_role);
     if (screen.optional) return true;
     return Boolean(data[screen.key]);
   };
 
   const goToKycStep3 = () => {
-    // Steps 1-2 (simple choices) are browsable logged out, same as the old
-    // picker page was -- but actually entering KYC data needs an account.
-    // Gate here rather than at final submit, so an anonymous visitor never
-    // loses a wizard's worth of typed answers to a login redirect.
-    if (!isAuthenticated) {
-      navigate('/login', { state: { from: { pathname: '/become-host' } } });
-      return;
-    }
     setKycIndex(0);
     setOuterStep(3);
   };
@@ -124,7 +132,10 @@ const HostOnboardingWizard = ({ onComplete }) => {
       formData.append('account_type', accountType);
       formData.append('host_category', hostCategory);
       screens.forEach((s) => {
-        if (s.type === 'contact') {
+        if (s.type === 'account') {
+          formData.append('contact_email', data.contact_email);
+          formData.append('password', data.password);
+        } else if (s.type === 'contact') {
           formData.append('contact_email', data.contact_email);
           formData.append('contact_phone', data.contact_phone);
         } else if (s.type === 'manager') {
@@ -136,7 +147,10 @@ const HostOnboardingWizard = ({ onComplete }) => {
         }
       });
 
-      await authAPI.onboardHostFormData(formData);
+      const response = await authAPI.onboardHostFormData(formData);
+      if (response?.tokens) {
+        establishSession({ user: response.user, tokens: response.tokens });
+      }
       toast.success('Onboarding complete! Now let\'s set up your listing.');
       onComplete(hostCategory);
     } catch (err) {
@@ -190,7 +204,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
         </div>
       );
     }
-    if (screen.type === 'contact') {
+    if (screen.type === 'account') {
       return (
         <div className="space-y-3">
           <input
@@ -202,7 +216,31 @@ const HostOnboardingWizard = ({ onComplete }) => {
             className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
           <input
+            type="password"
+            value={data.password}
+            onChange={(e) => setField('password', e.target.value)}
+            placeholder="Create a password (min. 8 characters)"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+        </div>
+      );
+    }
+    if (screen.type === 'contact') {
+      return (
+        <div className="space-y-3">
+          {isAuthenticated && (
+            <input
+              type="email"
+              autoFocus
+              value={data.contact_email}
+              onChange={(e) => setField('contact_email', e.target.value)}
+              placeholder="Email address"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+          )}
+          <input
             type="tel"
+            autoFocus={!isAuthenticated}
             value={data.contact_phone}
             onChange={(e) => setField('contact_phone', e.target.value)}
             placeholder="Phone number"
@@ -329,7 +367,10 @@ const HostOnboardingWizard = ({ onComplete }) => {
 
             {outerStep === 3 && screen && (
               <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-6">{screen.label}</h2>
+                <h2 className={`text-xl font-bold text-gray-900 ${screen.type === 'account' ? 'mb-1' : 'mb-6'}`}>{screenLabel}</h2>
+                {screen.type === 'account' && (
+                  <p className="text-sm text-gray-500 mb-6">This creates your host account -- no separate sign-up needed.</p>
+                )}
                 {renderField()}
                 {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
                 <button
