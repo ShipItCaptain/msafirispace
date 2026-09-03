@@ -6,36 +6,42 @@ import {
   BuildingOffice2Icon,
   HomeModernIcon,
   BuildingOfficeIcon,
+  PhoneIcon,
+  DocumentTextIcon,
+  DocumentCheckIcon,
+  IdentificationIcon,
+  UserGroupIcon,
+  LockClosedIcon,
 } from '@heroicons/react/24/outline';
 import { authAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 
-// One question/field-group per screen, Booking.com-style. Each branch is a
-// short, ordered list of screens; the wizard walks through whichever list
-// applies once Steps 1-2 resolve which branch that is.
+// One question/field-group per screen, Booking.com-style: an icon, a short
+// question, and a one-line hint explaining why we're asking -- so each card
+// stands on its own instead of just naming a field with no context.
 const SCREENS = {
   hotel_restaurant: [
-    { key: 'company_name', label: 'What is the name of your hotel or restaurant?', type: 'text', placeholder: 'e.g. Acacia Resort' },
-    { key: 'contact', label: 'How should we reach you?', type: 'contact' },
-    { key: 'kra_pin', label: "What is your business's KRA PIN?", type: 'text', placeholder: 'P051234567X', uppercase: true },
-    { key: 'manager', label: 'Who manages this property day to day?', type: 'manager' },
-    { key: 'business_permit', label: 'Upload your Business Permit', type: 'file' },
-    { key: 'business_registration_certificate', label: 'Upload your Business Registration Certificate', type: 'file' },
+    { key: 'company_name', label: 'What is the name of your hotel or restaurant?', hint: "This is how guests will find you on Msafiri Space.", type: 'text', placeholder: 'e.g. Acacia Resort', icon: BuildingOfficeIcon },
+    { key: 'contact', label: 'How should we reach you?', hint: "We'll send booking alerts and account updates here.", type: 'contact', icon: PhoneIcon },
+    { key: 'kra_pin', label: "What is your business's KRA PIN?", hint: 'Used to verify your business for tax compliance.', type: 'text', placeholder: 'P051234567X', uppercase: true, icon: DocumentTextIcon },
+    { key: 'manager', label: 'Who manages this property day to day?', hint: 'The person guests and our team can reach on-site.', type: 'manager', icon: UserGroupIcon },
+    { key: 'business_permit', label: 'Upload your Business Permit', hint: 'Confirms you’re licensed to operate this business.', type: 'file', icon: DocumentCheckIcon },
+    { key: 'business_registration_certificate', label: 'Upload your Business Registration Certificate', hint: 'Proof your business is officially registered.', type: 'file', icon: DocumentCheckIcon },
   ],
   bnb_individual: [
-    { key: 'owner_name', label: "What's your full name?", type: 'text', placeholder: 'Jane Doe' },
-    { key: 'owner_kra_pin', label: 'What is your KRA PIN?', type: 'text', placeholder: 'A012345678Z', uppercase: true },
-    { key: 'owner_id_number', label: 'What is your National ID number?', type: 'text', placeholder: '12345678' },
-    { key: 'owner_id_front', label: 'Upload the FRONT of your ID', type: 'file' },
-    { key: 'owner_id_back', label: 'Upload the BACK of your ID', type: 'file' },
-    { key: 'owner_permit', label: 'Upload a permit, if you have one', type: 'file', optional: true },
-    { key: 'contact', label: 'How should we reach you?', type: 'contact' },
+    { key: 'owner_name', label: "What's your full name?", hint: "Let's start with who owns this property.", type: 'text', placeholder: 'Jane Doe', icon: UserIcon },
+    { key: 'owner_kra_pin', label: 'What is your KRA PIN?', hint: 'Used to verify your tax compliance as a host.', type: 'text', placeholder: 'A012345678Z', uppercase: true, icon: DocumentTextIcon },
+    { key: 'owner_id_number', label: 'What is your National ID number?', hint: 'Helps us confirm your identity.', type: 'text', placeholder: '12345678', icon: IdentificationIcon },
+    { key: 'owner_id_front', label: 'Upload the FRONT of your ID', hint: 'A clear photo, all four corners visible.', type: 'file', icon: IdentificationIcon },
+    { key: 'owner_id_back', label: 'Upload the BACK of your ID', hint: 'A clear photo, all four corners visible.', type: 'file', icon: IdentificationIcon },
+    { key: 'owner_permit', label: 'Upload a permit, if you have one', hint: 'Not every host needs one -- skip if it doesn’t apply.', type: 'file', optional: true, icon: DocumentCheckIcon },
+    { key: 'contact', label: 'How should we reach you?', hint: "We'll send booking alerts and account updates here.", type: 'contact', icon: PhoneIcon },
   ],
   bnb_company: [
-    { key: 'company_name', label: 'What is your company or business name?', type: 'text', placeholder: 'Coastal Stays Ltd' },
-    { key: 'company_kra_pin', label: "What is your company's KRA PIN?", type: 'text', placeholder: 'P051234567X', uppercase: true },
-    { key: 'company_permit', label: 'Upload your business permit', type: 'file' },
-    { key: 'contact', label: 'How should we reach you?', type: 'contact' },
+    { key: 'company_name', label: 'What is your company or business name?', hint: 'This is how guests will find you on Msafiri Space.', type: 'text', placeholder: 'Coastal Stays Ltd', icon: BuildingOffice2Icon },
+    { key: 'company_kra_pin', label: "What is your company's KRA PIN?", hint: "Used to verify your company's tax compliance.", type: 'text', placeholder: 'P051234567X', uppercase: true, icon: DocumentTextIcon },
+    { key: 'company_permit', label: 'Upload your business permit', hint: 'Confirms your business is licensed to operate.', type: 'file', icon: DocumentCheckIcon },
+    { key: 'contact', label: 'How should we reach you?', hint: "We'll send booking alerts and account updates here.", type: 'contact', icon: PhoneIcon },
   ],
 };
 
@@ -43,7 +49,13 @@ const SCREENS = {
 // same minimal one-screen pattern Booking.com uses for "Create your partner
 // account" right at the start of their host flow, so account creation reads
 // as the first KYC screen rather than a detour to a separate page.
-const ACCOUNT_SCREEN = { key: 'account', label: "Let's create your host account", type: 'account' };
+const ACCOUNT_SCREEN = {
+  key: 'account',
+  label: "Let's create your host account",
+  hint: 'This creates your login too -- no separate sign-up needed.',
+  type: 'account',
+  icon: LockClosedIcon,
+};
 
 const emptyData = () => ({
   company_name: '', contact_email: '', contact_phone: '', kra_pin: '',
@@ -74,6 +86,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
   // Signed-out visitors already gave their email on the account screen, so
   // the shared "contact" screen that follows is really just asking for phone.
   const screenLabel = screen?.type === 'contact' && !isAuthenticated ? 'What is your phone number?' : screen?.label;
+  const screenHint = screen?.type === 'contact' && !isAuthenticated ? "We'll send booking alerts and account updates here." : screen?.hint;
 
   const setField = (key, value) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -315,7 +328,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
           >
             {outerStep === 1 && (
               <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-1">Are you an individual or a company?</h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">Are you an individual or a company?</h2>
                 <p className="text-sm text-gray-500 mb-6">This helps us know what information to collect.</p>
                 <div className="space-y-3">
                   {[
@@ -328,9 +341,11 @@ const HostOnboardingWizard = ({ onComplete }) => {
                       onClick={() => { setAccountType(opt.value); setOuterStep(2); }}
                       className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-red-400 hover:bg-red-50/40 transition-colors text-left"
                     >
-                      <opt.icon className="w-6 h-6 text-red-600 flex-shrink-0" />
+                      <span className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                        <opt.icon className="w-5 h-5 text-red-600" />
+                      </span>
                       <div>
-                        <p className="font-semibold text-gray-900">{opt.label}</p>
+                        <p className="font-medium text-gray-900 text-sm">{opt.label}</p>
                         <p className="text-xs text-gray-500">{opt.desc}</p>
                       </div>
                     </button>
@@ -341,7 +356,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
 
             {outerStep === 2 && (
               <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-1">What would you like to list?</h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">What would you like to list?</h2>
                 <p className="text-sm text-gray-500 mb-6">You can only choose one for this account.</p>
                 <div className="space-y-3">
                   {[
@@ -354,9 +369,11 @@ const HostOnboardingWizard = ({ onComplete }) => {
                       onClick={() => { setHostCategory(opt.value); goToKycStep3(); }}
                       className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-red-400 hover:bg-red-50/40 transition-colors text-left"
                     >
-                      <opt.icon className="w-6 h-6 text-red-600 flex-shrink-0" />
+                      <span className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                        <opt.icon className="w-5 h-5 text-red-600" />
+                      </span>
                       <div>
-                        <p className="font-semibold text-gray-900">{opt.label}</p>
+                        <p className="font-medium text-gray-900 text-sm">{opt.label}</p>
                         <p className="text-xs text-gray-500">{opt.desc}</p>
                       </div>
                     </button>
@@ -367,17 +384,20 @@ const HostOnboardingWizard = ({ onComplete }) => {
 
             {outerStep === 3 && screen && (
               <div>
-                <h2 className={`text-xl font-bold text-gray-900 ${screen.type === 'account' ? 'mb-1' : 'mb-6'}`}>{screenLabel}</h2>
-                {screen.type === 'account' && (
-                  <p className="text-sm text-gray-500 mb-6">This creates your host account -- no separate sign-up needed.</p>
+                {screen.icon && (
+                  <span className="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                    <screen.icon className="w-5 h-5 text-red-600" />
+                  </span>
                 )}
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">{screenLabel}</h2>
+                {screenHint && <p className="text-sm text-gray-500 mb-6">{screenHint}</p>}
                 {renderField()}
                 {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
                 <button
                   type="button"
                   onClick={handleKycNext}
                   disabled={isSubmitting}
-                  className="mt-6 w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-60"
+                  className="mt-6 w-full py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-60"
                 >
                   {isSubmitting ? 'Submitting...' : kycIndex === screens.length - 1 ? 'Finish' : 'Continue'}
                 </button>
