@@ -240,11 +240,23 @@ export const authAPI = {
     return response.data;
   },
 
-  // Host onboarding with files (multipart)
+  // Host onboarding with files (multipart) -- Content-Type is deliberately
+  // NOT set manually: axios needs to compute the multipart boundary itself,
+  // which only happens if the header is left for it to fill in.
   onboardHostFormData: async (formData) => {
-    const response = await api.post('/auth/host/onboard/', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const config = {
+      transformRequest: [(data, headers) => {
+        delete headers['Content-Type'];
+        return data;
+      }],
+    };
+    const response = await api.post('/auth/host/onboard/', formData, config);
+    return response.data;
+  },
+
+  // Whether the current user has already completed host onboarding (KYC)
+  getHostOnboardingStatus: async () => {
+    const response = await api.get('/auth/host/onboarding-status/');
     return response.data;
   },
 

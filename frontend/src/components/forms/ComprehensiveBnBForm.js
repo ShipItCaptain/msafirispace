@@ -11,8 +11,7 @@ import {
   WifiIcon,
   PhotoIcon,
   ShieldCheckIcon,
-  CheckCircleIcon,
-  IdentificationIcon
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 
 const MAX_PHOTO_COUNT = 20;
@@ -75,17 +74,6 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
     hostEmail: '',
     emergencyContact: '',
 
-    // Owner / Operator Compliance
-    isCompanyOperated: false,
-    ownerIdNumber: '',
-    ownerKraPin: '',
-    ownerPermit: null,
-    companyName: '',
-    companyKraPin: '',
-    companyContactPhone: '',
-    companyContactEmail: '',
-    companyPermit: null,
-
     // Additional Info
     highlights: [],
     transportation: '',
@@ -104,8 +92,7 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
     { id: 5, title: 'Amenities', icon: WifiIcon },
     { id: 6, title: 'Photos', icon: PhotoIcon },
     { id: 7, title: 'House Rules', icon: ShieldCheckIcon },
-    { id: 8, title: 'Owner Details', icon: IdentificationIcon },
-    { id: 9, title: 'Review & Publish', icon: CheckCircleIcon }
+    { id: 8, title: 'Review & Publish', icon: CheckCircleIcon }
   ];
 
   const propertyTypes = [
@@ -182,19 +169,6 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
         // Map price to pricePerNight for form compatibility
         pricePerNight: editingListing.price || editingListing.pricePerNight || '',
         numberOfUnits: editingListing.number_of_units || editingListing.numberOfUnits || 1,
-        isCompanyOperated: Boolean(editingListing.is_company_operated ?? editingListing.isCompanyOperated),
-        companyName: editingListing.company_name || editingListing.companyName || '',
-        companyContactPhone: editingListing.company_contact_phone || editingListing.companyContactPhone || '',
-        companyContactEmail: editingListing.company_contact_email || editingListing.companyContactEmail || '',
-        // owner_id_number/owner_kra_pin/company_kra_pin are write_only server
-        // side and never come back from a GET, so they can't be pre-filled --
-        // left blank; the backend treats a blank resubmit here as "unchanged"
-        // rather than clearing the previously saved value.
-        ownerIdNumber: '',
-        ownerKraPin: '',
-        companyKraPin: '',
-        ownerPermit: null,
-        companyPermit: null,
       }));
     }
   }, [editingListing]);
@@ -401,23 +375,6 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
         if (!formData.bedrooms || formData.bedrooms <= 0) newErrors.bedrooms = 'Number of bedrooms is required';
         if (!formData.bathrooms || formData.bathrooms <= 0) newErrors.bathrooms = 'Number of bathrooms is required';
         if (!formData.guests || formData.guests <= 0) newErrors.guests = 'Maximum guests is required';
-        break;
-      case 8:
-        if (formData.isCompanyOperated) {
-          if (!formData.companyName.trim()) newErrors.companyName = 'Company name is required';
-          // owner_id_number/owner_kra_pin/company_kra_pin are write_only and
-          // can never be pre-filled when editing an existing listing, so
-          // only require them on first creation -- a blank resubmit on edit
-          // means "keep what's already saved", not "clear it".
-          if (!editingListing && !formData.companyKraPin.trim()) newErrors.companyKraPin = 'Company KRA PIN is required';
-          if (!formData.companyContactPhone.trim()) newErrors.companyContactPhone = 'Company contact phone is required';
-          if (!formData.companyContactEmail.trim()) newErrors.companyContactEmail = 'Company contact email is required';
-        } else {
-          if (!editingListing && !formData.ownerIdNumber.trim()) newErrors.ownerIdNumber = 'Owner ID number is required';
-          if (!editingListing && !formData.ownerKraPin.trim()) newErrors.ownerKraPin = 'Owner KRA PIN is required';
-          if (!formData.hostPhone.trim()) newErrors.hostPhone = 'Contact phone is required';
-          if (!formData.hostEmail.trim()) newErrors.hostEmail = 'Contact email is required';
-        }
         break;
       default:
         break;
@@ -986,175 +943,6 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Owner Details</h3>
-              <p className="text-sm text-gray-600 mb-6">
-                We collect this information for regulatory verification. It is never shown publicly.
-                {editingListing && ' For your security, ID/PIN fields below aren’t re-displayed once saved — leave them blank to keep what you already submitted, or fill them in to replace it.'}
-              </p>
-
-              <div className="space-y-4 mb-6">
-                <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isCompanyOperated}
-                    onChange={(e) => handleInputChange('isCompanyOperated', e.target.checked)}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                  />
-                  <span className="ml-3 text-sm text-gray-700">
-                    This BnB is managed or operated by a licensed company/business (not an individual owner)
-                  </span>
-                </label>
-              </div>
-
-              {!formData.isCompanyOperated ? (
-                <div className="space-y-4">
-                  <h4 className="text-md font-medium text-gray-800">Personal Details</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">ID No. *</label>
-                      <input
-                        type="text"
-                        value={formData.ownerIdNumber}
-                        onChange={(e) => handleInputChange('ownerIdNumber', e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                          errors.ownerIdNumber ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="National ID number"
-                      />
-                      {errors.ownerIdNumber && <p className="mt-1 text-sm text-red-600">{errors.ownerIdNumber}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">KRA PIN *</label>
-                      <input
-                        type="text"
-                        value={formData.ownerKraPin}
-                        onChange={(e) => handleInputChange('ownerKraPin', e.target.value.toUpperCase())}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                          errors.ownerKraPin ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="A012345678Z"
-                      />
-                      {errors.ownerKraPin && <p className="mt-1 text-sm text-red-600">{errors.ownerKraPin}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Contact Phone *</label>
-                      <input
-                        type="tel"
-                        value={formData.hostPhone}
-                        onChange={(e) => handleInputChange('hostPhone', e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                          errors.hostPhone ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="+254 700 000000"
-                      />
-                      {errors.hostPhone && <p className="mt-1 text-sm text-red-600">{errors.hostPhone}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Contact Email *</label>
-                      <input
-                        type="email"
-                        value={formData.hostEmail}
-                        onChange={(e) => handleInputChange('hostEmail', e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                          errors.hostEmail ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="you@example.com"
-                      />
-                      {errors.hostEmail && <p className="mt-1 text-sm text-red-600">{errors.hostEmail}</p>}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Permit (if applicable)</label>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => handleInputChange('ownerPermit', e.target.files?.[0] || null)}
-                      className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-                    />
-                    {formData.ownerPermit && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {formData.ownerPermit.name}</p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <h4 className="text-md font-medium text-gray-800">Company / Business Details</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Company Name *</label>
-                      <input
-                        type="text"
-                        value={formData.companyName}
-                        onChange={(e) => handleInputChange('companyName', e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                          errors.companyName ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="Company or business name"
-                      />
-                      {errors.companyName && <p className="mt-1 text-sm text-red-600">{errors.companyName}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">KRA PIN *</label>
-                      <input
-                        type="text"
-                        value={formData.companyKraPin}
-                        onChange={(e) => handleInputChange('companyKraPin', e.target.value.toUpperCase())}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                          errors.companyKraPin ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="P051234567X"
-                      />
-                      {errors.companyKraPin && <p className="mt-1 text-sm text-red-600">{errors.companyKraPin}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Contact Phone *</label>
-                      <input
-                        type="tel"
-                        value={formData.companyContactPhone}
-                        onChange={(e) => handleInputChange('companyContactPhone', e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                          errors.companyContactPhone ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="+254 700 000000"
-                      />
-                      {errors.companyContactPhone && <p className="mt-1 text-sm text-red-600">{errors.companyContactPhone}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Contact Email *</label>
-                      <input
-                        type="email"
-                        value={formData.companyContactEmail}
-                        onChange={(e) => handleInputChange('companyContactEmail', e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
-                          errors.companyContactEmail ? 'border-red-300' : 'border-gray-300'
-                        }`}
-                        placeholder="info@company.com"
-                      />
-                      {errors.companyContactEmail && <p className="mt-1 text-sm text-red-600">{errors.companyContactEmail}</p>}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Permit *</label>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => handleInputChange('companyPermit', e.target.files?.[0] || null)}
-                      className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-                    />
-                    {formData.companyPermit && (
-                      <p className="mt-1 text-xs text-gray-500">Selected: {formData.companyPermit.name}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
-      case 9:
-        return (
-          <div className="space-y-6">
-            <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Review & Publish</h3>
               <p className="text-sm text-gray-600 mb-6">Review your listing details before publishing</p>
               
@@ -1351,26 +1139,6 @@ const ComprehensiveBnBForm = ({ editingListing, onClose, onSave }) => {
                     <p className="text-sm text-gray-500">
                       No photos added yet. Go back to the Photos step to upload images.
                     </p>
-                  )}
-                </div>
-
-                {/* Owner details */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Owner Details</h4>
-                  {formData.isCompanyOperated ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                      <p className="text-gray-600">Operated by: <span className="font-medium">{formData.companyName || 'Not provided'}</span></p>
-                      <p className="text-gray-600">Contact: <span className="font-medium">{formData.companyContactPhone || '-'} &middot; {formData.companyContactEmail || '-'}</span></p>
-                      <p className="text-gray-600">KRA PIN: <span className="font-medium">{formData.companyKraPin ? '••••••••' : 'Not provided'}</span></p>
-                      <p className="text-gray-600">Permit: <span className="font-medium">{formData.companyPermit ? formData.companyPermit.name : 'Not attached'}</span></p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                      <p className="text-gray-600">ID No: <span className="font-medium">{formData.ownerIdNumber ? '••••••••' : 'Not provided'}</span></p>
-                      <p className="text-gray-600">KRA PIN: <span className="font-medium">{formData.ownerKraPin ? '••••••••' : 'Not provided'}</span></p>
-                      <p className="text-gray-600">Contact: <span className="font-medium">{formData.hostPhone || '-'} &middot; {formData.hostEmail || '-'}</span></p>
-                      <p className="text-gray-600">Permit: <span className="font-medium">{formData.ownerPermit ? formData.ownerPermit.name : 'Not attached'}</span></p>
-                    </div>
                   )}
                 </div>
               </div>

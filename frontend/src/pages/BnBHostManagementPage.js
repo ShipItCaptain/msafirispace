@@ -632,13 +632,6 @@ const BnBHostManagementPage = () => {
                       host_email: listingData.hostEmail || '',
                       emergency_contact: listingData.emergencyContact || '',
                       number_of_units: parseInt(listingData.numberOfUnits || 1, 10),
-                      is_company_operated: Boolean(listingData.isCompanyOperated),
-                      owner_id_number: listingData.ownerIdNumber || '',
-                      owner_kra_pin: listingData.ownerKraPin || '',
-                      company_name: listingData.companyName || '',
-                      company_kra_pin: listingData.companyKraPin || '',
-                      company_contact_phone: listingData.companyContactPhone || '',
-                      company_contact_email: listingData.companyContactEmail || '',
                       is_active: true
                     };
 
@@ -651,20 +644,6 @@ const BnBHostManagementPage = () => {
                       // Create new listing
                       savedListing = await bnbAPI.create(apiData);
                       setListings(prev => [savedListing, ...prev]);
-                    }
-
-                    // Permit files go through a separate multipart request,
-                    // same as images -- the call above is plain JSON.
-                    const permitFile = listingData.isCompanyOperated ? listingData.companyPermit : listingData.ownerPermit;
-                    if (permitFile instanceof File) {
-                      const permitField = listingData.isCompanyOperated ? 'company_permit' : 'owner_permit';
-                      try {
-                        const withPermit = await bnbAPI.uploadPermit(savedListing.id, permitField, permitFile);
-                        savedListing = withPermit;
-                        setListings(prev => prev.map(l => l.id === withPermit.id ? withPermit : l));
-                      } catch (permitError) {
-                        showError('Permit Upload Failed', 'Listing was saved, but the permit document failed to upload.', 8000);
-                      }
                     }
 
                     // Upload images if provided

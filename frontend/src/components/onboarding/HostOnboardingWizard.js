@@ -1,0 +1,362 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
+import {
+  UserIcon,
+  BuildingOffice2Icon,
+  HomeModernIcon,
+  BuildingOfficeIcon,
+} from '@heroicons/react/24/outline';
+import { authAPI } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
+
+// One question/field-group per screen, Booking.com-style. Each branch is a
+// short, ordered list of screens; the wizard walks through whichever list
+// applies once Steps 1-2 resolve which branch that is.
+const SCREENS = {
+  hotel_restaurant: [
+    { key: 'company_name', label: 'What is the name of your hotel or restaurant?', type: 'text', placeholder: 'e.g. Acacia Resort' },
+    { key: 'contact', label: 'How should we reach you?', type: 'contact' },
+    { key: 'kra_pin', label: "What is your business's KRA PIN?", type: 'text', placeholder: 'P051234567X', uppercase: true },
+    { key: 'manager', label: 'Who manages this property day to day?', type: 'manager' },
+    { key: 'business_permit', label: 'Upload your Business Permit', type: 'file' },
+    { key: 'business_registration_certificate', label: 'Upload your Business Registration Certificate', type: 'file' },
+  ],
+  bnb_individual: [
+    { key: 'owner_name', label: "What's your full name?", type: 'text', placeholder: 'Jane Doe' },
+    { key: 'owner_kra_pin', label: 'What is your KRA PIN?', type: 'text', placeholder: 'A012345678Z', uppercase: true },
+    { key: 'owner_id_number', label: 'What is your National ID number?', type: 'text', placeholder: '12345678' },
+    { key: 'owner_id_front', label: 'Upload the FRONT of your ID', type: 'file' },
+    { key: 'owner_id_back', label: 'Upload the BACK of your ID', type: 'file' },
+    { key: 'owner_permit', label: 'Upload a permit, if you have one', type: 'file', optional: true },
+    { key: 'contact', label: 'How should we reach you?', type: 'contact' },
+  ],
+  bnb_company: [
+    { key: 'company_name', label: 'What is your company or business name?', type: 'text', placeholder: 'Coastal Stays Ltd' },
+    { key: 'company_kra_pin', label: "What is your company's KRA PIN?", type: 'text', placeholder: 'P051234567X', uppercase: true },
+    { key: 'company_permit', label: 'Upload your business permit', type: 'file' },
+    { key: 'contact', label: 'How should we reach you?', type: 'contact' },
+  ],
+};
+
+const emptyData = () => ({
+  company_name: '', contact_email: '', contact_phone: '', kra_pin: '',
+  manager_name: '', manager_contact: '', manager_role: '',
+  business_permit: null, business_registration_certificate: null,
+  owner_name: '', owner_kra_pin: '', owner_id_number: '',
+  owner_id_front: null, owner_id_back: null, owner_permit: null,
+  company_kra_pin: '', company_permit: null,
+});
+
+const HostOnboardingWizard = ({ onComplete }) => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [outerStep, setOuterStep] = useState(1); // 1 = account type, 2 = host category, 3 = KYC sub-stepper
+  const [accountType, setAccountType] = useState(null);
+  const [hostCategory, setHostCategory] = useState(null);
+  const [kycIndex, setKycIndex] = useState(0);
+  const [data, setData] = useState(emptyData());
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const branchKey = hostCategory === 'hotel_restaurant'
+    ? 'hotel_restaurant'
+    : accountType === 'company' ? 'bnb_company' : 'bnb_individual';
+  const screens = SCREENS[branchKey] || [];
+  const screen = screens[kycIndex];
+
+  const setField = (key, value) => {
+    setData((prev) => ({ ...prev, [key]: value }));
+    setError('');
+  };
+
+  const isScreenFilled = () => {
+    if (!screen) return false;
+    if (screen.type === 'contact') return Boolean(data.contact_email.trim() && data.contact_phone.trim());
+    if (screen.type === 'manager') return Boolean(data.manager_name.trim() && data.manager_contact.trim() && data.manager_role);
+    if (screen.optional) return true;
+    return Boolean(data[screen.key]);
+  };
+
+  const goToKycStep3 = () => {
+    // Steps 1-2 (simple choices) are browsable logged out, same as the old
+    // picker page was -- but actually entering KYC data needs an account.
+    // Gate here rather than at final submit, so an anonymous visitor never
+    // loses a wizard's worth of typed answers to a login redirect.
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: { pathname: '/become-host' } } });
+      return;
+    }
+    setKycIndex(0);
+    setOuterStep(3);
+  };
+
+  const handleKycNext = async () => {
+    if (!isScreenFilled()) {
+      setError('Please fill this in before continuing.');
+      return;
+    }
+    if (kycIndex < screens.length - 1) {
+      setKycIndex((i) => i + 1);
+      return;
+    }
+    await submit();
+  };
+
+  const handleBack = () => {
+    setError('');
+    if (outerStep === 3) {
+      if (kycIndex > 0) {
+        setKycIndex((i) => i - 1);
+      } else {
+        setOuterStep(2);
+      }
+      return;
+    }
+    setOuterStep((s) => Math.max(1, s - 1));
+  };
+
+  const submit = async () => {
+    setIsSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('account_type', accountType);
+      formData.append('host_category', hostCategory);
+      screens.forEach((s) => {
+        if (s.type === 'contact') {
+          formData.append('contact_email', data.contact_email);
+          formData.append('contact_phone', data.contact_phone);
+        } else if (s.type === 'manager') {
+          formData.append('manager_name', data.manager_name);
+          formData.append('manager_contact', data.manager_contact);
+          formData.append('manager_role', data.manager_role);
+        } else if (data[s.key] !== null && data[s.key] !== '') {
+          formData.append(s.key, data[s.key]);
+        }
+      });
+
+      await authAPI.onboardHostFormData(formData);
+      toast.success('Onboarding complete! Now let\'s set up your listing.');
+      onComplete(hostCategory);
+    } catch (err) {
+      const backendErrors = err?.response?.data;
+      const firstMessage = backendErrors && typeof backendErrors === 'object'
+        ? Object.values(backendErrors)[0]
+        : null;
+      const message = Array.isArray(firstMessage) ? firstMessage[0] : (firstMessage || 'Something went wrong. Please try again.');
+      setError(message);
+      toast.error('Could not complete onboarding');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const renderField = () => {
+    if (!screen) return null;
+    if (screen.type === 'text') {
+      return (
+        <input
+          type="text"
+          autoFocus
+          value={data[screen.key]}
+          onChange={(e) => setField(screen.key, screen.uppercase ? e.target.value.toUpperCase() : e.target.value)}
+          placeholder={screen.placeholder}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+        />
+      );
+    }
+    if (screen.type === 'file') {
+      return (
+        <div>
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            onChange={(e) => setField(screen.key, e.target.files?.[0] || null)}
+            className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+          />
+          {data[screen.key] && (
+            <p className="mt-2 text-xs text-gray-500">Selected: {data[screen.key].name}</p>
+          )}
+          {screen.optional && (
+            <button
+              type="button"
+              onClick={handleKycNext}
+              className="mt-3 text-sm font-medium text-gray-500 hover:text-gray-700"
+            >
+              Skip this step
+            </button>
+          )}
+        </div>
+      );
+    }
+    if (screen.type === 'contact') {
+      return (
+        <div className="space-y-3">
+          <input
+            type="email"
+            autoFocus
+            value={data.contact_email}
+            onChange={(e) => setField('contact_email', e.target.value)}
+            placeholder="Email address"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+          <input
+            type="tel"
+            value={data.contact_phone}
+            onChange={(e) => setField('contact_phone', e.target.value)}
+            placeholder="Phone number"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+        </div>
+      );
+    }
+    if (screen.type === 'manager') {
+      return (
+        <div className="space-y-3">
+          <input
+            type="text"
+            autoFocus
+            value={data.manager_name}
+            onChange={(e) => setField('manager_name', e.target.value)}
+            placeholder="Full name"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+          <input
+            type="text"
+            value={data.manager_contact}
+            onChange={(e) => setField('manager_contact', e.target.value)}
+            placeholder="Phone or email"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+          <div className="flex gap-3">
+            {[['manager', 'Manager'], ['director', 'Director']].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setField('manager_role', value)}
+                className={`flex-1 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  data.manager_role === value
+                    ? 'bg-red-600 border-red-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-700 hover:border-red-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Compact progress dots: 2 for the intro choices + one per KYC screen
+  const totalDots = 2 + screens.length;
+  const currentDot = outerStep === 3 ? 2 + kycIndex : outerStep - 1;
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+        <div className="flex items-center gap-1.5 mb-6">
+          {Array.from({ length: totalDots }).map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 flex-1 rounded-full ${i <= currentDot ? 'bg-red-600' : 'bg-gray-200'}`}
+            />
+          ))}
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`${outerStep}-${kycIndex}`}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -12 }}
+            transition={{ duration: 0.2 }}
+          >
+            {outerStep === 1 && (
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-1">Are you an individual or a company?</h2>
+                <p className="text-sm text-gray-500 mb-6">This helps us know what information to collect.</p>
+                <div className="space-y-3">
+                  {[
+                    { value: 'individual', label: 'Individual', icon: UserIcon, desc: 'I own or manage this myself' },
+                    { value: 'company', label: 'Company', icon: BuildingOffice2Icon, desc: 'A registered business operates this' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => { setAccountType(opt.value); setOuterStep(2); }}
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-red-400 hover:bg-red-50/40 transition-colors text-left"
+                    >
+                      <opt.icon className="w-6 h-6 text-red-600 flex-shrink-0" />
+                      <div>
+                        <p className="font-semibold text-gray-900">{opt.label}</p>
+                        <p className="text-xs text-gray-500">{opt.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {outerStep === 2 && (
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-1">What would you like to list?</h2>
+                <p className="text-sm text-gray-500 mb-6">You can only choose one for this account.</p>
+                <div className="space-y-3">
+                  {[
+                    { value: 'bnb', label: 'BnB', icon: HomeModernIcon, desc: 'A home, apartment, or unit you rent out' },
+                    { value: 'hotel_restaurant', label: 'Hotel / Restaurant', icon: BuildingOfficeIcon, desc: 'A registered hospitality business' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => { setHostCategory(opt.value); goToKycStep3(); }}
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-red-400 hover:bg-red-50/40 transition-colors text-left"
+                    >
+                      <opt.icon className="w-6 h-6 text-red-600 flex-shrink-0" />
+                      <div>
+                        <p className="font-semibold text-gray-900">{opt.label}</p>
+                        <p className="text-xs text-gray-500">{opt.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {outerStep === 3 && screen && (
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">{screen.label}</h2>
+                {renderField()}
+                {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+                <button
+                  type="button"
+                  onClick={handleKycNext}
+                  disabled={isSubmitting}
+                  className="mt-6 w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-60"
+                >
+                  {isSubmitting ? 'Submitting...' : kycIndex === screens.length - 1 ? 'Finish' : 'Continue'}
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        {(outerStep > 1) && (
+          <button
+            type="button"
+            onClick={handleBack}
+            className="mt-4 text-sm font-medium text-gray-500 hover:text-gray-700"
+          >
+            ← Back
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default HostOnboardingWizard;
