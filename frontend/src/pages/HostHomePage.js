@@ -34,11 +34,6 @@ const HostHomePage = () => {
         return;
       }
 
-      // Mark that user has visited host home
-      if (user.active_role) {
-        localStorage.setItem(`hasVisitedHostHome_${user.active_role}`, 'true');
-      }
-
       try {
         // Check for hotels owned by current user (backend filters by request.user)
         const listingsAPI = (await import('../services/api')).listingsAPI;
@@ -74,13 +69,6 @@ const HostHomePage = () => {
     checkListings();
   }, [user, isAuthenticated]);
 
-  // If user is explicitly in guest role, redirect to home
-  useEffect(() => {
-    if (user?.active_role === 'guest') {
-      navigate('/', { replace: true });
-    }
-  }, [user?.active_role, navigate]);
-
   if (isLoading || loadingCheck) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -103,18 +91,6 @@ const HostHomePage = () => {
           >
             Log In
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  // If user is in guest role, show loading while redirecting
-  if (user?.active_role === 'guest') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Redirecting...</p>
         </div>
       </div>
     );

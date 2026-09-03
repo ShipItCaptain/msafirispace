@@ -17,19 +17,13 @@ const RoleGuard = ({
 }) => {
   const { user, isAuthenticated } = useSelector((state) => state.auth);
 
-  console.log('RoleGuard - User:', user);
-  console.log('RoleGuard - Allowed roles:', allowedRoles);
-  console.log('RoleGuard - User active_role:', user?.active_role);
-
   // If not authenticated, redirect to login
   if (!isAuthenticated) {
-    console.log('RoleGuard - Not authenticated, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
   // If no user data yet, show loading
   if (!user) {
-    console.log('RoleGuard - No user data, showing loading');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -42,13 +36,14 @@ const RoleGuard = ({
 
   // If no roles specified, allow access
   if (allowedRoles.length === 0) {
-    console.log('RoleGuard - No roles specified, allowing access');
     return children;
   }
 
-  // Check if user's active role is in allowed roles
-  const hasAccess = allowedRoles.includes(user.active_role);
-  console.log('RoleGuard - Has access:', hasAccess);
+  // Access is based on which roles the user actually holds, not any
+  // "currently active" one -- there's no more mode-switching concept, so a
+  // user with the right role can always reach a route gated on it.
+  const userRoles = user.roles || [];
+  const hasAccess = allowedRoles.some((role) => userRoles.includes(role));
 
   if (!hasAccess) {
     if (!showAccessDenied) {
@@ -95,11 +90,15 @@ const RoleGuard = ({
           
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
-              Your current role: <span className="font-medium text-gray-900">
-                {user.active_role === 'guest' ? 'Guest' : 
-                 user.active_role === 'bnb_host' ? 'BnB Host' :
-                 user.active_role === 'hotel_host' ? 'Hotel Host' :
-                 user.active_role}
+              Your roles: <span className="font-medium text-gray-900">
+                {userRoles.length > 0
+                  ? userRoles.map((role) => (
+                      role === 'guest' ? 'Guest' :
+                      role === 'bnb_host' ? 'BnB Host' :
+                      role === 'hotel_host' ? 'Hotel Host' :
+                      role
+                    )).join(', ')
+                  : 'Guest'}
               </span>
             </p>
             

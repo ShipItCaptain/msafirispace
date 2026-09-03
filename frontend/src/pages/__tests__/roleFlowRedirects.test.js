@@ -29,7 +29,7 @@ jest.mock('framer-motion', () => {
 
 const mockUseAuth = useAuth;
 
-describe('Role flow redirect guards', () => {
+describe('Homepage always shows the guest experience', () => {
   let harness;
 
   beforeEach(() => {
@@ -41,9 +41,9 @@ describe('Role flow redirect guards', () => {
     await harness.unmount();
   });
 
-  it('does not force host home when active role is guest even if host role exists', async () => {
+  it('shows the guest homepage for a guest-only user', async () => {
     mockUseAuth.mockReturnValue({
-      user: { id: 1, active_role: 'guest', roles: ['guest', 'bnb_host'] },
+      user: { id: 1, roles: ['guest'] },
       isAuthenticated: true,
     });
 
@@ -57,9 +57,12 @@ describe('Role flow redirect guards', () => {
     expect(harness.container.querySelector('[data-testid="host-home-page"]')).toBeNull();
   });
 
-  it('shows host home when active role is a host role', async () => {
+  it('never swaps to HostHomePage, even for a user who holds host roles', async () => {
+    // There's no more "mode switching" -- the homepage is always the guest
+    // experience regardless of which roles a signed-in user holds. Hosts
+    // reach their dashboard via an explicit nav link, never via "/" itself.
     mockUseAuth.mockReturnValue({
-      user: { id: 1, active_role: 'bnb_host', roles: ['guest', 'bnb_host'] },
+      user: { id: 1, roles: ['guest', 'bnb_host', 'hotel_host'] },
       isAuthenticated: true,
     });
 
@@ -69,7 +72,7 @@ describe('Role flow redirect guards', () => {
       </MemoryRouter>
     );
 
-    await harness.waitForCondition(() => harness.container.querySelector('[data-testid="host-home-page"]'));
-    expect(harness.container.querySelector('[data-testid="host-home-page"]')).toBeTruthy();
+    await harness.waitForCondition(() => harness.container.textContent.includes('Find your next stay'));
+    expect(harness.container.querySelector('[data-testid="host-home-page"]')).toBeNull();
   });
 });

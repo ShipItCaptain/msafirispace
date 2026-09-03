@@ -84,7 +84,7 @@ const NotificationBell = ({ isScrolled }) => {
     // server-side); a host clicking through would just hit a 404. Route
     // hosts to their own bookings tab instead, where the same booking (and
     // its message thread) is reachable via "View".
-    const isHostViewer = user?.active_role === 'bnb_host' || user?.active_role === 'hotel_host';
+    const isHostViewer = Boolean(user?.roles?.includes('bnb_host') || user?.roles?.includes('hotel_host'));
     if (isHostViewer) {
       const destination = notification.data?.hotel_id ? '/host/hotels' : '/host/bnb';
       navigate(destination, { state: { initialTab: 'bookings' } });

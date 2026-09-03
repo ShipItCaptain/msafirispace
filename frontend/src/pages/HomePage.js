@@ -1,9 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAuth } from '../hooks/useAuth';
-import HostHomePage from './HostHomePage';
-import { 
+import {
   CalendarIcon,
   StarIcon,
   ArrowRightIcon,
@@ -15,19 +13,6 @@ import FeaturedBnBs from '../components/bnb/FeaturedBnBs';
 import DealsSection from '../components/promotions/DealsSection';
 
 const HomePage = () => {
-  const { user } = useAuth();
-
-  // Only show host home when the currently active role is a host role.
-  // Using "has host roles" here can cause a redirect loop for users
-  // who have host roles but are currently browsing as guest.
-  const isHostMode = user?.active_role && user.active_role !== 'guest';
-  const shouldShowHostPage = Boolean(isHostMode);
-
-  if (shouldShowHostPage) {
-    return <HostHomePage />;
-  }
-
-
   const testimonials = [
     {
       name: 'Sarah Johnson',

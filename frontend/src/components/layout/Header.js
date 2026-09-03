@@ -2,28 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { switchUserRole, addUserRole, fetchUserMe } from '../../store/slices/authSlice';
-import { toast } from 'react-hot-toast';
 import {
   Bars3Icon,
   XMarkIcon,
   UserIcon,
   HomeIcon,
   BuildingOfficeIcon,
-  HomeModernIcon,
-  ChevronDownIcon
+  HomeModernIcon
 } from '@heroicons/react/24/outline';
 import NotificationBell from '../notifications/NotificationBell';
+
+const NAVIGATION = [
+  { name: 'Home Page', href: '/', icon: HomeIcon },
+  { name: 'Hotels', href: '/hotels', icon: BuildingOfficeIcon },
+  { name: 'BnBs', href: '/bnbs', icon: HomeModernIcon },
+];
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
   const location = useLocation();
 
   // Handle scroll effect
@@ -62,120 +61,24 @@ const Header = () => {
     await logout();
   };
 
-  const handleHeaderRoleToggle = async () => {
-    if (!user) return;
-    try {
-      // First, fetch fresh user data from backend to get current active_role
-      const freshUserData = await dispatch(fetchUserMe()).unwrap();
-      const currentActiveRole = freshUserData?.active_role || user.active_role || 'guest';
-      
-      // Determine the new role to switch to based on current active_role from backend
-      const isCurrentlyHost = (currentActiveRole && currentActiveRole !== 'guest');
-      const newRole = isCurrentlyHost ? 'guest' : 'bnb_host';
-      
-      // If already on the target role, don't switch
-      if (currentActiveRole === newRole) {
-        console.log('Already on target role:', newRole);
-        return;
-      }
-      
-      // Check if user has the role in their roles array
-      // If not, add it first before switching (except for guest which everyone has)
-      const userRoles = freshUserData?.roles || user?.roles || ['guest'];
-      const userHasRole = userRoles.includes(newRole);
-      
-      if (!userHasRole && newRole !== 'guest') {
-        // Add the role first if user doesn't have it
-        try {
-          await dispatch(addUserRole({ role: newRole })).unwrap();
-          // Refresh user data after adding role
-          await dispatch(fetchUserMe()).unwrap();
-        } catch (addError) {
-          console.error('Failed to add role:', addError);
-          // If adding role fails, still try to switch (might work if backend auto-adds)
-        }
-      }
-      
-      // Switch to the new role
-      const result = await dispatch(switchUserRole({ role: newRole })).unwrap();
-      
-      // Update localStorage with the new role from backend response
-      if (result?.user?.active_role) {
-        try { localStorage.setItem('userActiveRole', result.user.active_role); } catch (_) {}
-      }
-      
-      // Fetch fresh user data after switching to ensure state is updated
-      await dispatch(fetchUserMe()).unwrap();
-      
-      // Navigate to appropriate page
-      if (newRole === 'guest') {
-        navigate('/', { replace: true });
-      } else {
-        navigate('/host/home', { replace: true });
-      }
-      
-      // Reload to ensure all components pick up the new role
-      setTimeout(() => { try { window.location.reload(); } catch (_) {} }, 100);
-    } catch (e) {
-      console.error('Header role toggle failed:', e);
-      const errorMessage = e?.detail || e?.message || 'Failed to switch role. Please try again.';
-      toast.error(errorMessage);
-    }
-  };
+  const navigation = NAVIGATION;
 
-  // Get navigation based on user role
-  const getNavigation = () => {
-    
-    // If not authenticated or no user data, show guest navigation
-    if (!isAuthenticated || !user) {
-      return [
-        { name: 'Home Page', href: '/', icon: HomeIcon },
-        { name: 'Hotels', href: '/hotels', icon: BuildingOfficeIcon },
-        { name: 'BnBs', href: '/bnbs', icon: HomeModernIcon },
-      ];
-    }
+  const hasBnBRole = Boolean(user?.roles?.includes('bnb_host'));
+  const hasHotelRole = Boolean(user?.roles?.includes('hotel_host'));
+  const hasHostRoles = hasBnBRole || hasHotelRole;
 
-    const activeRole = user.active_role || 'guest';
-    console.log('Active role for navigation:', activeRole);
-    
-    if (activeRole === 'guest') {
-      // Guest navigation - browse and book services
-      return [
-        { name: 'Home Page', href: '/', icon: HomeIcon },
-        { name: 'Hotels', href: '/hotels', icon: BuildingOfficeIcon },
-        { name: 'BnBs', href: '/bnbs', icon: HomeModernIcon },
-      ];
-    } else {
-      // Host navigation - hide general Hotel and BnB links
-      return [];
-    }
-  };
-
-  // Check if user is in host mode - use same logic as HomePage
-  const isHostMode = user?.active_role && user.active_role !== 'guest';
-  const hasHostRoles = user?.roles && user.roles.some(role => ['bnb_host', 'hotel_host'].includes(role));
-  const isActuallyInHostMode = isHostMode || hasHostRoles;
-
-  const navigation = getNavigation();
-  
-  // Determine current role for display - ALWAYS use active_role from backend
-  // Never use fallback logic based on roles array, as active_role is the source of truth
-  const getCurrentRoleDisplay = () => {
-    if (!user) return 'Loading...';
-
-    // Always use active_role from backend as the source of truth
-    // If active_role is not set or is undefined/null, default to 'guest'
-    const activeRole = user.active_role || 'guest';
-    
-    switch (activeRole) {
-      case 'guest': return 'Guest';
-      case 'bnb_host': return 'Host';
-      case 'hotel_host': return 'Host';
-      default: return 'Guest';
-    }
-  };
-  
-  const currentRoleDisplay = getCurrentRoleDisplay();
+  // A single "go to my dashboard" destination, computed purely from roles
+  // held (not any "active" mode) -- both roles gets a chooser hub, a single
+  // host role goes straight to that dashboard, no host role falls back to
+  // the guest dashboard.
+  const dashboardHref = hasBnBRole && hasHotelRole
+    ? '/host/home'
+    : hasHotelRole
+      ? '/host-dashboard'
+      : hasBnBRole
+        ? '/host/bnb'
+        : '/dashboard';
+  const dashboardLabel = hasHostRoles ? 'Host Dashboard' : 'Dashboard';
 
   return (
     <>
@@ -241,7 +144,7 @@ const Header = () => {
           {/* Right side - Auth, etc. */}
           <div className="flex items-center space-x-4">
             {/* Become a Host Button */}
-            {!isActuallyInHostMode && (
+            {!hasHostRoles && (
               <Link
                 to="/become-host"
                 className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200 shadow-soft hover:shadow-medium"
@@ -283,47 +186,11 @@ const Header = () => {
                   {/* Dropdown Menu */}
                   {isUserMenuOpen && (
                     <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-large border border-secondary-100 py-2 z-50">
-                    {/* Switch Role Section */}
-                    <div className="px-4 py-3 border-b border-secondary-100">
-                      <div className="text-xs font-medium text-secondary-500 uppercase tracking-wide mb-3">
-                        Switch Role
-                      </div>
-                      
-                      {/* Current Role Display */}
-                      <div className="mb-3">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
-                          <span className="text-sm text-gray-600">Current Role:</span>
-                          <span className="text-sm font-semibold text-gray-900">
-                            {currentRoleDisplay}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Switch Button */}
-                      <button
-                        disabled={!user}
-                        onClick={handleHeaderRoleToggle}
-                        className={`w-full text-left px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 ${
-                          !user 
-                            ? 'text-gray-400 bg-gray-200 cursor-not-allowed' 
-                            : 'text-white bg-primary-500 hover:bg-primary-600'
-                        }`}
-                      >
-                        <span>
-                          {!user ? 'Loading user data...' :
-                           (user.active_role === 'guest' || !user.active_role) ? 'Switch to Host role' : 
-                           'Switch to Guest role'}
-                        </span>
-                        <ChevronDownIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                    
                     <Link
-                      to={user?.is_host ? "/host-dashboard" : "/dashboard"}
+                      to={dashboardHref}
                       className="block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 transition-colors duration-200"
                     >
-                      {user?.is_host ? "Host Dashboard" : "Dashboard"}
+                      {dashboardLabel}
                     </Link>
                     <Link
                       to="/profile"
@@ -400,7 +267,7 @@ const Header = () => {
               })}
               
               {/* Become a Host Button - Mobile */}
-              {!isActuallyInHostMode && (
+              {!hasHostRoles && (
                 <Link
                   to="/become-host"
                   className="block w-full text-center px-4 py-3 text-lg font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200"
@@ -411,36 +278,6 @@ const Header = () => {
               
               {isAuthenticated ? (
                 <div className="space-y-4 pt-4 border-t border-secondary-100">
-                  {/* Switch Role - Mobile */}
-                  <div className="px-4 py-3 border-b border-secondary-100">
-                    <div className="text-sm font-medium text-secondary-500 uppercase tracking-wide mb-3">
-                      Switch Role
-                    </div>
-                    
-                    {/* Current Role Display - Mobile */}
-                    <div className="mb-3">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
-                        <span className="text-base text-gray-600">Current Role:</span>
-                        <span className="text-base font-semibold text-gray-900">
-                          {currentRoleDisplay}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Switch Button - Mobile */}
-                    <button
-                      onClick={handleHeaderRoleToggle}
-                      className="w-full text-center px-4 py-3 text-lg font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-                    >
-                      <span>
-                        {currentRoleDisplay === 'Guest' ? 'Switch to Host role' : 
-                         'Switch to Guest role'}
-                      </span>
-                      <ChevronDownIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                  
                   {/* Notifications */}
                   <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-lg font-medium text-secondary-700">
@@ -450,10 +287,10 @@ const Header = () => {
                   </div>
 
                   <Link
-                    to={user?.is_host ? "/host-dashboard" : "/dashboard"}
+                    to={dashboardHref}
                     className="block text-lg font-medium text-secondary-700 hover:text-primary-500 transition-colors duration-200"
                   >
-                    {user?.is_host ? "Host Dashboard" : "Dashboard"}
+                    {dashboardLabel}
                   </Link>
                   <Link
                     to="/profile"
