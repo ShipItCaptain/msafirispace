@@ -789,47 +789,62 @@ def resend_verification_email(request):
 
 class HostOnboardingView(APIView):
     """
-    Host onboarding endpoint for different host types
+    Host onboarding wizard submission (KYC): account type, host category,
+    and the type-specific identity/business details, all in one call. Only
+    records the host's KYC profile -- it does NOT grant a bnb_host/hotel_host
+    role by itself. Roles are still granted at listing-creation time (see
+    HotelListCreateView/BnBListingListCreateView.perform_create), so
+    completing KYC alone doesn't unlock host-only routes before the host has
+    actually published anything.
     """
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def post(self, request):
-        """
-        Create host profile based on host type
-        """
-        print(f"Received data: {request.data}")
         serializer = HostOnboardingSerializer(data=request.data, context={'user': request.user})
-        print(f"Serializer is valid: {serializer.is_valid()}")
         if not serializer.is_valid():
-            print(f"Serializer errors: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            with transaction.atomic():
-                # Update user type and host type
-                user = request.user
-                user.user_type = User.UserType.HOST
-                user.host_type = serializer.validated_data['host_type']
-                user.save()
-                
-                # Create specific host profile
-                host_profile = serializer.save(user=user)
 
-                if user.host_type == User.HostType.HOTEL_RESTAURANT_HOST:
-                    profile_data = HotelRestaurantHostProfileSerializer(host_profile).data
-                else:
-                    profile_data = BnBHostProfileSerializer(host_profile).data
+        with transaction.atomic():
+            user = request.user
+            host_category = serializer.validated_data['host_category']
+            user.user_type = User.UserType.HOST
+            user.host_type = (
+                User.HostType.HOTEL_RESTAURANT_HOST if host_category == 'hotel_restaurant'
+                else User.HostType.BNB_HOST
+            )
+            user.save(update_fields=['user_type', 'host_type'])
 
-                return Response({
-                    'message': 'Host profile created successfully',
-                    'host_type': user.host_type,
-                    'host_profile': profile_data
-                }, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            print(f"Error creating host profile: {str(e)}")
+            host_profile = serializer.save()
+
+            if host_category == 'hotel_restaurant':
+                profile_data = HotelRestaurantHostProfileSerializer(host_profile).data
+            else:
+                profile_data = BnBHostProfileSerializer(host_profile).data
+
             return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'message': 'Host onboarding completed successfully',
+                'host_category': host_category,
+                'host_profile': profile_data,
+            }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def host_onboarding_status(request):
+    """
+    Lightweight check for whether the current user has already completed
+    the host onboarding wizard, and which category -- lets the entry point
+    (BecomeHostPage) skip straight past Steps 1-3 for a returning host.
+    """
+    user = request.user
+    bnb_profile = getattr(user, 'bnb_profile', None)
+    hotel_profile = getattr(user, 'hotel_restaurant_profile', None)
+
+    if bnb_profile and bnb_profile.onboarding_completed_at:
+        return Response({'onboarding_completed': True, 'host_category': 'bnb'})
+    if hotel_profile and hotel_profile.onboarding_completed_at:
+        return Response({'onboarding_completed': True, 'host_category': 'hotel_restaurant'})
+    return Response({'onboarding_completed': False, 'host_category': None})
 
 
 class HotelRestaurantHostProfileView(APIView):

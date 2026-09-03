@@ -377,15 +377,43 @@ class BnBHostProfile(models.Model):
         ],
         default='moderate'
     )
-    
+
+    # --- Account-level KYC (host onboarding wizard) ---
+    class AccountType(models.TextChoices):
+        INDIVIDUAL = 'individual', 'Individual'
+        COMPANY = 'company', 'Company'
+
+    account_type = models.CharField(max_length=20, choices=AccountType.choices, blank=True)
+
+    # Individual branch
+    owner_name = models.CharField(max_length=150, blank=True)
+    owner_kra_pin = models.CharField(max_length=20, blank=True)
+    owner_id_number = models.CharField(max_length=50, blank=True)
+    owner_id_front = models.FileField(upload_to='hosts/bnb/owner_id/', blank=True, null=True)
+    owner_id_back = models.FileField(upload_to='hosts/bnb/owner_id/', blank=True, null=True)
+    owner_permit = models.FileField(upload_to='hosts/bnb/permits/', blank=True, null=True)
+
+    # Company branch
+    company_name = models.CharField(max_length=200, blank=True)
+    company_kra_pin = models.CharField(max_length=20, blank=True)
+    company_permit = models.FileField(upload_to='hosts/bnb/permits/', blank=True, null=True)
+
+    # Shared
+    contact_email = models.EmailField(blank=True)
+    contact_phone = models.CharField(max_length=20, blank=True)
+
+    # Set once, on successful onboarding submission -- the source of truth
+    # for "has this user completed host KYC" (see HostOnboardingSerializer).
+    onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'bnb_host_profiles'
         verbose_name = 'BnB Host Profile'
         verbose_name_plural = 'BnB Host Profiles'
-    
+
     def __str__(self):
         return f"BnB Profile for {self.user.email}"
 
@@ -403,7 +431,8 @@ class HotelRestaurantHostProfile(models.Model):
             ('hotel', 'Hotel Only'),
             ('restaurant', 'Restaurant Only'),
             ('both', 'Hotel & Restaurant'),
-        ]
+        ],
+        default='hotel',
     )
     establishment_count = models.PositiveIntegerField(default=1)
     
@@ -440,14 +469,36 @@ class HotelRestaurantHostProfile(models.Model):
         ],
         default='owner_managed'
     )
-    
+
+    # --- Account-level KYC (host onboarding wizard) ---
+    # Hotel/Restaurant is always treated as a business regardless of the
+    # onboarding wizard's Individual/Company step -- these fields don't
+    # branch the way BnBHostProfile's do.
+    company_name = models.CharField(max_length=200, blank=True)
+    contact_email = models.EmailField(blank=True)
+    contact_phone = models.CharField(max_length=20, blank=True)
+    kra_pin = models.CharField(max_length=20, blank=True)
+    manager_name = models.CharField(max_length=150, blank=True)
+    manager_contact = models.CharField(max_length=100, blank=True)
+    manager_role = models.CharField(
+        max_length=20,
+        choices=[('manager', 'Manager'), ('director', 'Director')],
+        blank=True,
+    )
+    business_permit = models.FileField(upload_to='hosts/hotel/permits/', blank=True, null=True)
+    business_registration_certificate = models.FileField(upload_to='hosts/hotel/registration/', blank=True, null=True)
+
+    # Set once, on successful onboarding submission -- the source of truth
+    # for "has this user completed host KYC" (see HostOnboardingSerializer).
+    onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'hotel_restaurant_host_profiles'
         verbose_name = 'Hotel/Restaurant Host Profile'
         verbose_name_plural = 'Hotel/Restaurant Host Profiles'
-    
+
     def __str__(self):
         return f"Hotel/Restaurant Profile for {self.user.email}"

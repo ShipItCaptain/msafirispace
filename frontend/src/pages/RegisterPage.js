@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import GuestSignupForm from '../components/auth/GuestSignupForm';
-import HostSignupForm from '../components/auth/HostSignupForm';
-import FormSwitcher from '../components/auth/FormSwitcher';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -16,14 +14,14 @@ const RegisterPage = () => {
   // A referral link looks like /register?ref=CODE -- pre-fill the existing
   // referral_code field on the form with it (still editable/overridable).
   const referralCodeFromLink = new URLSearchParams(location.search).get('ref') || '';
-  
-  // Form state management
-  const [isHostForm, setIsHostForm] = useState(false);
+
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Guest form data
-  const [guestFormData, setGuestFormData] = useState({
+
+  // Registration always creates a plain guest account -- becoming a host
+  // is a separate, later decision made through the "Become a Host"
+  // onboarding wizard, not a choice made at signup time.
+  const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     email: '',
@@ -34,27 +32,6 @@ const RegisterPage = () => {
     city: '',
     referral_code: referralCodeFromLink
   });
-
-  // Host form data
-  const [hostFormData, setHostFormData] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirm_password: '',
-    roles: [],
-    company_name: '',
-    business_license: '',
-    tax_id: '',
-    country: 'Kenya',
-    city: '',
-    referral_code: referralCodeFromLink
-  });
-
-  // Get current form data based on form type
-  const currentFormData = isHostForm ? hostFormData : guestFormData;
-  const setCurrentFormData = isHostForm ? setHostFormData : setGuestFormData;
 
   useEffect(() => {
     clearAuthError();
@@ -62,11 +39,11 @@ const RegisterPage = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setCurrentFormData(prev => ({
+    setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    
+
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -75,85 +52,66 @@ const RegisterPage = () => {
     }
   };
 
-  const handleSwitchToGuest = () => {
-    setIsHostForm(false);
-    setErrors({});
-  };
-
-  const handleSwitchToHost = () => {
-    setIsHostForm(true);
-    setErrors({});
-  };
-
-  const validateForm = (formData, agreedToTerms) => {
+  const validateForm = (data, agreedToTerms) => {
     const newErrors = {};
-    
-    if (!formData.first_name.trim()) {
+
+    if (!data.first_name.trim()) {
       newErrors.first_name = 'First name is required';
-    } else if (formData.first_name.trim().length < 2) {
+    } else if (data.first_name.trim().length < 2) {
       newErrors.first_name = 'First name must be at least 2 characters';
     }
-    
-    if (!formData.last_name.trim()) {
+
+    if (!data.last_name.trim()) {
       newErrors.last_name = 'Last name is required';
-    } else if (formData.last_name.trim().length < 2) {
+    } else if (data.last_name.trim().length < 2) {
       newErrors.last_name = 'Last name must be at least 2 characters';
     }
-    
-    if (!formData.email.trim()) {
+
+    if (!data.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(data.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-    
-    if (!formData.phone.trim()) {
+
+    if (!data.phone.trim()) {
       newErrors.phone = 'Phone number is required';
-    } else if (!/^[+]?[0-9\s\-()]{10,}$/.test(formData.phone.replace(/\s/g, ''))) {
+    } else if (!/^[+]?[0-9\s\-()]{10,}$/.test(data.phone.replace(/\s/g, ''))) {
       newErrors.phone = 'Please enter a valid phone number';
     }
-    
-    if (!formData.password.trim()) {
+
+    if (!data.password.trim()) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
+    } else if (data.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(data.password)) {
       newErrors.password = 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
     }
-    
-    if (!formData.confirm_password.trim()) {
+
+    if (!data.confirm_password.trim()) {
       newErrors.confirm_password = 'Please confirm your password';
-    } else if (formData.password !== formData.confirm_password) {
+    } else if (data.password !== data.confirm_password) {
       newErrors.confirm_password = 'Passwords do not match';
     }
-    
-    if (!formData.city.trim()) {
+
+    if (!data.city.trim()) {
       newErrors.city = 'City is required';
     }
-    
-    // Host-specific validation
-    if (isHostForm) {
-      const hasHostRoles = formData.roles && formData.roles.some(role => ['bnb_host', 'hotel_restaurant_host'].includes(role));
-      if (hasHostRoles && !formData.company_name.trim()) {
-        newErrors.company_name = 'Company name is required for host roles';
-      }
-    }
-    
+
     if (!agreedToTerms) {
       newErrors.terms = 'You must agree to the terms and conditions';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e, formDataToSubmit, agreedToTerms) => {
     e.preventDefault();
-    
+
     if (!validateForm(formDataToSubmit, agreedToTerms)) return;
-    
+
     setIsSubmitting(true);
     try {
-      // Map frontend fields to backend API expectations
       const {
         first_name,
         last_name,
@@ -161,10 +119,6 @@ const RegisterPage = () => {
         phone,
         password,
         confirm_password,
-        roles,
-        company_name,
-        business_license,
-        tax_id,
         referral_code,
       } = formDataToSubmit;
 
@@ -176,10 +130,6 @@ const RegisterPage = () => {
         password,
         password_confirm: confirm_password,
         phone_number: phone,
-        roles,
-        company_name,
-        business_license,
-        tax_id,
         ...(referral_code ? { referral_code: referral_code.trim() } : {}),
       };
 
@@ -207,10 +157,6 @@ const RegisterPage = () => {
       pushFirst('password_confirm', 'confirm_password');
       pushFirst('city', 'city');
       pushFirst('country', 'country');
-      // Host-specific fields if backend requires them for hosts
-      pushFirst('company_name', 'company_name');
-      pushFirst('business_license', 'business_license');
-      pushFirst('tax_id', 'tax_id');
 
       // non_field_errors or generic detail/message at top
       if (Array.isArray(backend.non_field_errors) && backend.non_field_errors.length) {
@@ -252,42 +198,15 @@ const RegisterPage = () => {
         {/* Registration Form */}
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
           <div className="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10 border border-gray-200">
-            {/* Form Switcher */}
-            <FormSwitcher
-              isHostForm={isHostForm}
-              onSwitchToGuest={handleSwitchToGuest}
-              onSwitchToHost={handleSwitchToHost}
-              guestFormData={guestFormData}
-              hostFormData={hostFormData}
-              setFormData={setCurrentFormData}
+            <GuestSignupForm
+              formData={formData}
+              setFormData={setFormData}
+              errors={errors}
+              handleInputChange={handleInputChange}
+              onSubmit={handleSubmit}
+              isSubmitting={isSubmitting}
+              isLoading={isLoading}
             />
-
-            {/* Dynamic Form Content */}
-            <AnimatePresence mode="wait">
-              {!isHostForm ? (
-                <GuestSignupForm
-                  key="guest"
-                  formData={currentFormData}
-                  setFormData={setCurrentFormData}
-                  errors={errors}
-                  handleInputChange={handleInputChange}
-                  onSubmit={handleSubmit}
-                  isSubmitting={isSubmitting}
-                  isLoading={isLoading}
-                />
-              ) : (
-                <HostSignupForm
-                  key="host"
-                  formData={currentFormData}
-                  setFormData={setCurrentFormData}
-                  errors={errors}
-                  handleInputChange={handleInputChange}
-                  onSubmit={handleSubmit}
-                  isSubmitting={isSubmitting}
-                  isLoading={isLoading}
-                />
-              )}
-            </AnimatePresence>
 
             {/* Error Message */}
             {error && (

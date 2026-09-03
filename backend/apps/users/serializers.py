@@ -5,62 +5,52 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from .models import User, UserProfile, UserAddress, BnBHostProfile, HotelRestaurantHostProfile
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """
-    Serializer for user registration
+    Serializer for user registration. Registration always creates a plain
+    guest account -- there is no host-signup path here. Becoming a host is
+    a separate, later decision made through the host onboarding wizard
+    (see HostOnboardingSerializer), which is also where KYC/business
+    details (company name, KRA PIN, permits, etc.) actually get collected.
     """
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
-    roles = serializers.MultipleChoiceField(choices=User.Role.choices, required=False, default=[User.Role.GUEST])
     referral_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
         fields = [
             'email', 'username', 'first_name', 'last_name', 'password', 'password_confirm',
-            'phone_number', 'roles', 'company_name', 'business_license', 'tax_id', 'referral_code'
+            'phone_number', 'referral_code'
         ]
         extra_kwargs = {
             'username': {'required': False},
-            'company_name': {'required': False},
-            'business_license': {'required': False},
-            'tax_id': {'required': False},
         }
-    
+
     def validate(self, attrs):
         # Check if passwords match
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError("Passwords don't match")
-        
+
         # Validate password strength
         try:
             validate_password(attrs['password'])
         except ValidationError as e:
             raise serializers.ValidationError({'password': e.messages})
-        
+
         # Generate username if not provided
         if not attrs.get('username'):
             attrs['username'] = attrs['email']
-        
-        # Validate roles
-        selected_roles = attrs.get('roles', [])
-        if not selected_roles:
-            raise serializers.ValidationError("At least one role must be selected.")
-        
-        # Validate host-specific fields if any host role is selected
-        host_roles = [r for r in selected_roles if r in [User.Role.BNB_HOST, User.Role.HOTEL_HOST]]
-        if host_roles and not attrs.get('company_name'):
-            raise serializers.ValidationError("Company name is required for host roles.")
-        
+
         return attrs
-    
+
     def create(self, validated_data):
         # Remove password_confirm from validated data
         validated_data.pop('password_confirm')
-        roles_data = validated_data.pop('roles', [User.Role.GUEST])
         referral_code = (validated_data.pop('referral_code', '') or '').strip()
 
         # Create user
@@ -72,21 +62,14 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             referrer = User.objects.filter(referral_code=referral_code, is_active=True).exclude(pk=user.pk).first()
             if referrer:
                 user.referred_by = referrer
-        
+
         # Create user profile
         UserProfile.objects.create(user=user)
-        
-        # Set roles and active role
-        roles_list = list(roles_data)
-        user.roles = roles_list
-        user.active_role = roles_list[0] if roles_list else User.Role.GUEST
+
+        # Every new account starts as a plain guest -- roles/active_role
+        # already default to guest on the model, nothing else to set here.
         user.save()
-        
-        # Create host-specific profiles if host roles are selected
-        if User.Role.BNB_HOST in roles_data:
-            BnBHostProfile.objects.create(user=user)
-        if User.Role.HOTEL_HOST in roles_data:
-            HotelRestaurantHostProfile.objects.create(user=user)
+
         return user
 
 
@@ -305,9 +288,14 @@ class BnBHostProfileSerializer(serializers.ModelSerializer):
         model = BnBHostProfile
         fields = [
             'property_count', 'max_properties', 'home_sharing_license', 'insurance_document',
-            'property_management_style', 'guest_interaction_level', 'created_at', 'updated_at'
+            'property_management_style', 'guest_interaction_level',
+            'account_type', 'owner_name', 'owner_kra_pin', 'owner_id_number',
+            'owner_id_front', 'owner_id_back', 'owner_permit',
+            'company_name', 'company_kra_pin', 'company_permit',
+            'contact_email', 'contact_phone', 'onboarding_completed_at',
+            'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'onboarding_completed_at']
 
 
 class HotelRestaurantHostProfileSerializer(serializers.ModelSerializer):
@@ -319,88 +307,127 @@ class HotelRestaurantHostProfileSerializer(serializers.ModelSerializer):
         fields = [
             'establishment_type', 'establishment_count', 'tourism_license', 'health_certificate',
             'food_handling_certificate', 'star_rating', 'cuisine_types', 'room_count',
-            'table_count', 'management_style', 'created_at', 'updated_at'
+            'table_count', 'management_style',
+            'company_name', 'contact_email', 'contact_phone', 'kra_pin',
+            'manager_name', 'manager_contact', 'manager_role',
+            'business_permit', 'business_registration_certificate', 'onboarding_completed_at',
+            'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'onboarding_completed_at']
 
 
 class HostOnboardingSerializer(serializers.Serializer):
     """
-    Serializer for host onboarding process
+    Serializer for the host onboarding wizard (KYC). One combined submission
+    covering: account type (individual/company), host category (bnb vs
+    hotel/restaurant), and the type-specific identity/business details.
+    Hotel/Restaurant is always treated as a business regardless of
+    account_type -- that choice only actually branches the BnB path.
     """
-    host_type = serializers.ChoiceField(choices=User.HostType.choices, write_only=True)
-    
-    # Basic information
-    property_name = serializers.CharField(max_length=200, required=False)
-    establishment_name = serializers.CharField(max_length=200, required=False)
-    contact_person = serializers.CharField(max_length=100, required=False)
-    host_name = serializers.CharField(max_length=100, required=False)
-    email = serializers.EmailField(required=False)
-    phone = serializers.CharField(max_length=20, required=False)
-    website = serializers.URLField(required=False)
-    
-    # Location
-    address = serializers.CharField(max_length=255, required=False)
-    city = serializers.CharField(max_length=100, required=False)
-    state = serializers.CharField(max_length=100, required=False)
-    country = serializers.CharField(max_length=100, required=False)
-    postal_code = serializers.CharField(max_length=20, required=False)
-    
-    # Property details
-    property_description = serializers.CharField(required=False)
-    property_type = serializers.CharField(max_length=50, required=False)
-    room_count = serializers.IntegerField(required=False)
-    guest_capacity = serializers.IntegerField(required=False)
-    bathroom_count = serializers.IntegerField(required=False)
-    property_size = serializers.IntegerField(required=False)
-    property_age = serializers.IntegerField(required=False)
-    
-    # Amenities and features (accept JSON strings from multipart)
-    amenities = serializers.JSONField(required=False)
-    property_features = serializers.JSONField(required=False)
-    safety_features = serializers.JSONField(required=False)
-    
-    # Hosting preferences
-    guest_interaction_level = serializers.CharField(max_length=50, required=False)
-    property_management_style = serializers.CharField(max_length=50, required=False)
-    house_rules = serializers.CharField(required=False)
-    check_in_time = serializers.TimeField(required=False)
-    check_out_time = serializers.TimeField(required=False)
-    
-    # Business details
-    description = serializers.CharField(required=False)
-    business_license = serializers.CharField(max_length=100, required=False)
-    tourism_license = serializers.CharField(max_length=100, required=False)
-    
-    # Files and photos
-    photos = serializers.ListField(child=serializers.FileField(), required=False)
-    
+    account_type = serializers.ChoiceField(choices=BnBHostProfile.AccountType.choices, required=True)
+    host_category = serializers.ChoiceField(choices=[('bnb', 'BnB'), ('hotel_restaurant', 'Hotel/Restaurant')], required=True)
+
+    # BnB -- individual branch
+    owner_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    owner_kra_pin = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    owner_id_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    owner_id_front = serializers.FileField(required=False)
+    owner_id_back = serializers.FileField(required=False)
+    owner_permit = serializers.FileField(required=False)
+
+    # BnB -- company branch
+    company_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    company_kra_pin = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    company_permit = serializers.FileField(required=False)
+
+    # Hotel/Restaurant (always business-style)
+    kra_pin = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    manager_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    manager_contact = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    manager_role = serializers.ChoiceField(choices=[('manager', 'Manager'), ('director', 'Director')], required=False, allow_blank=True)
+    business_permit = serializers.FileField(required=False)
+    business_registration_certificate = serializers.FileField(required=False)
+
+    # Shared contact (BnB uses these directly; Hotel/Restaurant also has its
+    # own company_name field above, reusing contact_email/contact_phone)
+    contact_email = serializers.EmailField(required=False, allow_blank=True)
+    contact_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        host_category = attrs.get('host_category')
+        account_type = attrs.get('account_type')
+        errors = {}
+
+        def require(field):
+            if not attrs.get(field):
+                errors[field] = 'This field is required.'
+
+        if host_category == 'hotel_restaurant':
+            for field in (
+                'company_name', 'contact_email', 'contact_phone', 'kra_pin',
+                'manager_name', 'manager_contact', 'manager_role',
+                'business_permit', 'business_registration_certificate',
+            ):
+                require(field)
+        elif host_category == 'bnb':
+            if account_type == 'individual':
+                for field in (
+                    'owner_name', 'owner_kra_pin', 'owner_id_number',
+                    'owner_id_front', 'owner_id_back', 'contact_email', 'contact_phone',
+                ):
+                    require(field)
+                # owner_permit is optional per spec
+            elif account_type == 'company':
+                for field in ('company_name', 'company_kra_pin', 'company_permit', 'contact_email', 'contact_phone'):
+                    require(field)
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
     def create(self, validated_data):
-        """
-        Create host profile based on host type
-        """
         user = self.context['user']
-        host_type = validated_data['host_type']
-        
-        if host_type == User.HostType.HOTEL_RESTAURANT_HOST:
-            profile = HotelRestaurantHostProfile.objects.create(
+        host_category = validated_data['host_category']
+        account_type = validated_data.get('account_type', '')
+        now = timezone.now()
+
+        if host_category == 'hotel_restaurant':
+            profile, _ = HotelRestaurantHostProfile.objects.update_or_create(
                 user=user,
-                establishment_type=validated_data.get('establishment_type', 'hotel'),
-                establishment_count=validated_data.get('establishment_count', 1),
-                tourism_license=validated_data.get('tourism_license', ''),
-                star_rating=validated_data.get('star_rating'),
-                cuisine_types=validated_data.get('cuisine_types', []),
-                room_count=validated_data.get('room_count', 0),
-                table_count=validated_data.get('table_count', 0),
-                management_style=validated_data.get('management_style', 'owner_managed')
+                defaults={
+                    'company_name': validated_data.get('company_name', ''),
+                    'contact_email': validated_data.get('contact_email', ''),
+                    'contact_phone': validated_data.get('contact_phone', ''),
+                    'kra_pin': validated_data.get('kra_pin', ''),
+                    'manager_name': validated_data.get('manager_name', ''),
+                    'manager_contact': validated_data.get('manager_contact', ''),
+                    'manager_role': validated_data.get('manager_role', ''),
+                    'business_permit': validated_data.get('business_permit'),
+                    'business_registration_certificate': validated_data.get('business_registration_certificate'),
+                    'onboarding_completed_at': now,
+                },
             )
-        elif host_type == User.HostType.BNB_HOST:
-            profile = BnBHostProfile.objects.create(
-                user=user,
-                property_count=validated_data.get('room_count', 1),
-                max_properties=validated_data.get('guest_capacity', 5),
-                home_sharing_license=validated_data.get('business_license', ''),
-                property_management_style=validated_data.get('property_management_style', 'self_managed'),
-                guest_interaction_level=validated_data.get('guest_interaction_level', 'moderate')
-            )
+        else:
+            defaults = {
+                'account_type': account_type,
+                'contact_email': validated_data.get('contact_email', ''),
+                'contact_phone': validated_data.get('contact_phone', ''),
+                'onboarding_completed_at': now,
+            }
+            if account_type == 'individual':
+                defaults.update({
+                    'owner_name': validated_data.get('owner_name', ''),
+                    'owner_kra_pin': validated_data.get('owner_kra_pin', ''),
+                    'owner_id_number': validated_data.get('owner_id_number', ''),
+                    'owner_id_front': validated_data.get('owner_id_front'),
+                    'owner_id_back': validated_data.get('owner_id_back'),
+                    'owner_permit': validated_data.get('owner_permit'),
+                })
+            else:
+                defaults.update({
+                    'company_name': validated_data.get('company_name', ''),
+                    'company_kra_pin': validated_data.get('company_kra_pin', ''),
+                    'company_permit': validated_data.get('company_permit'),
+                })
+            profile, _ = BnBHostProfile.objects.update_or_create(user=user, defaults=defaults)
         return profile

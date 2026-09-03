@@ -62,6 +62,24 @@ class HotelSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at', 'updated_at']
 
+    def validate(self, attrs):
+        # One hotel per host account -- a host genuinely running two
+        # separate hotel businesses should sign up as two separate
+        # accounts (each hotel's permit/KRA PIN is normally tied to that
+        # specific business registration anyway). Application-layer only,
+        # not a DB constraint, so it doesn't touch any host who already has
+        # more than one hotel from before this rule existed.
+        request = self.context.get('request')
+        if request and not self.instance:
+            if Hotel.objects.filter(host=request.user).exists():
+                raise serializers.ValidationError({
+                    'non_field_errors': [
+                        "You already have a hotel registered on this account. "
+                        "A separate hotel business should sign up as its own account."
+                    ]
+                })
+        return attrs
+
 
 class HotelListSerializer(serializers.ModelSerializer):
     """Simplified serializer for hotel listings"""

@@ -43,6 +43,7 @@ urlpatterns = [
     
     # Host onboarding
     path('host/onboard/', views.HostOnboardingView.as_view(), name='host-onboard'),
+    path('host/onboarding-status/', views.host_onboarding_status, name='host-onboarding-status'),
     path('host/dashboard/', views.HostDashboardView.as_view(), name='host-dashboard'),
     path('host/dashboard/summary/', views.HostDashboardSummaryView.as_view(), name='host-dashboard-summary'),
     path('host/hotel-restaurant/', views.HotelRestaurantHostProfileView.as_view(), name='hotel-restaurant-profile'),

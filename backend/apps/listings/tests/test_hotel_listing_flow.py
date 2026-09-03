@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from apps.listings.models import HotelAmenity
+from apps.listings.models import Hotel, HotelAmenity
 
 
 PNG_1X1 = (
@@ -228,6 +228,66 @@ def test_creating_a_hotel_grants_hotel_host_role():
     user.refresh_from_db()
     assert User.Role.HOTEL_HOST in user.roles
     assert user.active_role == User.Role.HOTEL_HOST
+
+
+def _hotel_payload(name="Another Hotel"):
+    return {
+        "name": name,
+        "description": "A hotel.",
+        "short_description": "Hotel.",
+        "property_type": "hotel",
+        "star_rating": 3,
+        "address": "1 Street",
+        "city": "Nairobi",
+        "country": "Kenya",
+    }
+
+
+@pytest.mark.django_db
+def test_second_hotel_rejected_for_a_fresh_host():
+    """
+    One hotel per host account -- a host genuinely running a second, separate
+    hotel business is expected to sign up as its own account, since each
+    hotel's permit/KRA PIN is normally tied to its own business registration.
+    """
+    User = get_user_model()
+    host = User.objects.create_user(
+        username="one_hotel_host", email="one_hotel_host@example.com", password="testpass123",
+    )
+    client = APIClient()
+    client.force_authenticate(user=host)
+
+    first = client.post("/api/v1/listings/hotels/", _hotel_payload("First Hotel"), format="json")
+    assert first.status_code == 201
+
+    second = client.post("/api/v1/listings/hotels/", _hotel_payload("Second Hotel"), format="json")
+    assert second.status_code == 400
+    assert Hotel.objects.filter(host=host).count() == 1
+
+
+@pytest.mark.django_db
+def test_existing_multi_hotel_host_is_grandfathered_but_capped():
+    """
+    A host who already had multiple hotels before this rule existed keeps
+    them (no destructive migration/cleanup), but still can't add a further
+    one going forward.
+    """
+    User = get_user_model()
+    host = User.objects.create_user(
+        username="legacy_multi_hotel_host", email="legacy_multi_hotel_host@example.com", password="testpass123",
+    )
+    Hotel.objects.create(host=host, name="Legacy Hotel 1", description="d", short_description="s",
+                          star_rating=3, address="a", city="Nairobi", country="Kenya")
+    Hotel.objects.create(host=host, name="Legacy Hotel 2", description="d", short_description="s",
+                          star_rating=3, address="a", city="Nairobi", country="Kenya")
+    assert Hotel.objects.filter(host=host).count() == 2
+
+    client = APIClient()
+    client.force_authenticate(user=host)
+    response = client.post("/api/v1/listings/hotels/", _hotel_payload("Third Hotel"), format="json")
+
+    assert response.status_code == 400
+    assert Hotel.objects.filter(host=host).count() == 2
 
 
 # Must match ListHotelPage.js's `availableAmenities` list — the hotel creation
