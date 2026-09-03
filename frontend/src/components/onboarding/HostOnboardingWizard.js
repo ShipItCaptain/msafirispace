@@ -189,7 +189,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
           value={data[screen.key]}
           onChange={(e) => setField(screen.key, screen.uppercase ? e.target.value.toUpperCase() : e.target.value)}
           placeholder={screen.placeholder}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-none text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
         />
       );
     }
@@ -200,7 +200,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
             type="file"
             accept="image/*,.pdf"
             onChange={(e) => setField(screen.key, e.target.files?.[0] || null)}
-            className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+            className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-none file:border-0 file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
           />
           {data[screen.key] && (
             <p className="mt-2 text-xs text-gray-500">Selected: {data[screen.key].name}</p>
@@ -226,14 +226,14 @@ const HostOnboardingWizard = ({ onComplete }) => {
             value={data.contact_email}
             onChange={(e) => setField('contact_email', e.target.value)}
             placeholder="Email address"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-none text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
           <input
             type="password"
             value={data.password}
             onChange={(e) => setField('password', e.target.value)}
             placeholder="Create a password (min. 8 characters)"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-none text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
         </div>
       );
@@ -248,7 +248,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
               value={data.contact_email}
               onChange={(e) => setField('contact_email', e.target.value)}
               placeholder="Email address"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-none text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
             />
           )}
           <input
@@ -257,7 +257,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
             value={data.contact_phone}
             onChange={(e) => setField('contact_phone', e.target.value)}
             placeholder="Phone number"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-none text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
         </div>
       );
@@ -271,14 +271,14 @@ const HostOnboardingWizard = ({ onComplete }) => {
             value={data.manager_name}
             onChange={(e) => setField('manager_name', e.target.value)}
             placeholder="Full name"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-none text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
           <input
             type="text"
             value={data.manager_contact}
             onChange={(e) => setField('manager_contact', e.target.value)}
             placeholder="Phone or email"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-none text-base focus:ring-2 focus:ring-red-500 focus:border-transparent"
           />
           <div className="flex gap-3">
             {[['manager', 'Manager'], ['director', 'Director']].map(([value, label]) => (
@@ -286,7 +286,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
                 key={value}
                 type="button"
                 onClick={() => setField('manager_role', value)}
-                className={`flex-1 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                className={`flex-1 px-4 py-2 rounded-none border text-sm font-medium transition-colors ${
                   data.manager_role === value
                     ? 'bg-red-600 border-red-600 text-white'
                     : 'bg-white border-gray-300 text-gray-700 hover:border-red-400'
@@ -308,12 +308,12 @@ const HostOnboardingWizard = ({ onComplete }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+      <div className="w-full max-w-md bg-white rounded-none shadow-lg border border-gray-100 p-8">
         <div className="flex items-center gap-1.5 mb-6">
           {Array.from({ length: totalDots }).map((_, i) => (
             <span
               key={i}
-              className={`h-1.5 flex-1 rounded-full ${i <= currentDot ? 'bg-red-600' : 'bg-gray-200'}`}
+              className={`h-1.5 flex-1 rounded-none ${i <= currentDot ? 'bg-red-600' : 'bg-gray-200'}`}
             />
           ))}
         </div>
@@ -339,9 +339,9 @@ const HostOnboardingWizard = ({ onComplete }) => {
                       key={opt.value}
                       type="button"
                       onClick={() => { setAccountType(opt.value); setOuterStep(2); }}
-                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-red-400 hover:bg-red-50/40 transition-colors text-left"
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-none hover:border-red-400 hover:bg-red-50/40 transition-colors text-left"
                     >
-                      <span className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                      <span className="w-10 h-10 rounded-none bg-red-50 flex items-center justify-center flex-shrink-0">
                         <opt.icon className="w-5 h-5 text-red-600" />
                       </span>
                       <div>
@@ -367,9 +367,9 @@ const HostOnboardingWizard = ({ onComplete }) => {
                       key={opt.value}
                       type="button"
                       onClick={() => { setHostCategory(opt.value); goToKycStep3(); }}
-                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-red-400 hover:bg-red-50/40 transition-colors text-left"
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-none hover:border-red-400 hover:bg-red-50/40 transition-colors text-left"
                     >
-                      <span className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                      <span className="w-10 h-10 rounded-none bg-red-50 flex items-center justify-center flex-shrink-0">
                         <opt.icon className="w-5 h-5 text-red-600" />
                       </span>
                       <div>
@@ -385,7 +385,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
             {outerStep === 3 && screen && (
               <div>
                 {screen.icon && (
-                  <span className="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                  <span className="w-11 h-11 rounded-none bg-red-50 flex items-center justify-center mb-4">
                     <screen.icon className="w-5 h-5 text-red-600" />
                   </span>
                 )}
@@ -397,7 +397,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
                   type="button"
                   onClick={handleKycNext}
                   disabled={isSubmitting}
-                  className="mt-6 w-full py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-60"
+                  className="mt-6 w-full py-3 bg-red-600 text-white rounded-none font-medium hover:bg-red-700 disabled:opacity-60"
                 >
                   {isSubmitting ? 'Submitting...' : kycIndex === screens.length - 1 ? 'Finish' : 'Continue'}
                 </button>
