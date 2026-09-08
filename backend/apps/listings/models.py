@@ -31,8 +31,8 @@ class Hotel(models.Model):
     
     # Basic Information
     name = models.CharField(max_length=200, help_text="Hotel name")
-    description = models.TextField(help_text="Detailed hotel description")
-    short_description = models.CharField(max_length=500, help_text="Brief hotel description")
+    description = models.TextField(blank=True, help_text="Detailed hotel description")
+    short_description = models.CharField(max_length=500, blank=True, help_text="Brief hotel description")
     
     # Property Details
     property_type = models.CharField(

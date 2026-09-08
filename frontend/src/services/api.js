@@ -358,10 +358,16 @@ export const listingsAPI = {
     if (imageData.order !== undefined) formData.append('order', imageData.order);
 
     const response = await api.post(`/listings/hotels/${hotelId}/images/`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      transformRequest: [(data, headers) => {
+        delete headers['Content-Type'];
+        return data;
+      }],
     });
+    return response.data;
+  },
+
+  deleteHotelImage: async (hotelId, imageId) => {
+    const response = await api.delete(`/listings/hotels/${hotelId}/images/${imageId}/`);
     return response.data;
   },
 
@@ -377,6 +383,11 @@ export const listingsAPI = {
       is_available: true,
       ...payload,
     });
+    return response.data;
+  },
+
+  removeHotelAmenity: async (hotelId, mappingId) => {
+    const response = await api.delete(`/listings/hotels/${hotelId}/amenities/${mappingId}/`);
     return response.data;
   },
 

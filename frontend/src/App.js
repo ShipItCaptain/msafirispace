@@ -16,6 +16,7 @@ import HotelsPage from './pages/HotelsPage';
 import BnBsPage from './pages/BnBsPage';
 import BnBDetailPage from './pages/BnBDetailPage';
 import ListHotelPage from './pages/ListHotelPage';
+import HotelHostManagementPage from './pages/HotelHostManagementPage';
 import DashboardPage from './pages/DashboardPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
@@ -435,6 +436,25 @@ function AppContent() {
                     transition={{ duration: 0.3 }}
                   >
                     <HotelHostDashboard />
+                  </motion.div>
+                  <Footer />
+                </Layout>
+              </RoleGuard>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/host/hotel/manage" element={
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <RoleGuard allowedRoles={['hotel_host']} fallbackPath="/" showAccessDenied={false}>
+                <Layout>
+                  <Header />
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <HotelHostManagementPage />
                   </motion.div>
                   <Footer />
                 </Layout>

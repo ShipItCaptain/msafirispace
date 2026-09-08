@@ -8,6 +8,7 @@ import {
   StarIcon,
   MapPinIcon,
   BuildingOfficeIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
 
 const isRoomConfigured = (room) => {
@@ -38,6 +39,7 @@ const HostDashboardHotelsTab = ({
   onAddHotel,
   onOpenHotelRooms,
   onManageHotelRooms,
+  onManageMedia,
   onEditHotel,
   onDeleteHotel,
 }) => (
@@ -135,7 +137,7 @@ const HostDashboardHotelsTab = ({
               </div>
             )}
 
-            <div className="flex space-x-1">
+            <div className="flex space-x-1 mb-1">
               <button
                 onClick={async () => onManageHotelRooms(hotel.id)}
                 className="flex-1 flex items-center justify-center px-2 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -143,6 +145,15 @@ const HostDashboardHotelsTab = ({
                 <CogIcon className="h-3 w-3 mr-1" />
                 Manage Rooms
               </button>
+              <button
+                onClick={() => onManageMedia(hotel.id)}
+                className="flex-1 flex items-center justify-center px-2 py-1.5 text-xs bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+              >
+                <PhotoIcon className="h-3 w-3 mr-1" />
+                Photos &amp; Amenities
+              </button>
+            </div>
+            <div className="flex space-x-1">
               <button
                 onClick={() => onEditHotel(hotel)}
                 className="flex-1 flex items-center justify-center px-2 py-1.5 text-xs border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"

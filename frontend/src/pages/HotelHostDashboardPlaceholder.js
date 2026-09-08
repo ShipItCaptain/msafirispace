@@ -1207,6 +1207,7 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
       onAddHotel={() => setShowAddHotelModal(true)}
       onOpenHotelRooms={handleOpenHotelRoomsFromCard}
       onManageHotelRooms={handleManageHotelRooms}
+      onManageMedia={() => navigate('/host/hotel/manage')}
       onEditHotel={handleEditHotel}
       onDeleteHotel={setHotelToDelete}
     />

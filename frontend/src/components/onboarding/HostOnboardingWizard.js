@@ -11,9 +11,26 @@ import {
   IdentificationIcon,
   UserGroupIcon,
   LockClosedIcon,
+  MapPinIcon,
+  PhotoIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline';
-import { authAPI } from '../../services/api';
+import { authAPI, listingsAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import LocationPicker from './LocationPicker';
+
+const PROPERTY_TYPE_OPTIONS = [
+  { value: 'hotel', label: 'Hotel' },
+  { value: 'resort', label: 'Resort' },
+  { value: 'boutique_hotel', label: 'Boutique Hotel' },
+  { value: 'business_hotel', label: 'Business Hotel' },
+  { value: 'luxury_hotel', label: 'Luxury Hotel' },
+  { value: 'budget_hotel', label: 'Budget Hotel' },
+  { value: 'bed_and_breakfast', label: 'Bed & Breakfast' },
+  { value: 'hostel', label: 'Hostel' },
+  { value: 'apartment', label: 'Apartment' },
+  { value: 'villa', label: 'Villa' },
+];
 
 // Cards group related questions together, Booking.com-style (e.g. their
 // "Parking" card holds several related radio questions under one heading)
@@ -48,6 +65,24 @@ const CARDS = {
         { key: 'business_permit', question: 'Business Permit', type: 'file' },
         { key: 'business_registration_certificate', question: 'Business Registration Certificate', type: 'file' },
       ],
+    },
+    {
+      key: 'basics', title: 'Property Basics', icon: BuildingOfficeIcon,
+      hint: 'A couple quick details about your property.',
+      fields: [
+        { key: 'property_type', question: 'What type of property is this?', type: 'select', options: PROPERTY_TYPE_OPTIONS },
+        { key: 'star_rating', question: 'Star rating', type: 'star-select' },
+      ],
+    },
+    {
+      key: 'location', title: 'Location', icon: MapPinIcon,
+      hint: 'Search for your address or drop a pin on the map.',
+      custom: 'location',
+    },
+    {
+      key: 'photos', title: 'Showcase Photos', icon: PhotoIcon,
+      hint: 'Add at least 3 photos so guests can see your property. You can add more anytime from your dashboard.',
+      custom: 'photos',
     },
   ],
   bnb_individual: [
@@ -120,10 +155,52 @@ const emptyData = () => ({
   owner_id_front: null, owner_id_back: null, owner_permit: null,
   company_kra_pin: '', company_permit: null,
   password: '',
+  // Hotel/Restaurant only -- the wizard creates the Hotel listing directly,
+  // so these live here alongside the KYC fields instead of a separate form.
+  property_type: 'hotel', star_rating: 3,
+  address: '', city: '', state_province: '', country: 'Kenya', postal_code: '',
+  latitude: '', longitude: '',
+  photos: [],
 });
 
+const PhotosField = ({ files, onChange }) => {
+  const addFiles = (fileList) => {
+    onChange([...files, ...Array.from(fileList)]);
+  };
+  const removeAt = (index) => onChange(files.filter((_, i) => i !== index));
+
+  return (
+    <div>
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(e) => e.target.files?.length && addFiles(e.target.files)}
+        className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-none file:border-0 file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+      />
+      <p className="mt-2 text-xs text-gray-500">{files.length} of at least 3 photos added</p>
+      {files.length > 0 && (
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {files.map((file, index) => (
+            <div key={`${file.name}-${index}`} className="relative">
+              <img src={URL.createObjectURL(file)} alt="" className="w-full h-20 object-cover" />
+              <button
+                type="button"
+                onClick={() => removeAt(index)}
+                className="absolute top-1 right-1 bg-white/90 text-gray-700 text-xs w-5 h-5 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const HostOnboardingWizard = ({ onComplete }) => {
-  const { isAuthenticated, establishSession } = useAuth();
+  const { isAuthenticated, establishSession, getMe } = useAuth();
   const [outerStep, setOuterStep] = useState(1); // 1 = account type, 2 = host category, 3 = KYC cards
   const [accountType, setAccountType] = useState(null);
   const [hostCategory, setHostCategory] = useState(null);
@@ -140,7 +217,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
   const card = cards[cardIndex];
   // Signed-out visitors already gave their email on the account card, so
   // any other card's email field would just be asking a second time.
-  const visibleFields = card
+  const visibleFields = card?.fields
     ? card.fields.filter((f) => card.key === 'account' || f.key !== 'contact_email' || isAuthenticated)
     : [];
 
@@ -156,6 +233,8 @@ const HostOnboardingWizard = ({ onComplete }) => {
 
   const isCardFilled = () => {
     if (!card) return false;
+    if (card.custom === 'location') return Boolean(data.address.trim() && data.city.trim() && data.country.trim());
+    if (card.custom === 'photos') return data.photos.length >= 3;
     return visibleFields.every((f) => {
       if (f.type === 'password') return data.password.length >= 8;
       return isFieldFilled(f);
@@ -199,6 +278,10 @@ const HostOnboardingWizard = ({ onComplete }) => {
       formData.append('account_type', accountType);
       formData.append('host_category', hostCategory);
       Object.entries(data).forEach(([key, value]) => {
+        // photos and the hotel-listing fields below aren't part of the KYC
+        // payload -- photos in particular is an array, which FormData would
+        // otherwise silently mangle into a garbage string.
+        if (key === 'photos') return;
         if (value !== null && value !== '') {
           formData.append(key, value);
         }
@@ -207,7 +290,41 @@ const HostOnboardingWizard = ({ onComplete }) => {
       const response = await authAPI.onboardHostFormData(formData);
       if (response?.tokens) {
         establishSession({ user: response.user, tokens: response.tokens });
+        // The account card disappears from `cards` the instant isAuthenticated
+        // flips true, shifting every later index back by one -- keep
+        // cardIndex pointing at the same logical card so a later failure
+        // (e.g. hotel creation below) doesn't strand the UI on an
+        // out-of-bounds card.
+        setCardIndex((i) => Math.max(0, i - 1));
       }
+
+      if (hostCategory === 'hotel_restaurant') {
+        const hotel = await listingsAPI.createListing({
+          name: data.company_name,
+          property_type: data.property_type,
+          star_rating: data.star_rating,
+          address: data.address,
+          city: data.city,
+          state_province: data.state_province,
+          country: data.country,
+          postal_code: data.postal_code,
+          latitude: data.latitude === '' ? null : data.latitude,
+          longitude: data.longitude === '' ? null : data.longitude,
+          phone: data.contact_phone,
+          email: data.contact_email,
+        });
+        // Photo upload failures shouldn't block the listing from existing --
+        // photos can always be added afterward from the hotel dashboard.
+        await Promise.all(
+          data.photos.map((file) => listingsAPI.uploadHotelImage(hotel.id, { file }).catch(() => null))
+        );
+        // Creating the hotel is what grants the hotel_host role server-side
+        // (see HotelListCreateView.perform_create) -- refresh the session so
+        // the Redux user object has that role before landing on the
+        // role-gated /host/hotels dashboard, or RoleGuard bounces them home.
+        await getMe().catch(() => null);
+      }
+
       toast.success('Onboarding complete! Now let\'s set up your listing.');
       onComplete(hostCategory);
     } catch (err) {
@@ -237,6 +354,37 @@ const HostOnboardingWizard = ({ onComplete }) => {
           {data[field.key] && (
             <p className="mt-2 text-xs text-gray-500">Selected: {data[field.key].name}</p>
           )}
+        </div>
+      );
+    }
+    if (field.type === 'select') {
+      return (
+        <select
+          value={data[field.key]}
+          onChange={(e) => setField(field.key, e.target.value)}
+          className={baseClasses}
+        >
+          {field.options.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      );
+    }
+    if (field.type === 'star-select') {
+      return (
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setField('star_rating', n)}
+              className={`w-10 h-10 border flex items-center justify-center transition-colors ${
+                n <= data.star_rating ? 'border-yellow-400 bg-yellow-50 text-yellow-500' : 'border-gray-300 text-gray-300'
+              }`}
+            >
+              <StarIcon className="w-5 h-5" />
+            </button>
+          ))}
         </div>
       );
     }
@@ -363,7 +511,19 @@ const HostOnboardingWizard = ({ onComplete }) => {
                 <h2 className="text-lg font-semibold text-gray-900 mb-1">{card.title}</h2>
                 {card.hint && <p className="text-sm text-gray-500 mb-4">{card.hint}</p>}
                 <div className="border-t border-gray-200 pt-5 space-y-5">
-                  {visibleFields.map((field, index) => (
+                  {card.custom === 'location' && (
+                    <LocationPicker
+                      value={data}
+                      onChange={(patch) => setData((prev) => ({ ...prev, ...patch }))}
+                    />
+                  )}
+                  {card.custom === 'photos' && (
+                    <PhotosField
+                      files={data.photos}
+                      onChange={(files) => setField('photos', files)}
+                    />
+                  )}
+                  {!card.custom && visibleFields.map((field, index) => (
                     <div key={field.key}>
                       <p className="text-sm font-medium text-gray-900 mb-2">
                         {field.question}

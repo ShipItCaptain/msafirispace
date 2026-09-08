@@ -35,6 +35,12 @@ const BecomeHostPage = () => {
           const { listingsAPI } = await import('../services/api');
           const hotelsResponse = await listingsAPI.getUserListings();
           const hotels = hotelsResponse?.results || hotelsResponse || [];
+          // The wizard normally creates the hotel in the same submission as
+          // onboarding, so "onboarded with zero hotels" shouldn't happen for
+          // new hosts -- /list-hotel stays here only as a recovery path for
+          // that edge case (e.g. onboarding succeeded but hotel creation
+          // failed mid-flow, or a pre-existing account from before this
+          // change).
           navigate(hotels.length > 0 ? '/host-dashboard' : '/list-hotel', { replace: true });
         } else {
           const { bnbAPI } = await import('../services/api');
@@ -53,7 +59,12 @@ const BecomeHostPage = () => {
   }, [isAuthenticated, navigate]);
 
   const handleOnboardingComplete = (hostCategory) => {
-    navigate(hostCategory === 'hotel_restaurant' ? '/list-hotel' : '/become-host/bnb', { replace: true });
+    // The wizard itself creates the Hotel (name, location, photos) as part
+    // of its own Finish step now, so there's no separate facility form left
+    // to fill out -- go straight to the hotel dashboard. BnB still lands on
+    // its facility form, since BnB hosts can list multiple units and that
+    // form is how each additional one gets added.
+    navigate(hostCategory === 'hotel_restaurant' ? '/host/hotels' : '/become-host/bnb', { replace: true });
   };
 
   if (checking) {
