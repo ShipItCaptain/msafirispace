@@ -275,9 +275,19 @@ class BnBImage(models.Model):
         ordering = ['order', 'created_at']
         verbose_name = 'BnB Image'
         verbose_name_plural = 'BnB Images'
-    
+
     def __str__(self):
         return f"{self.bnb_listing.title} - {self.get_image_type_display()}"
+
+    def save(self, *args, **kwargs):
+        # "At most one primary image per listing" is an invariant the API
+        # should guarantee regardless of what a caller sends -- relying on
+        # every client (frontend, admin, future API consumers) to always
+        # get this right on their own is exactly how two images both ended
+        # up primary at once.
+        if self.is_primary:
+            BnBImage.objects.filter(bnb_listing_id=self.bnb_listing_id, is_primary=True).exclude(pk=self.pk).update(is_primary=False)
+        super().save(*args, **kwargs)
 
 
 class BnBAvailability(models.Model):
@@ -312,7 +322,13 @@ class BnBAvailability(models.Model):
     )
     min_stay = models.PositiveIntegerField(default=1, help_text="Minimum stay required")
     max_stay = models.PositiveIntegerField(null=True, blank=True, help_text="Maximum stay allowed")
-    
+    # Optional details when a host marks a night occupied for an offline / walk-in guest.
+    walk_in_guest_name = models.CharField(max_length=150, blank=True, default='')
+    walk_in_paid = models.BooleanField(
+        default=False,
+        help_text="True if the walk-in guest has already paid; False if reserved unpaid.",
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -474,8 +490,8 @@ class RoomType(models.Model):
         choices=RoomCategory.choices,
         default=RoomCategory.STANDARD
     )
-    description = models.TextField(help_text="Detailed room description")
-    short_description = models.CharField(max_length=500, help_text="Brief room description")
+    description = models.TextField(blank=True, help_text="Detailed room description")
+    short_description = models.CharField(max_length=500, blank=True, help_text="Brief room description")
     
     # Room Specifications
     bed_type = models.CharField(
@@ -487,6 +503,10 @@ class RoomType(models.Model):
     max_occupancy = models.PositiveIntegerField(help_text="Maximum number of guests")
     max_adults = models.PositiveIntegerField(help_text="Maximum number of adults")
     max_children = models.PositiveIntegerField(default=0, help_text="Maximum number of children")
+    total_rooms = models.PositiveIntegerField(
+        default=1,
+        help_text="Total number of physical rooms of this type at the hotel"
+    )
     
     # Pricing
     base_price = models.DecimalField(
