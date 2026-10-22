@@ -10,6 +10,15 @@ from .models import (
 from apps.users.serializers import UserDetailSerializer
 
 
+def _absolute_media_url(context, url):
+    """SerializerMethodField images bypass DRF's ImageField, which normally
+    makes URLs absolute via request context automatically -- do it by hand."""
+    request = context.get('request')
+    if request and isinstance(url, str) and url.startswith('/'):
+        return request.build_absolute_uri(url)
+    return url
+
+
 class HotelAmenitySerializer(serializers.ModelSerializer):
     """Serializer for hotel amenities"""
     
@@ -99,18 +108,19 @@ class HotelListSerializer(serializers.ModelSerializer):
     
     def get_primary_image(self, obj):
         """Get the primary image URL"""
-        primary_image = obj.images.filter(is_primary=True).first()
+        # obj.images.all() reuses the view's prefetch_related('images') cache;
+        # obj.images.filter(...) would issue a fresh query per object instead.
+        images = list(obj.images.all())
+        primary_image = next((img for img in images if img.is_primary), None)
         if primary_image:
-            return primary_image.image.url
-        # Fallback to first image if no primary image
-        first_image = obj.images.first()
-        if first_image:
-            return first_image.image.url
+            return _absolute_media_url(self.context, primary_image.image.url)
+        if images:
+            return _absolute_media_url(self.context, images[0].image.url)
         return None
-    
+
     def get_amenity_count(self, obj):
         """Get the number of amenities"""
-        return obj.amenity_mappings.filter(is_available=True).count()
+        return sum(1 for mapping in obj.amenity_mappings.all() if mapping.is_available)
 
 
 class HotelDetailSerializer(HotelSerializer):
@@ -177,8 +187,8 @@ class RoomTypeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'hotel', 'hotel_id', 'name', 'category', 'description',
             'short_description', 'bed_type', 'bed_count',
-            'max_occupancy', 'max_adults', 'max_children', 'base_price',
-            'currency', 'has_balcony', 'has_kitchen', 'has_living_room',
+            'max_occupancy', 'max_adults', 'max_children', 'total_rooms',
+            'base_price', 'currency', 'has_balcony', 'has_kitchen', 'has_living_room',
             'has_dining_area', 'has_workspace', 'has_bathtub', 'has_shower',
             'has_sea_view', 'has_city_view', 'has_garden_view', 'is_active',
             'is_available', 'created_at', 'updated_at', 'images',
@@ -188,7 +198,7 @@ class RoomTypeSerializer(serializers.ModelSerializer):
 
     def get_configuration_completed(self, obj):
         has_images = obj.images.exists()
-        has_amenities = obj.amenity_mappings.filter(is_available=True).exists()
+        has_amenities = any(mapping.is_available for mapping in obj.amenity_mappings.all())
         has_availability = obj.availability.exists()
         changed_after_create = obj.updated_at and obj.created_at and obj.updated_at > obj.created_at
 
@@ -221,7 +231,7 @@ class RoomTypeListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'category', 'short_description',
             'bed_type', 'bed_count', 'max_occupancy', 'max_adults',
-            'max_children', 'base_price', 'currency', 'is_available',
+            'max_children', 'total_rooms', 'base_price', 'currency', 'is_available',
             'primary_image', 'amenity_count', 'current_price',
             'has_balcony', 'has_kitchen', 'has_living_room', 'has_dining_area',
             'has_workspace', 'has_bathtub', 'has_shower', 'has_sea_view',
@@ -231,18 +241,19 @@ class RoomTypeListSerializer(serializers.ModelSerializer):
     
     def get_primary_image(self, obj):
         """Get the primary image URL"""
-        primary_image = obj.images.filter(is_primary=True).first()
+        # obj.images.all() reuses the view's prefetch_related('images') cache;
+        # obj.images.filter(...) would issue a fresh query per object instead.
+        images = list(obj.images.all())
+        primary_image = next((img for img in images if img.is_primary), None)
         if primary_image:
-            return primary_image.image.url
-        # Fallback to first image if no primary image
-        first_image = obj.images.first()
-        if first_image:
-            return first_image.image.url
+            return _absolute_media_url(self.context, primary_image.image.url)
+        if images:
+            return _absolute_media_url(self.context, images[0].image.url)
         return None
-    
+
     def get_amenity_count(self, obj):
         """Get the number of amenities"""
-        return obj.amenity_mappings.filter(is_available=True).count()
+        return sum(1 for mapping in obj.amenity_mappings.all() if mapping.is_available)
     
     def get_current_price(self, obj):
         """Get current price (could be overridden for specific dates)"""
@@ -250,7 +261,7 @@ class RoomTypeListSerializer(serializers.ModelSerializer):
 
     def get_configuration_completed(self, obj):
         has_images = obj.images.exists()
-        has_amenities = obj.amenity_mappings.filter(is_available=True).exists()
+        has_amenities = any(mapping.is_available for mapping in obj.amenity_mappings.all())
         has_availability = obj.availability.exists()
         changed_after_create = obj.updated_at and obj.created_at and obj.updated_at > obj.created_at
 
@@ -353,21 +364,16 @@ class BnBListingSerializer(serializers.ModelSerializer):
             'company_permit': {'write_only': True},
         }
 
-    def _absolute_url(self, url):
-        request = self.context.get('request')
-        if request and isinstance(url, str) and url.startswith('/'):
-            return request.build_absolute_uri(url)
-        return url
-
     def get_primary_image(self, obj):
         """Get the primary image URL"""
-        primary_image = obj.images.filter(is_primary=True).first()
+        # obj.images.all() reuses the view's prefetch_related('images') cache;
+        # obj.images.filter(...) would issue a fresh query per object instead.
+        images = list(obj.images.all())
+        primary_image = next((img for img in images if img.is_primary), None)
         if primary_image:
-            return self._absolute_url(primary_image.image.url)
-        # Fallback to first image if no primary image
-        first_image = obj.images.first()
-        if first_image:
-            return self._absolute_url(first_image.image.url)
+            return _absolute_media_url(self.context, primary_image.image.url)
+        if images:
+            return _absolute_media_url(self.context, images[0].image.url)
         return None
 
     def update(self, instance, validated_data):
@@ -400,20 +406,14 @@ class BnBListingListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'host', 'created_at', 'full_address', 'primary_image']
 
-    def _absolute_url(self, url):
-        request = self.context.get('request')
-        if request and isinstance(url, str) and url.startswith('/'):
-            return request.build_absolute_uri(url)
-        return url
-
     def get_primary_image(self, obj):
         """Get the primary image URL"""
         primary_image = obj.images.filter(is_primary=True).first()
         if primary_image:
-            return self._absolute_url(primary_image.image.url)
+            return _absolute_media_url(self.context, primary_image.image.url)
         first_image = obj.images.first()
         if first_image:
-            return self._absolute_url(first_image.image.url)
+            return _absolute_media_url(self.context, first_image.image.url)
         return None
 
 
@@ -446,6 +446,7 @@ class BnBAvailabilitySerializer(serializers.ModelSerializer):
         model = BnBAvailability
         fields = [
             'id', 'date', 'status', 'price_override', 'min_stay', 'max_stay',
+            'walk_in_guest_name', 'walk_in_paid',
             'is_available', 'current_price', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'is_available', 'current_price', 'created_at', 'updated_at']

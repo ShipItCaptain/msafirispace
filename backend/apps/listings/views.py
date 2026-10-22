@@ -11,6 +11,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
+
+# TTL for publicly cached, unpersonalized listing search/detail responses.
+LISTING_CACHE_SECONDS = 90
 from .models import (
     Hotel, HotelAmenity, HotelAmenityMapping, HotelImage, RoomType, RoomAmenity,
     RoomAvailability, RoomImage, Favorite, BnBFavorite, BnBListing, BnBImage,
@@ -27,6 +32,7 @@ from .serializers import (
 )
 
 
+@method_decorator(cache_page(LISTING_CACHE_SECONDS), name='get')
 class HotelListCreateView(generics.ListCreateAPIView):
     """
     List all hotels or create a new hotel
@@ -55,6 +61,7 @@ class HotelListCreateView(generics.ListCreateAPIView):
             user.save()
 
 
+@method_decorator(cache_page(LISTING_CACHE_SECONDS), name='get')
 class HotelDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     Retrieve, update or delete a hotel
@@ -487,6 +494,7 @@ class CombinedFavoriteListView(APIView):
 
 
 # --- New: BnB API Views ---
+@method_decorator(cache_page(LISTING_CACHE_SECONDS), name='get')
 class BnBListingListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -546,6 +554,7 @@ class MyBnBListingsView(generics.ListAPIView):
         return BnBListing.objects.filter(host=self.request.user).select_related('host').prefetch_related('images')
 
 
+@method_decorator(cache_page(LISTING_CACHE_SECONDS), name='get')
 class BnBListingDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BnBListingSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
