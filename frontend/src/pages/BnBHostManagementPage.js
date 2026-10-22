@@ -1,54 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
 import { bnbAPI, bookingsAPI, reviewsAPI } from '../services/api';
-import ComprehensiveBnBForm from '../components/forms/ComprehensiveBnBForm';
-import ConfirmDialog from '../components/common/ConfirmDialog';
+import { getBnBListingStatus, BNB_STATUS_LABELS, BNB_STATUS_STYLES } from '../utils/bnbOptions';
 import AvailabilityCalendarModal from '../components/bnb/AvailabilityCalendarModal';
 import BnBBookingsPanel from './dashboard/BnBBookingsPanel';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
-  FunnelIcon,
-  EyeIcon,
   PencilIcon,
-  TrashIcon,
   CalendarIcon,
-  CurrencyDollarIcon,
   MapPinIcon,
   HomeIcon,
-  ArrowTrendingUpIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  HeartIcon,
-  ShareIcon
+  Squares2X2Icon,
+  Bars3Icon,
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 
+const FALLBACK_IMAGE =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="100%" height="100%" fill="%23e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%236b7280" font-family="Arial" font-size="28">No image</text></svg>';
+
+const todayKey = () => new Date().toISOString().slice(0, 10);
+
+const listingImage = (listing) => {
+  if (listing?.primary_image) return listing.primary_image;
+  const first = listing?.images?.[0];
+  if (!first) return FALLBACK_IMAGE;
+  return typeof first === 'string' ? first : first.image || FALLBACK_IMAGE;
+};
+
+const formatMoney = (value) =>
+  `KSh ${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
 const BnBHostManagementPage = () => {
-  const FALLBACK_IMAGE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="100%" height="100%" fill="%23e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%236b7280" font-family="Arial" font-size="28">No image</text></svg>';
   const navigate = useNavigate();
   const location = useLocation();
-  const { showSuccess, showError } = useNotifications();
+  const { showError } = useNotifications();
   const [listings, setListings] = useState([]);
+  const [bnbBookings, setBnbBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editingListing, setEditingListing] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [sortBy, setSortBy] = useState('created_at');
-  const [viewMode, setViewMode] = useState('grid'); // grid or list
+  const [viewMode, setViewMode] = useState('grid');
   const [analytics, setAnalytics] = useState({
     totalListings: 0,
     activeListings: 0,
     totalBookings: 0,
+    pendingBookings: 0,
     totalRevenue: 0,
-    averageRating: 0
+    averageRating: 0,
   });
-  const [listingToDelete, setListingToDelete] = useState(null);
-  const [isDeletingListing, setIsDeletingListing] = useState(false);
   const [availabilityListing, setAvailabilityListing] = useState(null);
-  const [activeSection, setActiveSection] = useState(location.state?.initialTab === 'bookings' ? 'bookings' : 'listings');
+  const [activeSection, setActiveSection] = useState(
+    location.state?.initialTab === 'bookings' ? 'bookings' : 'listings'
+  );
 
   useEffect(() => {
     if (location.state?.initialTab) {
@@ -58,7 +65,6 @@ const BnBHostManagementPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
-  // Load data from API when component mounts
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -71,16 +77,23 @@ const BnBHostManagementPage = () => {
         const hostBookings = hostBookingsResponse?.results || hostBookingsResponse || [];
         const safeListings = Array.isArray(data) ? data : [];
         const safeHostBookings = Array.isArray(hostBookings) ? hostBookings : [];
-        setListings(safeListings);
-
-        const totalListings = safeListings.length;
-        const activeListings = safeListings.filter((listing) => listing.is_active !== false).length;
         const bnbListingIds = new Set(safeListings.map((listing) => listing.id));
-        const bnbBookings = safeHostBookings.filter(
+        const bnbOnly = safeHostBookings.filter(
           (booking) => booking.booking_type === 'bnb' && bnbListingIds.has(booking.bnb_listing_id)
         );
-        const totalBookings = bnbBookings.length;
-        const totalRevenue = bnbBookings
+
+        setListings(safeListings);
+        setBnbBookings(bnbOnly);
+
+        const totalListings = safeListings.length;
+        const activeListings = safeListings.filter((listing) => getBnBListingStatus(listing) === 'active').length;
+        const totalBookings = bnbOnly.length;
+        const pendingBookings = bnbOnly.filter(
+          (booking) =>
+            booking.status === 'pending' &&
+            (!booking.host_approval_status || booking.host_approval_status === 'pending')
+        ).length;
+        const totalRevenue = bnbOnly
           .filter((booking) => booking.status !== 'cancelled')
           .reduce((sum, booking) => sum + (parseFloat(booking.total_amount) || 0), 0);
 
@@ -93,16 +106,18 @@ const BnBHostManagementPage = () => {
           .filter(Boolean);
         const totalReviews = reviewStats.reduce((sum, stats) => sum + (stats.total_reviews || 0), 0);
         const weightedRating = reviewStats.reduce(
-          (sum, stats) => sum + ((stats.average_rating || 0) * (stats.total_reviews || 0)),
+          (sum, stats) => sum + (stats.average_rating || 0) * (stats.total_reviews || 0),
           0
         );
         const averageRating = totalReviews > 0 ? weightedRating / totalReviews : 0;
+
         setAnalytics({
           totalListings,
           activeListings,
           totalBookings,
+          pendingBookings,
           totalRevenue,
-          averageRating: Number(averageRating.toFixed(2))
+          averageRating: Number(averageRating.toFixed(1)),
         });
       } catch (error) {
         console.error('Failed to load BnB listings:', error);
@@ -115,88 +130,42 @@ const BnBHostManagementPage = () => {
     loadData();
   }, [showError]);
 
-  const filteredListings = listings.filter(listing => {
-    const matchesSearch = listing.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         listing.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         listing.address?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || 
-                         (filterStatus === 'active' && listing.is_active !== false) ||
-                         (filterStatus === 'inactive' && listing.is_active === false);
-    return matchesSearch && matchesFilter;
-  });
+  const nextBookingByListing = useMemo(() => {
+    const today = todayKey();
+    const map = {};
+    bnbBookings
+      .filter((b) => b.status !== 'cancelled' && b.check_out >= today)
+      .sort((a, b) => a.check_in.localeCompare(b.check_in))
+      .forEach((booking) => {
+        if (!map[booking.bnb_listing_id]) map[booking.bnb_listing_id] = booking;
+      });
+    return map;
+  }, [bnbBookings]);
 
-  const handleDeleteListing = async () => {
-    if (!listingToDelete) return;
-    try {
-      setIsDeletingListing(true);
-      await bnbAPI.remove(listingToDelete);
-      setListings(prev => prev.filter(l => l.id !== listingToDelete));
-      showSuccess(
-        'Listing Deleted!',
-        'The BnB listing has been successfully deleted.',
-        5000
-      );
-      setListingToDelete(null);
-    } catch (error) {
-      console.error('Delete error:', error);
-      showError(
-        'Delete Failed',
-        error?.response?.data?.detail || 'There was an error deleting the listing. Please try again.',
-        7000
-      );
-    } finally {
-      setIsDeletingListing(false);
-    }
-  };
+  const draftCount = useMemo(
+    () => listings.filter((listing) => getBnBListingStatus(listing) === 'draft').length,
+    [listings]
+  );
 
-  const handleToggleStatus = async (id) => {
-    try {
-      const listing = listings.find(l => l.id === id);
-      if (listing) {
-        const updatedListing = await bnbAPI.update(id, {
-          ...listing,
-          is_active: !listing.is_active
-        });
-        setListings(prev => prev.map(l => l.id === id ? updatedListing : l));
-        
-        showSuccess(
-          `Listing ${updatedListing.is_active ? 'Activated' : 'Deactivated'}!`,
-          `The BnB listing has been ${updatedListing.is_active ? 'activated' : 'deactivated'} successfully.`,
-          4000
-        );
-      }
-    } catch (error) {
-      console.error('Status update error:', error);
-      showError(
-        'Status Update Failed',
-        error?.response?.data?.detail || 'There was an error updating the listing status. Please try again.',
-        7000
-      );
-    }
-  };
-
-  const handleViewDetails = (id) => {
-    navigate(`/host/bnb/${id}`);
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'inactive':
-        return 'bg-gray-100 text-gray-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const filteredListings = listings
+    .filter((listing) => {
+      const haystack = `${listing.title || ''} ${listing.city || ''} ${listing.address || ''}`.toLowerCase();
+      const matchesSearch = haystack.includes(searchTerm.toLowerCase());
+      const status = getBnBListingStatus(listing);
+      const matchesFilter = filterStatus === 'all' || status === filterStatus;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '');
+      if (sortBy === 'price') return Number(a.price_per_night || 0) - Number(b.price_per_night || 0);
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-20">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600 mx-auto" />
           <p className="mt-4 text-gray-600">Loading your BnB listings...</p>
         </div>
       </div>
@@ -204,546 +173,324 @@ const BnBHostManagementPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+    <div className="min-h-screen bg-gray-50 pt-20">
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">BnB Management</h1>
-              <p className="mt-2 text-gray-600">Manage your BnB listings, bookings, and analytics</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {activeSection === 'bookings' ? 'Reservations' : 'Your listings'}
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                {activeSection === 'bookings'
+                  ? 'Guests staying in your places'
+                  : 'Manage availability, photos, and publishing'}
+              </p>
             </div>
-            <div className="mt-4 sm:mt-0">
+            {activeSection === 'listings' && (
               <button
-                onClick={() => setShowAddForm(true)}
-                className="bg-primary-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-600 transition-colors duration-200 flex items-center space-x-2"
+                type="button"
+                onClick={() => navigate('/become-host/bnb')}
+                className="inline-flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 text-sm font-semibold hover:bg-red-700"
               >
                 <PlusIcon className="w-5 h-5" />
-                <span>Add New BnB</span>
+                Add listing
               </button>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Section Tabs */}
-        <div className="flex gap-2 mb-8 border-b border-gray-200">
-          <button
-            type="button"
-            onClick={() => setActiveSection('listings')}
-            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-              activeSection === 'listings'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Listings
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('bookings')}
-            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-              activeSection === 'bookings'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Bookings
-          </button>
+        <div className="flex gap-1 mb-8 border-b border-gray-200">
+          {[
+            { id: 'listings', label: 'Listings' },
+            {
+              id: 'bookings',
+              label: analytics.pendingBookings > 0 ? `Bookings (${analytics.pendingBookings})` : 'Bookings',
+            },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveSection(tab.id)}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+                activeSection === tab.id
+                  ? 'border-red-600 text-red-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {activeSection === 'bookings' && <BnBBookingsPanel />}
+        {activeSection === 'bookings' && (
+          <BnBBookingsPanel
+            onOpenAvailability={(booking) => {
+              const listing = listings.find((item) => item.id === booking.bnb_listing_id);
+              setAvailabilityListing(
+                listing || {
+                  id: booking.bnb_listing_id,
+                  title: booking.bnb_listing_title || booking.hotel_name || 'Listing',
+                  price_per_night: listing?.price_per_night || 0,
+                  currency: booking.currency || 'KES',
+                }
+              );
+            }}
+            onOpenHouseGuide={(booking) => {
+              if (booking.bnb_listing_id) {
+                navigate(`/host/bnb/${booking.bnb_listing_id}`, { state: { section: 'rules' } });
+              }
+            }}
+          />
+        )}
 
         {activeSection === 'listings' && (
-        <>
-        {/* Analytics Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
-        >
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Listings</p>
-                <p className="text-3xl font-bold text-gray-900">{analytics.totalListings}</p>
-              </div>
-              <div className="bg-blue-100 p-3 rounded-full">
-                <HomeIcon className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm text-gray-600">
-              <span>Current host inventory</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active Listings</p>
-                <p className="text-3xl font-bold text-gray-900">{analytics.activeListings}</p>
-              </div>
-              <div className="bg-green-100 p-3 rounded-full">
-                <CheckCircleIcon className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm text-gray-600">
-              <span>
-                {analytics.totalListings > 0
-                  ? `${Math.round((analytics.activeListings / analytics.totalListings) * 100)}% active`
-                  : '0% active'}
-                {` • Avg rating ${Number(analytics.averageRating || 0).toFixed(1)}`}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Bookings</p>
-                <p className="text-3xl font-bold text-gray-900">{analytics.totalBookings}</p>
-              </div>
-              <div className="bg-purple-100 p-3 rounded-full">
-                <CalendarIcon className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm text-green-600">
-              <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
-              <span>Real-time booking count</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-3xl font-bold text-gray-900">KSh {analytics.totalRevenue.toLocaleString()}</p>
-              </div>
-              <div className="bg-yellow-100 p-3 rounded-full">
-                <CurrencyDollarIcon className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm text-green-600">
-              <ArrowTrendingUpIcon className="w-4 h-4 mr-1" />
-              <span>From non-cancelled BnB bookings</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Filters and Search */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex flex-col sm:flex-row gap-4 flex-1">
-              {/* Search */}
-              <div className="relative flex-1 max-w-md">
-                <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search listings..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Status Filter */}
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="pending">Pending</option>
-              </select>
-
-              {/* Sort */}
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="created_at">Newest First</option>
-                <option value="title">Title A-Z</option>
-                <option value="price">Price Low-High</option>
-                <option value="rating">Rating High-Low</option>
-              </select>
-            </div>
-
-            {/* View Toggle */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <HomeIcon className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <FunnelIcon className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Listings Grid/List */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className={viewMode === 'grid' 
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' 
-            : 'space-y-4'
-          }
-        >
-          <AnimatePresence>
-            {filteredListings.map((listing) => (
-              <motion.div
-                key={listing.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.3 }}
-                className={`bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden ${
-                  viewMode === 'list' ? 'flex' : ''
-                }`}
-              >
-                {/* Image */}
-                <div className={`${viewMode === 'list' ? 'w-64 h-48' : 'h-48'} bg-gray-200 relative`}>
-                  <img
-                    src={
-                      // Prefer backend-provided primary_image if available
-                      listing.primary_image
-                        ? listing.primary_image
-                        : (listing.images && listing.images.length > 0
-                            ? (typeof listing.images[0] === 'string'
-                                ? listing.images[0]
-                                : listing.images[0]?.image)
-                            : FALLBACK_IMAGE)
-                    }
-                    alt={listing.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = FALLBACK_IMAGE;
-                    }}
-                  />
-                  <div className="absolute top-4 left-4">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(listing.is_active !== false ? 'active' : 'inactive')}`}>
-                      {listing.is_active !== false ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <div className="absolute top-4 right-4 flex space-x-2">
-                    <button className="p-2 bg-white/80 rounded-full hover:bg-white transition-colors">
-                      <HeartIcon className="w-4 h-4 text-gray-600" />
-                    </button>
-                    <button className="p-2 bg-white/80 rounded-full hover:bg-white transition-colors">
-                      <ShareIcon className="w-4 h-4 text-gray-600" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className={`p-6 ${viewMode === 'list' ? 'flex-1' : ''}`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{listing.title}</h3>
-                    <div className="flex items-center space-x-1">
-                      <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                        {listing.property_type || 'bnb'}
-                      </span>
+          <>
+            {(analytics.pendingBookings > 0 || draftCount > 0) && (
+              <div className="mb-6 space-y-2">
+                {analytics.pendingBookings > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection('bookings')}
+                    className="w-full text-left border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 hover:bg-amber-100"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">
+                        {analytics.pendingBookings} reservation
+                        {analytics.pendingBookings > 1 ? 's' : ''} need your response
+                      </p>
+                      <p className="text-xs text-amber-800">Guests are waiting on confirmation</p>
+                    </div>
+                    <span className="text-sm font-semibold text-amber-900">Review</span>
+                  </button>
+                )}
+                {draftCount > 0 && (
+                  <div className="border border-gray-200 bg-white px-4 py-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {draftCount} draft{draftCount > 1 ? 's' : ''} still unfinished
+                      </p>
+                      <p className="text-xs text-gray-500">Finish photos, pricing, or location to publish</p>
                     </div>
                   </div>
+                )}
+              </div>
+            )}
 
-                  <div className="flex items-center text-gray-600 mb-2">
-                    <MapPinIcon className="w-4 h-4 mr-1" />
-                    <span className="text-sm">{listing.city}, {listing.country}</span>
+            {listings.length > 0 && (
+              <div className="bg-white border border-gray-200 p-4 mb-6">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                  <div className="relative flex-1">
+                    <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden />
+                    <input
+                      type="search"
+                      placeholder="Search by title or city…"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      aria-label="Search listings"
+                      className="w-full pl-9 pr-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
                   </div>
-
-                  {listing.description && (
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">{listing.description}</p>
-                  )}
-
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-sm text-gray-600">
-                      {listing.address && (
-                        <div className="flex items-center">
-                          <MapPinIcon className="w-4 h-4 mr-1" />
-                          <span className="line-clamp-1">{listing.address}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">KSh {(listing.price_per_night || 0).toLocaleString()}</p>
-                      <p className="text-sm text-gray-500">per night</p>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => setEditingListing(listing)}
-                        className="p-2 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                        title="Edit"
-                      >
-                        <PencilIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleToggleStatus(listing.id)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          listing.is_active !== false
-                            ? 'text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50'
-                            : 'text-green-600 hover:text-green-700 hover:bg-green-50'
-                        }`}
-                        title={listing.is_active !== false ? 'Deactivate' : 'Activate'}
-                      >
-                        {listing.is_active !== false ? (
-                          <ExclamationTriangleIcon className="w-4 h-4" />
-                        ) : (
-                          <CheckCircleIcon className="w-4 h-4" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => setListingToDelete(listing.id)}
-                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setAvailabilityListing(listing)}
-                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Manage Availability"
-                      >
-                        <CalendarIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <button 
-                      onClick={() => handleViewDetails(listing.id)}
-                      className="flex items-center space-x-1 text-primary-600 hover:text-primary-700 font-medium"
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    aria-label="Filter by status"
+                    className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="active">Live</option>
+                    <option value="paused">Paused</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    aria-label="Sort listings"
+                    className="px-3 py-2 border border-gray-300 text-sm focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="created_at">Newest first</option>
+                    <option value="title">Title A–Z</option>
+                    <option value="price">Price low–high</option>
+                  </select>
+                  <div className="flex items-center border border-gray-300" role="group" aria-label="Listing view mode">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('grid')}
+                      className={`p-2 ${viewMode === 'grid' ? 'bg-red-50 text-red-600' : 'text-gray-400 hover:text-gray-700'}`}
+                      aria-pressed={viewMode === 'grid'}
+                      aria-label="Grid view"
                     >
-                      <EyeIcon className="w-4 h-4" />
-                      <span>View Details</span>
+                      <Squares2X2Icon className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      className={`p-2 ${viewMode === 'list' ? 'bg-red-50 text-red-600' : 'text-gray-400 hover:text-gray-700'}`}
+                      aria-pressed={viewMode === 'list'}
+                      aria-label="List view"
+                    >
+                      <Bars3Icon className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
+              </div>
+            )}
 
-        {/* Empty State */}
-        {filteredListings.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-12"
-          >
-            <HomeIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No listings found</h3>
-            <p className="text-gray-500 mb-6">
-              {searchTerm || filterStatus !== 'all' 
-                ? 'Try adjusting your search or filter criteria.'
-                : 'Get started by adding your first BnB listing.'
+            <div
+              className={
+                viewMode === 'grid'
+                  ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5'
+                  : 'space-y-3'
               }
-            </p>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="bg-primary-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-600 transition-colors duration-200"
             >
-              Add Your First BnB
-            </button>
-          </motion.div>
-        )}
-        </>
+              <AnimatePresence>
+                {filteredListings.map((listing) => {
+                  const status = getBnBListingStatus(listing);
+                  const nextBooking = nextBookingByListing[listing.id];
+                  const locationLabel = [listing.city, listing.country].filter(Boolean).join(', ');
+                  const primaryIsEdit = status === 'draft';
+
+                  return (
+                    <motion.div
+                      key={listing.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 8 }}
+                      className={`bg-white border border-gray-200 overflow-hidden ${
+                        viewMode === 'list' ? 'flex flex-col sm:flex-row' : ''
+                      }`}
+                    >
+                      <div className={`${viewMode === 'list' ? 'sm:w-56 sm:flex-shrink-0 h-40 sm:h-auto' : 'h-44'} relative bg-gray-100`}>
+                        <img
+                          src={listingImage(listing)}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = FALLBACK_IMAGE;
+                          }}
+                        />
+                        <span className={`absolute top-3 left-3 px-2 py-0.5 text-[11px] font-semibold ${BNB_STATUS_STYLES[status]}`}>
+                          {BNB_STATUS_LABELS[status]}
+                        </span>
+                      </div>
+
+                      <div className={`p-4 flex flex-col ${viewMode === 'list' ? 'flex-1' : ''}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="text-base font-semibold text-gray-900 truncate">
+                              {listing.title || 'Untitled listing'}
+                            </h3>
+                            {locationLabel ? (
+                              <p className="mt-0.5 text-xs text-gray-500 truncate flex items-center gap-1">
+                                <MapPinIcon className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                                {locationLabel}
+                              </p>
+                            ) : (
+                              <p className="mt-0.5 text-xs text-amber-700">Add a location to publish</p>
+                            )}
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-base font-bold text-gray-900">{formatMoney(listing.price_per_night)}</p>
+                            <p className="text-[11px] text-gray-500">per night</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex items-start gap-1.5 text-xs text-gray-600">
+                          <ClockIcon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" aria-hidden />
+                          {status === 'draft' ? (
+                            <span className="text-amber-700">Draft · finish setup to go live</span>
+                          ) : nextBooking ? (
+                            <span>
+                              Next stay · {nextBooking.check_in} → {nextBooking.check_out}
+                              {nextBooking.guest_full_name || nextBooking.traveler_name
+                                ? ` · ${nextBooking.guest_full_name || nextBooking.traveler_name}`
+                                : ''}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">No upcoming guests</span>
+                          )}
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                          {primaryIsEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/host/bnb/${listing.id}`)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-red-600 text-white hover:bg-red-700"
+                            >
+                              <PencilIcon className="w-3.5 h-3.5" />
+                              Continue setup
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setAvailabilityListing(listing)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-red-600 text-white hover:bg-red-700"
+                              >
+                                <CalendarIcon className="w-3.5 h-3.5" />
+                                Availability
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/host/bnb/${listing.id}`)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 hover:bg-gray-50"
+                              >
+                                <PencilIcon className="w-3.5 h-3.5" />
+                                Edit
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+
+            {filteredListings.length === 0 && (
+              <div className="text-center py-16 bg-white border border-dashed border-gray-200">
+                <HomeIcon className="w-10 h-10 text-gray-300 mx-auto mb-3" aria-hidden />
+                {listings.length === 0 ? (
+                  <>
+                    <h3 className="text-base font-semibold text-gray-900 mb-1">Create your first listing</h3>
+                    <p className="text-sm text-gray-500 mb-5 max-w-sm mx-auto">
+                      Add a place to stay — you’ll set photos, pricing, and availability next.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/become-host/bnb')}
+                      className="inline-flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 text-sm font-semibold hover:bg-red-700"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      Add listing
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-base font-semibold text-gray-900 mb-1">No matches</h3>
+                    <p className="text-sm text-gray-500 mb-5">Try a different search or status filter.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchTerm('');
+                        setFilterStatus('all');
+                      }}
+                      className="text-sm font-semibold text-red-600 hover:text-red-700"
+                    >
+                      Clear filters
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
-
-      {/* Comprehensive Add/Edit Form Modal */}
-      <AnimatePresence>
-        {(showAddForm || editingListing) && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto"
-            >
-              <ComprehensiveBnBForm
-                editingListing={editingListing}
-                onClose={() => {
-                  setShowAddForm(false);
-                  setEditingListing(null);
-                }}
-                onSave={async (listingData) => {
-                  try {
-                    // Map form data to API format with all new fields
-                    const apiData = {
-                      title: listingData.title || listingData.propertyName || '',
-                      description: listingData.description || '',
-                      property_type: listingData.propertyType || 'apartment',
-                      address: listingData.address || '',
-                      city: listingData.city || '',
-                      state_province: listingData.stateProvince || listingData.state || '',
-                      country: listingData.country || 'Kenya',
-                      postal_code: listingData.postalCode || '',
-                      latitude: listingData.latitude ? parseFloat(listingData.latitude) : null,
-                      longitude: listingData.longitude ? parseFloat(listingData.longitude) : null,
-                      price_per_night: parseFloat(listingData.pricePerNight || listingData.price || 0),
-                      cleaning_fee: listingData.cleaningFee ? parseFloat(listingData.cleaningFee) : 0,
-                      security_deposit: listingData.securityDeposit ? parseFloat(listingData.securityDeposit) : 0,
-                      currency: listingData.currency || 'KES',
-                      bedrooms: parseInt(listingData.bedrooms || 1),
-                      bathrooms: parseInt(listingData.bathrooms || 1),
-                      beds: parseInt(listingData.beds || 1),
-                      max_guests: parseInt(listingData.guests || listingData.maxGuests || 2),
-                      square_footage: listingData.squareFootage ? parseInt(listingData.squareFootage) : null,
-                      year_built: listingData.yearBuilt ? parseInt(listingData.yearBuilt) : null,
-                      check_in_time: listingData.checkInTime || '15:00:00',
-                      check_out_time: listingData.checkOutTime || '11:00:00',
-                      minimum_nights: parseInt(listingData.minimumNights || 1),
-                      maximum_nights: parseInt(listingData.maximumNights || 30),
-                      amenities: Array.isArray(listingData.amenities) ? listingData.amenities : [],
-                      house_rules: Array.isArray(listingData.houseRules) ? listingData.houseRules : [],
-                      smoking_allowed: listingData.smokingAllowed || false,
-                      pets_allowed: listingData.petsAllowed || false,
-                      parties_allowed: listingData.partiesAllowed || false,
-                      children_allowed: listingData.childrenAllowed !== undefined ? listingData.childrenAllowed : true,
-                      highlights: Array.isArray(listingData.highlights) ? listingData.highlights : [],
-                      transportation: listingData.transportation || '',
-                      special_instructions: listingData.specialInstructions || '',
-                      host_name: listingData.hostName || '',
-                      host_phone: listingData.hostPhone || '',
-                      host_email: listingData.hostEmail || '',
-                      emergency_contact: listingData.emergencyContact || '',
-                      number_of_units: parseInt(listingData.numberOfUnits || 1, 10),
-                      is_active: true
-                    };
-
-                    let savedListing;
-                    if (editingListing) {
-                      // Update existing listing
-                      savedListing = await bnbAPI.update(editingListing.id, apiData);
-                      setListings(prev => prev.map(l => l.id === editingListing.id ? savedListing : l));
-                    } else {
-                      // Create new listing
-                      savedListing = await bnbAPI.create(apiData);
-                      setListings(prev => [savedListing, ...prev]);
-                    }
-
-                    // Upload images if provided
-                    if (listingData.photos && listingData.photos.length > 0) {
-                      console.log('Preparing to upload images:', listingData.photos.length, 'photos');
-                      
-                      const imageUploadPromises = listingData.photos
-                        .map((photo, index) => {
-                          // Skip existing images (from editing mode) - they're already on the server
-                          if (photo.isExisting) {
-                            console.log(`Skipping existing image at index ${index}`);
-                            return null;
-                          }
-                          
-                          // Handle both object format {file, preview, id} and direct File objects
-                          const file = photo.file || (photo instanceof File ? photo : null);
-                          if (!file || !(file instanceof File)) {
-                            console.warn(`Photo at index ${index} is not a valid File object:`, photo);
-                            return null;
-                          }
-                          
-                          console.log(`Uploading image ${index + 1}/${listingData.photos.length}:`, file.name, `(${(file.size / 1024 / 1024).toFixed(2)} MB)`);
-                          
-                          return bnbAPI.uploadImage(savedListing.id, {
-                            image: file,
-                            image_type: photo.image_type || 'exterior',
-                            caption: photo.caption || '',
-                            is_primary: photo.is_primary !== undefined ? photo.is_primary : (index === 0),
-                            order: index
-                          }).then(result => {
-                            console.log(`Successfully uploaded image ${index + 1}:`, result);
-                            return result;
-                          }).catch(imgError => {
-                            console.error(`Failed to upload image ${index + 1} (${file.name}):`, imgError);
-                            // Log the full error details for debugging
-                            if (imgError.response) {
-                              console.error('Error response data:', imgError.response.data);
-                              console.error('Error status:', imgError.response.status);
-                              console.error('Error headers:', imgError.response.headers);
-                            } else if (imgError.request) {
-                              console.error('Request was made but no response received:', imgError.request);
-                            } else {
-                              console.error('Error setting up request:', imgError.message);
-                            }
-                            // Don't throw - let other uploads continue
-                            return { error: imgError, index };
-                          });
-                        })
-                        .filter(p => p !== null); // Remove null entries
-                      
-                      // Wait for all uploads to complete (success or failure)
-                      const results = await Promise.allSettled(imageUploadPromises);
-                      const failures = results.filter(r => r.status === 'rejected' || (r.value && r.value.error));
-                      const successes = results.filter(r => r.status === 'fulfilled' && (!r.value || !r.value.error));
-                      
-                      console.log(`Image upload summary: ${successes.length} succeeded, ${failures.length} failed`);
-                      if (failures.length > 0) {
-                        console.warn('Some images failed to upload. Check console for details.');
-                      }
-                    }
-
-                    // Re-fetch listings to get updated data with images
-                    const response = await bnbAPI.getMyListings();
-                    setListings(response?.results || response || []);
-                    
-                    showSuccess(
-                      editingListing ? 'Listing Updated!' : 'Listing Created!',
-                      editingListing 
-                        ? 'Your BnB listing has been successfully updated.'
-                        : 'Your new BnB listing has been successfully created and published.',
-                      5000
-                    );
-                    setShowAddForm(false);
-                    setEditingListing(null);
-                  } catch (error) {
-                    console.error('Save error:', error);
-                    showError(
-                      'Operation Failed',
-                      error?.response?.data?.detail || error?.message || 'There was an error saving your listing. Please try again.',
-                      7000
-                    );
-                  }
-                }}
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <ConfirmDialog
-        isOpen={Boolean(listingToDelete)}
-        title="Delete Listing?"
-        message="This action cannot be undone. The listing and related data will no longer be available."
-        confirmLabel="Delete Listing"
-        cancelLabel="Keep Listing"
-        isLoading={isDeletingListing}
-        onConfirm={handleDeleteListing}
-        onCancel={() => setListingToDelete(null)}
-        tone="danger"
-      />
 
       {availabilityListing && (
         <AvailabilityCalendarModal

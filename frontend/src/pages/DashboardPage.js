@@ -29,6 +29,7 @@ import { toast } from 'react-hot-toast';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useFavorites } from '../contexts/FavoritesContext';
 import ReferralsPanel from '../components/referrals/ReferralsPanel';
+import GuestTripsPage from './guest/GuestTripsPage';
 
 const DashboardPage = () => {
   const { user, isBnBHost, isHotelRestaurantHost } = useAuth();
@@ -77,53 +78,9 @@ const DashboardPage = () => {
   }, [activeTab, location.pathname, location.state, navigate]);
 
   useEffect(() => {
-    if (!isGuest) return;
-    const load = async () => {
-      try {
-        setGuestLoading(true);
-        const data = await authAPI.getUserDashboard();
-        setGuestSummary(data);
-      } catch (e) {
-        setGuestError('Failed to load your dashboard');
-      } finally {
-        setGuestLoading(false);
-      }
-    };
-    load();
-  }, [isGuest]);
-
-  useEffect(() => {
     if (!isHostActiveRole) return;
     navigate(hostDashboardPath, { replace: true });
   }, [isHostActiveRole, hostDashboardPath, navigate]);
-
-  // Load bookings when guest views bookings tab
-  useEffect(() => {
-    if (!isGuest || activeTab !== 'bookings') return;
-    
-    const loadBookings = async () => {
-      try {
-        setBookingsLoading(true);
-        setBookingsError(null);
-        const data = await bookingsAPI.getBookings();
-        // Handle paginated response
-        const bookingsList = data.results || data || [];
-        setBookings(bookingsList);
-      } catch (err) {
-        setBookingsError('Failed to load bookings');
-        console.error('Error loading bookings:', err);
-      } finally {
-        setBookingsLoading(false);
-      }
-    };
-    
-    loadBookings();
-  }, [isGuest, activeTab]);
-
-  useEffect(() => {
-    if (!isGuest || activeTab !== 'favorites') return;
-    refreshFavorites();
-  }, [activeTab, isGuest, refreshFavorites]);
 
   useEffect(() => {
     if (activeTab !== 'favorites') return;
@@ -184,6 +141,10 @@ const DashboardPage = () => {
         </div>
       </div>
     );
+  }
+
+  if (isGuest) {
+    return <GuestTripsPage />;
   }
 
   const FavoritesSection = () => {

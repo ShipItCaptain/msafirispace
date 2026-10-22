@@ -10,31 +10,21 @@ import {
   normalizeHostBookings,
   normalizeHostReviews,
 } from './dashboard/hostDashboardUtils';
-import { buildHostAnalytics, exportBookingsCsv, exportBookingsExcel } from './dashboard/hostDashboardAnalytics';
+import { exportBookingsCsv, exportBookingsExcel } from './dashboard/hostDashboardAnalytics';
 import HostDashboardBookingsTab from './dashboard/HostDashboardBookingsTab';
-import HostDashboardOverviewTab from './dashboard/HostDashboardOverviewTab';
 import HostDashboardHotelsTab from './dashboard/HostDashboardHotelsTab';
 import HostDashboardManageRoomsTab from './dashboard/HostDashboardManageRoomsTab';
 import HostDashboardModals from './dashboard/HostDashboardModals';
-import HostDashboardAnalyticsTab from './dashboard/HostDashboardAnalyticsTab';
-import HostDashboardReviewsTab from './dashboard/HostDashboardReviewsTab';
-import HostDashboardSettingsTab from './dashboard/HostDashboardSettingsTab';
-import PromotionsManager from './dashboard/PromotionsManager';
 import {
-  ChartBarIcon,
   CalendarIcon,
   BuildingOfficeIcon,
-  StarIcon,
-  CogIcon,
-  ArrowTrendingUpIcon,
-  HomeIcon,
-  MegaphoneIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 
 const HotelHostDashboard = () => {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('hotels');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [, setSuccess] = useState('');
   const [hotelToDelete, setHotelToDelete] = useState(null);
   const [isDeletingHotel, setIsDeletingHotel] = useState(false);
   const { user } = useAuth();
@@ -45,7 +35,7 @@ const HotelHostDashboard = () => {
   const [hotels, setHotels] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [stats, setStats] = useState({
+  const [, setStats] = useState({
     totalBookings: 0,
     monthlyRevenue: 0,
     averageRating: 0,
@@ -63,12 +53,12 @@ const HotelHostDashboard = () => {
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [selectedRoomType, setSelectedRoomType] = useState(null);
   const [bookingActionLoadingId, setBookingActionLoadingId] = useState(null);
-  const [bookingsLastUpdatedAt, setBookingsLastUpdatedAt] = useState(null);
+  const [, setBookingsLastUpdatedAt] = useState(null);
   const [bookingStatusFilter, setBookingStatusFilter] = useState('all');
   const [selectedBooking, setSelectedBooking] = useState(null);
-  const [summaryRange, setSummaryRange] = useState('30d');
-  const [summaryCustomFrom, setSummaryCustomFrom] = useState('');
-  const [summaryCustomTo, setSummaryCustomTo] = useState('');
+  const [summaryRange] = useState('30d');
+  const [summaryCustomFrom] = useState('');
+  const [summaryCustomTo] = useState('');
   const [bookingSearchQuery, setBookingSearchQuery] = useState('');
   const [bookingSortBy, setBookingSortBy] = useState('created_desc');
   const [bookingPage, setBookingPage] = useState(1);
@@ -76,26 +66,12 @@ const HotelHostDashboard = () => {
   const [calendarMonthCursor, setCalendarMonthCursor] = useState(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState('');
   const [sectionLoading, setSectionLoading] = useState({
-    overview: true,
+    hotels: true,
     bookings: true,
   });
   const [bookingActivityLog, setBookingActivityLog] = useState({});
   const [reviewReplyDrafts, setReviewReplyDrafts] = useState({});
   const [reviewReplyLoadingId, setReviewReplyLoadingId] = useState(null);
-  const [hostSettings, setHostSettings] = useState({
-    company_name: '',
-    email: '',
-    phone_number: '',
-    preferred_language: 'en',
-    preferred_currency: 'KES',
-    notification_preferences: {
-      new_booking_notifications: true,
-      review_notifications: true,
-      marketing_emails: false,
-    },
-  });
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [hostSettingsBaseline, setHostSettingsBaseline] = useState(null);
   
   // Room configuration state
   const [roomAmenities, setRoomAmenities] = useState([]);
@@ -202,18 +178,34 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
       });
 
       unsavedLocalRooms.forEach((room, index) => {
-        const key = room.name
-          ? `name:${room.name.trim().toLowerCase()}`
-          : `draft:${hotel.id}:${index}`;
+        // A blank/not-yet-named draft can't be keyed by name (empty string
+        // is falsy), and keying it by its position in this filtered array
+        // isn't stable either -- the array is rebuilt every render, so the
+        // same draft can land at a different index between merge calls
+        // and get treated as a second, distinct room. _localId, assigned
+        // once when the draft is created, stays constant across renders.
+        const key = room._localId
+          ? `local:${room._localId}`
+          : room.name
+            ? `name:${room.name.trim().toLowerCase()}`
+            : `draft:${hotel.id}:${index}`;
         if (!mergedRoomMap.has(key)) {
           mergedRoomMap.set(key, room);
         }
       });
 
+      // Sum each room type's own inventory count (how many physical rooms
+      // of that type exist), not the number of room type rows -- otherwise
+      // a hotel with 3 room types and 15 actual rooms reports as "3 rooms".
+      const totalRoomUnits = serverRooms.reduce(
+        (sum, room) => sum + (Number(room.total_rooms) || 0),
+        0
+      );
+
       return {
         ...hotel,
         room_types: Array.from(mergedRoomMap.values()),
-        total_rooms: serverRooms.length || hotel.total_rooms || 0,
+        total_rooms: totalRoomUnits || hotel.total_rooms || 0,
       };
     });
   }, []);
@@ -221,7 +213,7 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
 
   const loadDashboardData = useCallback(async () => {
     setError('');
-    setSectionLoading({ overview: true, bookings: true });
+    setSectionLoading({ hotels: true, bookings: true });
     
     try {
       console.log('🔍 Loading dashboard data...');
@@ -238,11 +230,10 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
       }
 
       // Load hotels, host bookings and host summary in parallel.
-      const [hotelsResponse, bookingsResponse, summaryResponse, userDetailResponse] = await Promise.all([
+      const [hotelsResponse, bookingsResponse, summaryResponse] = await Promise.all([
         listingsAPI.getUserListings(),
         bookingsAPI.getHostBookings(),
         authAPI.getHostDashboardSummary(summaryParams),
-        authAPI.getUserDetail(),
       ]);
       const allHotels = hotelsResponse?.results || hotelsResponse || [];
       
@@ -330,30 +321,11 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
         }));
       }
 
-      if (userDetailResponse && typeof userDetailResponse === 'object') {
-        const nextNotificationPrefs = {
-          new_booking_notifications: true,
-          review_notifications: true,
-          marketing_emails: false,
-          ...(userDetailResponse.notification_preferences || {}),
-        };
-        const nextSettings = {
-          company_name: userDetailResponse.company_name || '',
-          email: userDetailResponse.email || '',
-          phone_number: userDetailResponse.phone_number || '',
-          preferred_language: userDetailResponse.preferred_language || 'en',
-          preferred_currency: userDetailResponse.preferred_currency || 'KES',
-          notification_preferences: nextNotificationPrefs,
-        };
-        setHostSettings(nextSettings);
-        setHostSettingsBaseline(nextSettings);
-      }
-
     } catch (err) {
       console.error('Error loading dashboard data:', err);
       setError('Failed to load dashboard data. Please try again.');
     } finally {
-      setSectionLoading({ overview: false, bookings: false });
+      setSectionLoading({ hotels: false, bookings: false });
     }
   }, [mergeRoomsIntoHotels, summaryCustomFrom, summaryCustomTo, summaryRange, user]);
 
@@ -365,33 +337,6 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
   useEffect(() => {
     setBookingPage(1);
   }, [bookingSearchQuery, bookingSortBy, bookingStatusFilter]);
-
-  const settingsDirty = useMemo(() => {
-    if (!hostSettingsBaseline) return false;
-    return JSON.stringify(hostSettings) !== JSON.stringify(hostSettingsBaseline);
-  }, [hostSettings, hostSettingsBaseline]);
-
-  const settingsValidationError = useMemo(() => {
-    const phone = (hostSettings.phone_number || '').trim();
-    if (phone && !/^\+?[0-9\s\-()]{7,20}$/.test(phone)) {
-      return 'Phone number format looks invalid. Use digits and optional +, spaces, -, ().';
-    }
-    const companyName = (hostSettings.company_name || '').trim();
-    if (companyName.length > 120) {
-      return 'Business name is too long (max 120 characters).';
-    }
-    return '';
-  }, [hostSettings.company_name, hostSettings.phone_number]);
-
-  useEffect(() => {
-    const beforeUnload = (event) => {
-      if (!settingsDirty) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', beforeUnload);
-    return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [settingsDirty]);
 
   const handleBookingStatusUpdate = async (bookingId, statusValue) => {
     try {
@@ -834,14 +779,8 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
 
 
   const tabs = [
-    { id: 'overview', name: 'Overview', icon: ChartBarIcon },
-    { id: 'hotels', name: 'My Hotels', icon: BuildingOfficeIcon },
-    { id: 'rooms', name: 'Manage Rooms', icon: HomeIcon },
-    { id: 'bookings', name: 'Bookings', icon: CalendarIcon },
-    { id: 'promotions', name: 'Promotions', icon: MegaphoneIcon },
-    { id: 'analytics', name: 'Analytics', icon: ArrowTrendingUpIcon },
-    { id: 'reviews', name: 'Reviews', icon: StarIcon },
-    { id: 'settings', name: 'Settings', icon: CogIcon }
+    { id: 'bookings', name: 'Reservations', icon: CalendarIcon },
+    { id: 'hotels', name: 'Property', icon: BuildingOfficeIcon },
   ];
 
   const bookingStatusCounts = {
@@ -960,55 +899,6 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
     });
   };
 
-  const alertCards = [
-    {
-      id: 'awaiting-approval',
-      label: 'Awaiting approval',
-      value: bookingStatusCounts.awaiting_approval,
-      className: 'bg-blue-50 border-blue-200 text-blue-900',
-      actionLabel: 'Review',
-      onAction: () => {
-        setActiveTab('bookings');
-        setBookingStatusFilter('awaiting_approval');
-      },
-    },
-    {
-      id: 'awaiting-payment',
-      label: 'Awaiting payment',
-      value: bookingStatusCounts.awaiting_payment,
-      className: 'bg-yellow-50 border-yellow-200 text-yellow-900',
-      actionLabel: 'Review',
-      onAction: () => {
-        setActiveTab('bookings');
-        setBookingStatusFilter('awaiting_payment');
-      },
-    },
-    {
-      id: 'checkins',
-      label: 'Today check-ins',
-      value: stats.todayCheckIns,
-      className: 'bg-blue-50 border-blue-200 text-blue-900',
-      actionLabel: 'View',
-      onAction: () => setActiveTab('bookings'),
-    },
-    {
-      id: 'checkouts',
-      label: 'Today check-outs',
-      value: stats.todayCheckOuts,
-      className: 'bg-green-50 border-green-200 text-green-900',
-      actionLabel: 'View',
-      onAction: () => setActiveTab('bookings'),
-    },
-    {
-      id: 'missing-rooms',
-      label: 'Hotels without room types',
-      value: hotels.filter((hotel) => !(hotel.room_types || []).length).length,
-      className: 'bg-red-50 border-red-200 text-red-900',
-      actionLabel: 'Fix now',
-      onAction: () => setActiveTab('rooms'),
-    },
-  ];
-
   const getStatusColor = (status) => {
     switch (status) {
       case 'confirmed': return 'bg-green-100 text-green-800';
@@ -1024,66 +914,6 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
       currency: 'KES',
       minimumFractionDigits: 0
     }).format(amount);
-  };
-
-  const analyticsData = useMemo(() => buildHostAnalytics(bookings), [bookings]);
-
-  const updateHostSettingField = (field, value) => {
-    setHostSettings((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const updateNotificationPreference = (field, value) => {
-    setHostSettings((prev) => ({
-      ...prev,
-      notification_preferences: {
-        ...(prev.notification_preferences || {}),
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleSaveSettings = async () => {
-    if (settingsValidationError) {
-      setError(settingsValidationError);
-      return;
-    }
-    if (!settingsDirty) {
-      setSuccess('No changes to save.');
-      return;
-    }
-    try {
-      setIsSavingSettings(true);
-      setError('');
-      const payload = {
-        company_name: hostSettings.company_name,
-        phone_number: hostSettings.phone_number,
-        preferred_language: hostSettings.preferred_language,
-        preferred_currency: hostSettings.preferred_currency,
-        notification_preferences: hostSettings.notification_preferences,
-      };
-      const updatedUser = await authAPI.updateUserDetail(payload);
-      const nextSettings = {
-        ...hostSettings,
-        company_name: updatedUser.company_name || '',
-        phone_number: updatedUser.phone_number || '',
-        preferred_language: updatedUser.preferred_language || 'en',
-        preferred_currency: updatedUser.preferred_currency || 'KES',
-        notification_preferences: {
-          ...hostSettings.notification_preferences,
-          ...(updatedUser.notification_preferences || {}),
-        },
-      };
-      setHostSettings(nextSettings);
-      setHostSettingsBaseline(nextSettings);
-      setSuccess('Settings saved successfully.');
-    } catch (err) {
-      setError(err?.response?.data?.detail || 'Failed to save settings.');
-    } finally {
-      setIsSavingSettings(false);
-    }
   };
 
   const handleReviewReplyChange = (reviewId, value) => {
@@ -1136,13 +966,6 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
     }
   };
 
-  const getReplyMetadataLabel = (review) => {
-    if (!review.host_reply_updated_at) return 'just now';
-    const stamp = new Date(review.host_reply_updated_at);
-    if (Number.isNaN(stamp.getTime())) return 'updated';
-    return `updated ${stamp.toLocaleDateString()} ${stamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  };
-
   const handleOpenHotelRoomsFromCard = async (hotelId) => {
     setSelectedHotelForRooms(hotelId);
     setActiveTab('rooms');
@@ -1157,59 +980,36 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
     await loadRoomTypes();
   };
 
-  const handleEditHotel = (hotel) => {
+  const handleEditHotel = async (hotel) => {
+    // `hotel` here comes from the lightweight my-listings list (HotelListSerializer),
+    // which omits `address` and `description` -- fetch the full detail so the
+    // modal doesn't open with those fields blanked out.
     setSelectedHotel(hotel);
     setShowEditHotelModal(true);
+    try {
+      const detail = await listingsAPI.getListing(hotel.id);
+      setSelectedHotel((prev) => (prev && prev.id === hotel.id ? { ...prev, ...detail } : prev));
+    } catch (err) {
+      console.error('Failed to load full hotel details for editing:', err);
+    }
   };
 
 
 
-  const renderOverview = () => (
-    <HostDashboardOverviewTab
-      error={error}
-      success={success}
-      setError={setError}
-      setSuccess={setSuccess}
-      sectionLoading={sectionLoading}
-      setSummaryRange={setSummaryRange}
-      summaryRange={summaryRange}
-      summaryCustomFrom={summaryCustomFrom}
-      setSummaryCustomFrom={setSummaryCustomFrom}
-      summaryCustomTo={summaryCustomTo}
-      setSummaryCustomTo={setSummaryCustomTo}
-      stats={stats}
-      reviews={reviews}
-      formatCurrency={formatCurrency}
-      alertCards={alertCards}
-      approvalAlertCount={bookingStatusCounts.awaiting_approval}
-      onReviewApprovalRequests={() => {
-        setActiveTab('bookings');
-        setBookingStatusFilter('awaiting_approval');
-      }}
-      setShowAddHotelModal={setShowAddHotelModal}
-      setActiveTab={setActiveTab}
-      bookingsLastUpdatedAt={bookingsLastUpdatedAt}
-      setBookingStatusFilter={setBookingStatusFilter}
-      bookingStatusFilter={bookingStatusFilter}
-      bookingStatusCounts={bookingStatusCounts}
-      filteredBookings={filteredBookings}
-      timeAgo={timeAgo}
-      getStatusColor={getStatusColor}
-      bookingActionLoadingId={bookingActionLoadingId}
-      setSelectedBooking={setSelectedBooking}
-      handleBookingStatusUpdate={handleBookingStatusUpdate}
-    />
-  );
-
   const renderHotels = () => (
     <HostDashboardHotelsTab
       hotels={hotels}
-      onAddHotel={() => setShowAddHotelModal(true)}
+      onAddHotel={() => navigate('/list-hotel')}
       onOpenHotelRooms={handleOpenHotelRoomsFromCard}
       onManageHotelRooms={handleManageHotelRooms}
       onManageMedia={() => navigate('/host/hotel/manage')}
       onEditHotel={handleEditHotel}
       onDeleteHotel={setHotelToDelete}
+      reviews={reviews}
+      replyDrafts={reviewReplyDrafts}
+      replyLoadingId={reviewReplyLoadingId}
+      onReplyChange={handleReviewReplyChange}
+      onSubmitReply={handleSubmitReviewReply}
     />
   );
 
@@ -1243,25 +1043,6 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
       filteredBookings={filteredBookings}
       getStatusColor={getStatusColor}
       formatCurrency={formatCurrency}
-    />
-  );
-
-  const renderAnalytics = () => (
-    <HostDashboardAnalyticsTab
-      analyticsData={analyticsData}
-      bookingsCount={bookings.length}
-      formatCurrency={formatCurrency}
-    />
-  );
-
-  const renderReviews = () => (
-    <HostDashboardReviewsTab
-      reviews={reviews}
-      reviewReplyDrafts={reviewReplyDrafts}
-      reviewReplyLoadingId={reviewReplyLoadingId}
-      onReviewReplyChange={handleReviewReplyChange}
-      onSubmitReviewReply={handleSubmitReviewReply}
-      getReplyMetadataLabel={getReplyMetadataLabel}
     />
   );
 
@@ -1372,7 +1153,7 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
     }
 
     if (state.initialTab) {
-      setActiveTab(state.initialTab);
+      setActiveTab(state.initialTab === 'overview' ? 'hotels' : state.initialTab);
     }
 
     if (targetHotelId) {
@@ -1425,29 +1206,12 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
     />
   );
 
-  const renderSettings = () => (
-    <HostDashboardSettingsTab
-      hostSettings={hostSettings}
-      updateHostSettingField={updateHostSettingField}
-      updateNotificationPreference={updateNotificationPreference}
-      handleSaveSettings={handleSaveSettings}
-      isSavingSettings={isSavingSettings}
-      settingsDirty={settingsDirty}
-      settingsValidationError={settingsValidationError}
-    />
-  );
-
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'overview': return renderOverview();
       case 'hotels': return renderHotels();
       case 'rooms': return renderManageRooms();
       case 'bookings': return renderBookings();
-      case 'promotions': return <PromotionsManager hotels={hotels} />;
-      case 'analytics': return renderAnalytics();
-      case 'reviews': return renderReviews();
-      case 'settings': return renderSettings();
-      default: return renderOverview();
+      default: return renderHotels();
     }
   };
 
@@ -1506,6 +1270,7 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
         has_sea_view: roomAmenities.includes('Ocean View'),
         has_city_view: roomAmenities.includes('City View'),
         has_balcony: roomAmenities.includes('Balcony'),
+        total_rooms: parseInt(roomAvailability.total_rooms, 10) || 1,
         is_active: true,
       };
 
@@ -1731,52 +1496,47 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pt-16 lg:pt-20">
+      <div className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">{activeTab === 'bookings' ? 'Reservations' : 'Your hotels'}</h1>
+            <p className="mt-1 text-sm text-gray-500">{activeTab === 'bookings' ? 'Guests staying at your properties' : 'Manage rooms, photos, availability, and guest reviews'}</p>
+          </div>
+          {activeTab !== 'bookings' && (
+            <button type="button" onClick={() => navigate('/list-hotel')} className="inline-flex items-center gap-2 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700">
+              <PlusIcon className="h-5 w-5" />Add hotel
+            </button>
+          )}
+        </div>
+      </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl font-bold text-gray-900">Hotel Host Dashboard</h1>
-          <p className="mt-2 text-gray-600">Manage your hotels, bookings, and grow your business</p>
-        </motion.div>
-
-        {/* Navigation Tabs */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8"
+          className="mb-6"
         >
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
+            <nav className="-mb-px flex gap-6 overflow-x-auto" aria-label="Host dashboard">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
+                const active = activeTab === tab.id || (tab.id === 'hotels' && activeTab === 'rooms');
                 const showApprovalBadge = tab.id === 'bookings' && bookingStatusCounts.awaiting_approval > 0;
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => {
-                      // Landing on Manage Rooms directly (not via a specific
-                      // hotel's card) with no hotel picked yet: skip the
-                      // ambiguity entirely when there's only one to pick.
-                      if (tab.id === 'rooms' && !selectedHotelForRooms && hotels.length === 1) {
-                        setSelectedHotelForRooms(hotels[0].id);
-                      }
-                      setActiveTab(tab.id);
-                    }}
-                    className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center whitespace-nowrap py-2.5 px-0.5 border-b-2 text-sm font-medium ${
+                      active
+                        ? 'border-red-600 text-red-600 font-semibold'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
-                    <Icon className="h-5 w-5 mr-2" />
+                    <Icon className="h-5 w-5 mr-1.5 flex-shrink-0" />
                     {tab.name}
                     {showApprovalBadge && (
-                      <span className="ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-xs font-semibold text-white">
+                      <span className="ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
                         {bookingStatusCounts.awaiting_approval}
                       </span>
                     )}
@@ -1788,7 +1548,11 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
         </motion.div>
 
         {/* Tab Content */}
-        <AnimatePresence mode="wait">
+        {/* mode="wait" made switching tabs feel unresponsive: it held the
+            outgoing tab's exit animation to completion (~0.2s) before the
+            new tab even started mounting, so a click briefly looked like it
+            did nothing. Default (sync) mode crossfades them instead. */}
+        <AnimatePresence>
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 20 }}

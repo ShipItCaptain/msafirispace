@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import BookingDetailModal from './BookingDetailModal';
@@ -63,6 +63,7 @@ const HostDashboardModals = ({
   setHotelToDelete,
   bookings
 }) => {
+  const [isUpdatingHotel, setIsUpdatingHotel] = useState(false);
   const hotelFormSteps = [
     { number: 1, label: 'Basic Info' },
     { number: 2, label: 'Location' },
@@ -1034,109 +1035,184 @@ const HostDashboardModals = ({
 
       {/* Edit Hotel Modal */}
       {showEditHotelModal && selectedHotel && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Edit Hotel</h3>
-              <button 
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => {
+            if (isUpdatingHotel) return;
+            setShowEditHotelModal(false);
+            setSelectedHotel(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-hotel-title"
+            className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden border border-gray-200 bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4 sm:px-6">
+              <div className="min-w-0">
+                <h3 id="edit-hotel-title" className="text-lg font-semibold text-gray-900">
+                  Edit hotel
+                </h3>
+                <p className="mt-0.5 truncate text-sm text-gray-500">
+                  {selectedHotel.name || 'Update property details guests see'}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isUpdatingHotel}
                 onClick={() => {
                   setShowEditHotelModal(false);
                   setSelectedHotel(null);
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+                aria-label="Close"
               >
-                <XMarkIcon className="h-6 w-6" />
+                <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Hotel Name</label>
-                <input
-                  type="text"
-                  value={selectedHotel.name || ''}
-                  onChange={(e) => setSelectedHotel({...selectedHotel, name: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Enter hotel name"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  value={selectedHotel.description || ''}
-                  onChange={(e) => setSelectedHotel({...selectedHotel, description: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  rows={3}
-                  placeholder="Describe your hotel"
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+
+            <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+              <section className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Basics</p>
+                  <p className="mt-0.5 text-sm text-gray-500">Name, story, and star rating</p>
+                </div>
+
+                <div>
+                  <label htmlFor="edit-hotel-name" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Hotel name
+                  </label>
                   <input
+                    id="edit-hotel-name"
+                    type="text"
+                    value={selectedHotel.name || ''}
+                    onChange={(e) => setSelectedHotel({ ...selectedHotel, name: e.target.value })}
+                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    placeholder="e.g. Acacia Resort"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                    <label htmlFor="edit-hotel-description" className="block text-sm font-medium text-gray-900">
+                      Description
+                    </label>
+                    <span className="text-xs text-gray-400">
+                      {(selectedHotel.description || '').length}/500
+                    </span>
+                  </div>
+                  <textarea
+                    id="edit-hotel-description"
+                    value={selectedHotel.description || ''}
+                    onChange={(e) =>
+                      setSelectedHotel({
+                        ...selectedHotel,
+                        description: e.target.value.slice(0, 500),
+                      })
+                    }
+                    rows={4}
+                    className="w-full resize-y border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    placeholder="What makes this stay special?"
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-900">Star rating</p>
+                  <div className="flex flex-wrap gap-2" role="group" aria-label="Star rating">
+                    {[1, 2, 3, 4, 5].map((stars) => {
+                      const selected = Number(selectedHotel.star_rating || 0) === stars;
+                      return (
+                        <button
+                          key={stars}
+                          type="button"
+                          onClick={() => setSelectedHotel({ ...selectedHotel, star_rating: stars })}
+                          className={`inline-flex items-center gap-1.5 border px-3 py-2 text-sm font-medium transition-colors ${
+                            selected
+                              ? 'border-red-600 bg-red-50 text-red-700'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          <StarIcon className={`h-4 w-4 ${selected ? 'text-red-600' : 'text-gray-400'}`} />
+                          {stars}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4 border-t border-gray-100 pt-6">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Location</p>
+                  <p className="mt-0.5 text-sm text-gray-500">Where guests will find you</p>
+                </div>
+
+                <div>
+                  <label htmlFor="edit-hotel-city" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    City
+                  </label>
+                  <input
+                    id="edit-hotel-city"
                     type="text"
                     value={selectedHotel.city || ''}
-                    onChange={(e) => setSelectedHotel({...selectedHotel, city: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    onChange={(e) => setSelectedHotel({ ...selectedHotel, city: e.target.value })}
+                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                     placeholder="City"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Star Rating</label>
-                  <select
-                    value={selectedHotel.star_rating || 3}
-                    onChange={(e) => setSelectedHotel({...selectedHotel, star_rating: parseInt(e.target.value)})}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  >
-                    <option value={1}>1 Star</option>
-                    <option value={2}>2 Stars</option>
-                    <option value={3}>3 Stars</option>
-                    <option value={4}>4 Stars</option>
-                    <option value={5}>5 Stars</option>
-                  </select>
+                  <label htmlFor="edit-hotel-address" className="mb-1.5 block text-sm font-medium text-gray-900">
+                    Address
+                  </label>
+                  <input
+                    id="edit-hotel-address"
+                    type="text"
+                    value={selectedHotel.address || ''}
+                    onChange={(e) => setSelectedHotel({ ...selectedHotel, address: e.target.value })}
+                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    placeholder="Street, ward, or landmark"
+                  />
                 </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                <input
-                  type="text"
-                  value={selectedHotel.address || ''}
-                  onChange={(e) => setSelectedHotel({...selectedHotel, address: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Full address"
-                />
-              </div>
-              
-              <div className="flex space-x-3 pt-4">
-                <button
-                  onClick={() => {
+              </section>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <button
+                type="button"
+                disabled={isUpdatingHotel}
+                onClick={() => {
+                  setShowEditHotelModal(false);
+                  setSelectedHotel(null);
+                }}
+                className="px-4 py-2.5 text-sm font-medium text-gray-700 border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingHotel || !(selectedHotel.name || '').trim()}
+                onClick={async () => {
+                  setIsUpdatingHotel(true);
+                  setError('');
+                  try {
+                    await listingsAPI.updateListing(selectedHotel.id, selectedHotel);
+                    setSuccess('Hotel updated successfully!');
                     setShowEditHotelModal(false);
                     setSelectedHotel(null);
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      await listingsAPI.updateListing(selectedHotel.id, selectedHotel);
-                      setSuccess('Hotel updated successfully!');
-                      setShowEditHotelModal(false);
-                      setSelectedHotel(null);
-                      await loadDashboardData();
-                    } catch (err) {
-                      setError('Failed to update hotel. Please try again.');
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Update Hotel
-                </button>
-              </div>
+                    await loadDashboardData();
+                  } catch (err) {
+                    setError('Failed to update hotel. Please try again.');
+                  } finally {
+                    setIsUpdatingHotel(false);
+                  }
+                }}
+                className="px-5 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isUpdatingHotel ? 'Saving…' : 'Save changes'}
+              </button>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   BuildingOfficeIcon,
   CheckCircleIcon,
@@ -6,6 +6,28 @@ import {
   ExclamationTriangleIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline';
+
+// A room image can be a locally-picked file awaiting upload ({ file, preview, isNew }),
+// a saved image straight from the API ({ image, ... }), or a plain URL string.
+const resolveRoomImageUrl = (image) => {
+  if (!image) return '';
+  if (typeof image === 'string') {
+    if (!image.startsWith('http') && !image.startsWith('//')) {
+      const backendUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      const baseUrl = backendUrl.replace(/\/api\/v1\/?$/, '');
+      return image.startsWith('/') ? `${baseUrl}${image}` : `${baseUrl}/${image}`;
+    }
+    return image;
+  }
+  if (image.preview) return image.preview;
+  const raw = image.image || image.url || '';
+  if (raw && !raw.startsWith('http') && !raw.startsWith('//')) {
+    const backendUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const baseUrl = backendUrl.replace(/\/api\/v1\/?$/, '');
+    return raw.startsWith('/') ? `${baseUrl}${raw}` : `${baseUrl}/${raw}`;
+  }
+  return raw;
+};
 
 const HostDashboardManageRoomsTab = ({
   hotels,
@@ -40,6 +62,14 @@ const HostDashboardManageRoomsTab = ({
   setSelectedHotelForRooms,
 }) => {
     const [basicInfoError, setBasicInfoError] = useState('');
+    // Guards handleAddRoomType against firing twice for what the user
+    // experiences as one click. React state (the existing-blank-draft
+    // check inside handleAddRoomType) isn't enough on its own: two calls
+    // that both start before either state update has committed both read
+    // the same stale room_types array and both conclude no draft exists
+    // yet. A ref is synchronous and shared across both calls immediately,
+    // independent of when React gets around to re-rendering.
+    const addRoomTypeLockRef = useRef(false);
     const isRoomConfigured = (room) => {
       if (!room?.id) return false;
       if (room.configuration_completed) return true;
@@ -93,6 +123,14 @@ const HostDashboardManageRoomsTab = ({
           const existingRoom = roomsByHotel.get(hotelId).find(r => {
             // Match by ID if both have IDs (most reliable)
             if (r.id && room.id) return r.id === room.id;
+            // Match by the client-side draft id assigned when an unsaved
+            // room type is created. Required for blank/not-yet-named
+            // drafts, where the name check below can never match (an
+            // empty name is falsy on both sides) -- without this, a draft
+            // that this same forEach already added on an earlier pass (or
+            // that the render below merges in a second time) looks "new"
+            // again and gets pushed as a duplicate.
+            if (r._localId && room._localId) return r._localId === room._localId;
             // Match by name if both have the same name (case-insensitive)
             // This handles the case where a saved room (from API) matches an unsaved room (from local state)
             if (r.name && room.name) {
@@ -213,6 +251,66 @@ const HostDashboardManageRoomsTab = ({
             if (!hotel) return null;
             
             const hotelId = hotel.id;
+
+            // Shared by both "Add Room Type" entry points below (the
+            // no-rooms-yet empty state and the button at the end of the
+            // list). Reuses an already-pending blank draft instead of
+            // stacking a second one on top of it, and the ref below guards
+            // against a literal double-click adding two in the same tick.
+            const handleAddRoomType = () => {
+              if (addRoomTypeLockRef.current) return;
+              addRoomTypeLockRef.current = true;
+              setTimeout(() => { addRoomTypeLockRef.current = false; }, 500);
+
+              const currentRoomTypes = hotel.room_types || [];
+              const draftIndex = currentRoomTypes.findIndex((room) => !room.id && !room.name?.trim());
+
+              if (draftIndex !== -1) {
+                const draft = currentRoomTypes[draftIndex]._localId
+                  ? currentRoomTypes[draftIndex]
+                  : { ...currentRoomTypes[draftIndex], _localId: `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` };
+                const updatedRoomTypes = [...currentRoomTypes];
+                updatedRoomTypes[draftIndex] = draft;
+                const updatedHotel = { ...hotel, room_types: updatedRoomTypes };
+
+                setHotels((prevHotels) => prevHotels.map((h) => (h.id === hotelId ? updatedHotel : h)));
+                setSelectedHotel(updatedHotel);
+                setSelectedRoomType(draft);
+                initializeRoomConfigurationState(draft);
+                setExpandedRoomMode('edit');
+                setExpandedRoomConfig({ hotelId, roomKey: `${hotelId}-${draft._localId}` });
+                return;
+              }
+
+              const newRoomType = {
+                _localId: `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                name: '',
+                description: '',
+                category: '',
+                bed_type: '',
+                max_adults: 2,
+                max_children: 1,
+                base_price: '',
+                currency: 'USD',
+                images: [],
+                basic_info_completed: false,
+              };
+
+              const updatedHotel = {
+                ...hotel,
+                room_types: [...currentRoomTypes, newRoomType],
+              };
+
+              setHotels((prevHotels) => prevHotels.map((h) => (h.id === hotelId ? updatedHotel : h)));
+              setSelectedHotel(updatedHotel);
+              setSelectedRoomType(newRoomType);
+              initializeRoomConfigurationState(newRoomType);
+              setExpandedRoomMode('edit');
+              setExpandedRoomConfig({ hotelId, roomKey: `${hotelId}-${newRoomType._localId}` });
+
+              loadRoomTypes();
+            };
+
             // Start with room types from API
             let rooms = roomsByHotel.get(hotelId) || [];
             
@@ -224,6 +322,13 @@ const HostDashboardManageRoomsTab = ({
                 const existsInList = rooms.some(r => {
                   // Match by ID if both have IDs (most reliable)
                   if (r.id && room.id) return r.id === room.id;
+                  // Match by the client-side draft id. Covers blank/not-yet-named
+                  // drafts, which the name check below can never match -- this
+                  // list already includes anything the pass above (roomsByHotel)
+                  // merged in from the same hotel.room_types array, so without
+                  // this check a blank draft looks "new" again here and is
+                  // pushed a second time.
+                  if (r._localId && room._localId) return r._localId === room._localId;
                   // Match by name if both have names (case-insensitive)
                   // This handles duplicates where one is saved (from API) and one is unsaved (from local state)
                   if (r.name && room.name) {
@@ -244,6 +349,7 @@ const HostDashboardManageRoomsTab = ({
                   // Room already exists - prefer saved version (with ID) over unsaved
                   const existingIndex = rooms.findIndex(r => {
                     if (r.id && room.id) return r.id === room.id;
+                    if (r._localId && room._localId) return r._localId === room._localId;
                     if (r.name && room.name) {
                       return r.name.trim().toLowerCase() === room.name.trim().toLowerCase();
                     }
@@ -301,46 +407,7 @@ const HostDashboardManageRoomsTab = ({
                     Empty for now — add a room type when you create the hotel.
                   </p>
           <button
-            onClick={() => {
-              // Create a new empty room type
-              const newRoomType = {
-                name: '',
-                description: '',
-                category: '',
-                bed_type: '',
-                max_adults: 2,
-                max_children: 1,
-                base_price: '',
-                currency: 'USD',
-                images: [],
-                basic_info_completed: false
-              };
-              
-              // Add the new room type to the hotel's room_types array
-              const updatedHotel = {
-                ...hotel,
-                room_types: [...(hotel.room_types || []), newRoomType]
-              };
-              
-              // Update hotels array
-              setHotels(prevHotels => 
-                prevHotels.map(h => h.id === hotelId ? updatedHotel : h)
-              );
-              
-              // Set as selected hotel and room type
-              setSelectedHotel(updatedHotel);
-              setSelectedRoomType(newRoomType);
-              
-              // Initialize room configuration state
-              initializeRoomConfigurationState(newRoomType);
-              
-              // Expand the configuration form (find the index of the new room type)
-              const roomIndex = updatedHotel.room_types.length - 1;
-              setExpandedRoomConfig({ hotelId, roomIndex });
-              
-              // Reload room types to ensure we have the latest data
-              loadRoomTypes();
-            }}
+            onClick={handleAddRoomType}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <PlusIcon className="h-5 w-5 mr-2" />
@@ -386,7 +453,16 @@ const HostDashboardManageRoomsTab = ({
               {/* Room Types List */}
               <div className="divide-y divide-gray-200">
                 {filteredRoomsForHotel.map((room, index) => {
-                  const isExpanded = expandedRoomConfig?.hotelId === hotelId && expandedRoomConfig?.roomIndex === index;
+                  // A stable identity for this row: the saved DB id once one
+                  // exists, otherwise the _localId assigned when the draft
+                  // was created. Never derived from room.name or the array
+                  // index -- both change as the user types (the list
+                  // re-sorts by name) or as rows are added/removed, which
+                  // previously caused this row's DOM node (and the input
+                  // inside it) to remount and drop focus after almost every
+                  // keystroke.
+                  const roomKey = `${hotelId}-${room.id || room._localId || index}`;
+                  const isExpanded = expandedRoomConfig?.hotelId === hotelId && expandedRoomConfig?.roomKey === roomKey;
                   const roomData = (isExpanded ? selectedRoomType : null) || room;
                   const amenityNames = roomData.amenity_mappings
                     ? roomData.amenity_mappings
@@ -403,7 +479,6 @@ const HostDashboardManageRoomsTab = ({
                     roomData.has_city_view ? 'City View' : null,
                     roomData.has_garden_view ? 'Garden View' : null,
                   ].filter(Boolean);
-                  const roomKey = `${hotelId}-${room.id || room.name || index}`;
                   const roomConfigured = isRoomConfigured(room);
                   const roomWasJustSaved = room.id && room.id === lastSavedRoomId;
 
@@ -419,7 +494,7 @@ const HostDashboardManageRoomsTab = ({
                             setExpandedRoomMode('view');
                           } else {
                             setExpandedRoomMode('view');
-                            setExpandedRoomConfig({ hotelId, roomIndex: index });
+                            setExpandedRoomConfig({ hotelId, roomKey });
                             setSelectedHotel(hotel);
                             setSelectedRoomType(room);
                           }
@@ -503,7 +578,7 @@ const HostDashboardManageRoomsTab = ({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setExpandedRoomMode('edit');
-                                  setExpandedRoomConfig({ hotelId, roomIndex: index });
+                                  setExpandedRoomConfig({ hotelId, roomKey });
                                   setSelectedHotel(hotel);
                                   setSelectedRoomType(room);
                                   initializeRoomConfigurationState(room);
@@ -570,7 +645,7 @@ const HostDashboardManageRoomsTab = ({
                                   {roomData.images.map((img, idx) => (
                                     <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
                                       <img
-                                        src={typeof img === 'string' ? img : img?.image || ''}
+                                        src={resolveRoomImageUrl(img)}
                                         alt={`${roomData.name || 'Room'} - ${idx + 1}`}
                                         className="w-full h-24 object-cover"
                                       />
@@ -890,7 +965,7 @@ const HostDashboardManageRoomsTab = ({
                                   {selectedRoomType.images && selectedRoomType.images.map((image, imgIndex) => (
                                     <div key={imgIndex} className="relative">
                                       <img
-                                        src={image}
+                                        src={resolveRoomImageUrl(image)}
                                         alt={`${selectedRoomType.name} - ${imgIndex + 1}`}
                                         className="w-full h-24 object-cover rounded-lg border border-gray-300"
                                       />
@@ -1085,46 +1160,7 @@ const HostDashboardManageRoomsTab = ({
                 {/* Add Room Type Button - Show when hotel has room types */}
                 <div className="px-6 py-4 border-t border-gray-200">
                   <button
-                    onClick={() => {
-                      // Create a new empty room type
-                      const newRoomType = {
-                        name: '',
-                        description: '',
-                        category: '',
-                        bed_type: '',
-                        max_adults: 2,
-                        max_children: 1,
-                        base_price: '',
-                        currency: 'USD',
-                        images: [],
-                        basic_info_completed: false
-                      };
-                      
-                      // Add the new room type to the hotel's room_types array
-                      const updatedHotel = {
-                        ...hotel,
-                        room_types: [...(hotel.room_types || []), newRoomType]
-                      };
-                      
-                      // Update hotels array
-                      setHotels(prevHotels => 
-                        prevHotels.map(h => h.id === hotelId ? updatedHotel : h)
-                      );
-                      
-                      // Set as selected hotel and room type
-                      setSelectedHotel(updatedHotel);
-                      setSelectedRoomType(newRoomType);
-                      
-                      // Initialize room configuration state
-                      initializeRoomConfigurationState(newRoomType);
-                      
-                      // Expand the configuration form (find the index of the new room type)
-                      const roomIndex = updatedHotel.room_types.length - 1;
-                      setExpandedRoomConfig({ hotelId, roomIndex });
-                      
-                      // Reload room types to ensure we have the latest data
-                      loadRoomTypes();
-                    }}
+                    onClick={handleAddRoomType}
                     className="w-full flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-gray-700 hover:text-blue-700"
                   >
                     <PlusIcon className="h-5 w-5 mr-2" />

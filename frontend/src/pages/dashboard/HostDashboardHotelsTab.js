@@ -1,192 +1,25 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import {
-  PlusIcon,
-  PencilIcon,
-  TrashIcon,
-  CogIcon,
-  StarIcon,
-  MapPinIcon,
-  BuildingOfficeIcon,
-  PhotoIcon,
-} from '@heroicons/react/24/outline';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { BuildingOfficeIcon, CalendarIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, MapPinIcon, PencilIcon, PhotoIcon, PlusIcon, StarIcon } from '@heroicons/react/24/outline';
 
-const isRoomConfigured = (room) => {
-  if (!room?.id) return false;
-  if (room.configuration_completed) return true;
+const FALLBACK_IMAGE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="100%" height="100%" fill="%23e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%236b7280" font-family="Arial" font-size="28">No image</text></svg>';
+const getImage = (hotel) => { const image = hotel?.primary_image || hotel?.images?.[0]; return !image ? FALLBACK_IMAGE : typeof image === 'string' ? image : image.image || FALLBACK_IMAGE; };
+const reviewDate = (value) => { const date = new Date(value); return value && !Number.isNaN(date.getTime()) ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''; };
 
-  const hasImages = Array.isArray(room.images) && room.images.length > 0;
-  const hasAmenities =
-    (Array.isArray(room.amenity_mappings) && room.amenity_mappings.length > 0) ||
-    (Array.isArray(room.amenities) && room.amenities.length > 0);
-  const hasAvailability = Array.isArray(room.availability) && room.availability.length > 0;
-
-  const createdAt = room.created_at ? new Date(room.created_at) : null;
-  const updatedAt = room.updated_at ? new Date(room.updated_at) : null;
-  const wasUpdatedAfterCreate = Boolean(
-    createdAt &&
-    updatedAt &&
-    !Number.isNaN(createdAt.getTime()) &&
-    !Number.isNaN(updatedAt.getTime()) &&
-    updatedAt.getTime() > createdAt.getTime()
-  );
-
-  return hasImages || hasAmenities || hasAvailability || wasUpdatedAfterCreate;
+const HotelReviews = ({ reviews, roomTypes, replyDrafts, replyLoadingId, onReplyChange, onSubmitReply }) => {
+  const [roomFilter, setRoomFilter] = useState('all');
+  const rooms = useMemo(() => {
+    const known = (roomTypes || []).filter((room) => room.id).map((room) => ({ id: String(room.id), name: room.name }));
+    reviews.filter((review) => review.room_type_id && !known.some((room) => room.id === String(review.room_type_id))).forEach((review) => known.push({ id: String(review.room_type_id), name: review.room_type_name || 'Room type' }));
+    return known;
+  }, [reviews, roomTypes]);
+  const visible = roomFilter === 'all' ? reviews : reviews.filter((review) => String(review.room_type_id || 'hotel') === roomFilter);
+  return <section className="border-t border-gray-100 bg-gray-50 p-4 sm:p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h4 className="text-sm font-semibold text-gray-900">Guest reviews</h4><p className="mt-0.5 text-xs text-gray-500">Filter feedback by room type and reply without leaving this hotel.</p></div>{rooms.length > 0 && <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} className="border border-gray-300 bg-white px-3 py-2 text-xs text-gray-700" aria-label="Filter reviews by room type"><option value="all">All room types</option><option value="hotel">Hotel-wide</option>{rooms.map((room) => <option key={room.id} value={room.id}>{room.name || 'Unnamed room'}</option>)}</select>}</div>{visible.length === 0 ? <div className="mt-4 border border-dashed border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">No reviews for this selection yet.</div> : <div className="mt-4 space-y-3">{visible.map((review) => <article key={review.id} className="border border-gray-200 bg-white p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-gray-900">{review.guest || review.traveler_name || 'Guest'}</p><p className="mt-0.5 text-xs text-gray-500">{review.room_type_name || 'Hotel stay'}{reviewDate(review.created_at) ? ` · ${reviewDate(review.created_at)}` : ''}</p></div><span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900"><StarIcon className="h-4 w-4 fill-amber-400 text-amber-400" />{Number(review.rating || 0).toFixed(1)}</span></div>{review.title && <p className="mt-3 text-sm font-medium text-gray-900">{review.title}</p>}{review.comment && <p className="mt-1 text-sm leading-6 text-gray-600">{review.comment}</p>}{review.host_reply ? <div className="mt-3 border-l-2 border-red-600 bg-red-50 px-3 py-2"><p className="text-xs font-semibold text-red-900">Your reply</p><p className="mt-1 text-sm text-red-900">{review.host_reply}</p></div> : <div className="mt-3"><textarea value={replyDrafts[review.id] || ''} onChange={(event) => onReplyChange(review.id, event.target.value)} placeholder="Write a public reply…" className="min-h-20 w-full border border-gray-300 px-3 py-2 text-sm" /><button type="button" disabled={replyLoadingId === review.id || !(replyDrafts[review.id] || '').trim()} onClick={() => onSubmitReply(review)} className="mt-2 bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">{replyLoadingId === review.id ? 'Posting…' : 'Post reply'}</button></div>}</article>)}</div>}</section>;
 };
 
-const HostDashboardHotelsTab = ({
-  hotels,
-  onAddHotel,
-  onOpenHotelRooms,
-  onManageHotelRooms,
-  onManageMedia,
-  onEditHotel,
-  onDeleteHotel,
-}) => (
-  <div className="space-y-6">
-    <div className="flex justify-between items-center">
-      <h2 className="text-2xl font-bold text-gray-900">My Hotels</h2>
-      <button
-        onClick={onAddHotel}
-        data-testid="host-add-hotel-button"
-        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-      >
-        <PlusIcon className="h-5 w-5 mr-2" />
-        Add Hotel
-      </button>
-    </div>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      {hotels.map((hotel) => {
-        const roomTypes = hotel.room_types || [];
-        const configuredRooms = roomTypes.filter((room) => isRoomConfigured(room)).length;
-        const roomsNeedingSetup = Math.max(roomTypes.length - configuredRooms, 0);
-
-        return (
-        <motion.div
-          key={hotel.id}
-          data-testid={`hotel-card-${hotel.id}`}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-        >
-          <div className="relative h-32 bg-gradient-to-r from-blue-500 to-purple-600">
-            <div className="absolute inset-0 bg-black bg-opacity-10"></div>
-            <div className="absolute top-2 right-2">
-              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                hotel.is_verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-              }`}>
-                {hotel.is_verified ? 'Active' : 'Pending'}
-              </span>
-            </div>
-            <div className="absolute bottom-2 left-2 text-white">
-              <h3 className="text-sm font-bold truncate max-w-[180px]">{hotel.name}</h3>
-              <p className="text-xs opacity-90 flex items-center">
-                <MapPinIcon className="h-3 w-3 mr-1" />
-                {hotel.city}, {hotel.country}
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3">
-            <div className="flex justify-between items-center mb-2">
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center">
-                  <StarIcon className="h-3 w-3 text-yellow-500 mr-1" />
-                  <span className="text-xs font-medium text-gray-900">{hotel.star_rating || 'N/A'}</span>
-                </div>
-                <div className="text-xs text-gray-500">{hotel.total_rooms || 0} rooms</div>
-              </div>
-              <div className="text-xs text-gray-500 capitalize">{hotel.property_type || 'Hotel'}</div>
-            </div>
-
-            <div className="mb-3 flex flex-wrap gap-2">
-              <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-700">
-                {roomTypes.length} room type{roomTypes.length === 1 ? '' : 's'}
-              </span>
-              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                {configuredRooms} configured
-              </span>
-              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-700">
-                {roomsNeedingSetup} need setup
-              </span>
-            </div>
-
-            {roomTypes.length > 0 && (
-              <div className="mb-3">
-                <div className="space-y-1">
-                  {roomTypes.slice(0, 2).map((room, index) => (
-                    <div key={index} className="flex justify-between items-center text-xs">
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-gray-900 truncate block">{room.name || `Room ${index + 1}`}</span>
-                        <span className="text-gray-500">{room.currency} {room.base_price}/night</span>
-                      </div>
-                      <div className="ml-2">
-                        {isRoomConfigured(room) ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">✓</span>
-                        ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">⏳</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {roomTypes.length > 2 && (
-                    <div className="text-xs text-gray-500">+{roomTypes.length - 2} more room types</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="flex space-x-1 mb-1">
-              <button
-                onClick={async () => onManageHotelRooms(hotel.id)}
-                className="flex-1 flex items-center justify-center px-2 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <CogIcon className="h-3 w-3 mr-1" />
-                Manage Rooms
-              </button>
-              <button
-                onClick={() => onManageMedia(hotel.id)}
-                className="flex-1 flex items-center justify-center px-2 py-1.5 text-xs bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-              >
-                <PhotoIcon className="h-3 w-3 mr-1" />
-                Photos &amp; Amenities
-              </button>
-            </div>
-            <div className="flex space-x-1">
-              <button
-                onClick={() => onEditHotel(hotel)}
-                className="flex-1 flex items-center justify-center px-2 py-1.5 text-xs border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <PencilIcon className="h-3 w-3 mr-1" />
-                Edit
-              </button>
-              <button
-                onClick={() => onDeleteHotel(hotel.id)}
-                className="flex items-center justify-center px-2 py-1.5 text-xs border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-              >
-                <TrashIcon className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )})}
-      {hotels.length === 0 && (
-        <div className="col-span-2 text-center py-12">
-          <BuildingOfficeIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hotels yet</h3>
-          <p className="text-gray-500 mb-4">Get started by adding your first hotel property.</p>
-          <button
-            onClick={onAddHotel}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Add Your First Hotel
-          </button>
-        </div>
-      )}
-    </div>
-  </div>
-);
-
+const HostDashboardHotelsTab = ({ hotels, reviews, onAddHotel, onManageHotelRooms, onManageMedia, onEditHotel, replyDrafts, replyLoadingId, onReplyChange, onSubmitReply }) => {
+  const [searchTerm, setSearchTerm] = useState(''); const [openReviewsFor, setOpenReviewsFor] = useState(null);
+  const filtered = hotels.filter((hotel) => `${hotel.name || ''} ${hotel.city || ''} ${hotel.country || ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
+  return <div>{hotels.length > 0 && <div className="mb-6 border border-gray-200 bg-white p-4"><div className="relative"><MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by hotel name or city…" className="w-full border border-gray-300 py-2 pl-9 pr-3 text-sm" /></div></div>}<div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"><AnimatePresence>{filtered.map((hotel) => { const hotelReviews = reviews.filter((review) => String(review.hotel_id) === String(hotel.id)); const rating = hotelReviews.length ? hotelReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / hotelReviews.length : 0; const reviewsOpen = openReviewsFor === hotel.id; return <motion.article key={hotel.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="overflow-hidden border border-gray-200 bg-white"><div className="relative h-44 bg-gray-100"><img src={getImage(hotel)} alt="" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = FALLBACK_IMAGE; }} /><span className={`absolute left-3 top-3 px-2 py-0.5 text-[11px] font-semibold ${hotel.is_verified ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-800'}`}>{hotel.is_verified ? 'Live' : 'In review'}</span></div><div className="flex flex-col p-4"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h3 className="truncate text-base font-semibold text-gray-900">{hotel.name || 'Untitled hotel'}</h3><p className="mt-0.5 flex items-center gap-1 truncate text-xs text-gray-500"><MapPinIcon className="h-3.5 w-3.5 flex-none" />{[hotel.city, hotel.country].filter(Boolean).join(', ') || 'Add a location'}</p></div><div className="flex items-center gap-1 text-sm font-semibold text-gray-900"><StarIcon className="h-4 w-4 fill-amber-400 text-amber-400" />{hotelReviews.length ? rating.toFixed(1) : '—'}</div></div><div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600"><span>{hotel.total_rooms || 0} rooms</span><span>·</span><span>{hotel.room_types?.length || 0} room types</span><span>·</span><span>{hotelReviews.length} review{hotelReviews.length === 1 ? '' : 's'}</span></div><div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-3"><button type="button" onClick={() => onManageHotelRooms(hotel.id)} className="inline-flex items-center gap-1.5 bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"><CalendarIcon className="h-3.5 w-3.5" />Manage rooms</button><button type="button" onClick={() => setOpenReviewsFor(reviewsOpen ? null : hotel.id)} className="inline-flex items-center gap-1.5 border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"><ChatBubbleLeftRightIcon className="h-3.5 w-3.5" />Reviews</button><button type="button" onClick={() => onEditHotel(hotel)} className="inline-flex items-center gap-1.5 border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"><PencilIcon className="h-3.5 w-3.5" />Edit</button><button type="button" onClick={() => onManageMedia(hotel.id)} className="px-2 py-1.5 text-gray-600 hover:bg-gray-50" aria-label={`Manage photos for ${hotel.name}`}><PhotoIcon className="h-4 w-4" /></button></div></div>{reviewsOpen && <HotelReviews reviews={hotelReviews} roomTypes={hotel.room_types} replyDrafts={replyDrafts} replyLoadingId={replyLoadingId} onReplyChange={onReplyChange} onSubmitReply={onSubmitReply} />}</motion.article>; })}</AnimatePresence></div>{filtered.length === 0 && <div className="border border-dashed border-gray-200 bg-white py-16 text-center"><BuildingOfficeIcon className="mx-auto mb-3 h-10 w-10 text-gray-300" /><h3 className="text-base font-semibold text-gray-900">{hotels.length ? 'No hotels match your search' : 'Create your first hotel'}</h3><p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">{hotels.length ? 'Try a different hotel name or city.' : 'Add your property, then set up rooms, photos, availability, and guest reviews.'}</p>{!hotels.length && <button type="button" onClick={onAddHotel} className="mt-5 inline-flex items-center gap-2 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"><PlusIcon className="h-4 w-4" />Add hotel</button>}</div>}</div>;
+};
 export default HostDashboardHotelsTab;
