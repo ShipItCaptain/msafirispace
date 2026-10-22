@@ -93,9 +93,11 @@ const HotelHostManagementPage = () => {
           ...prev,
           amenity_mappings: prev.amenity_mappings.filter((m) => m.id !== mapping.id),
         }));
+        toast.success(`${amenity.name} removed`);
       } else {
         const created = await listingsAPI.addHotelAmenity(hotel.id, amenity.id);
         setHotel((prev) => ({ ...prev, amenity_mappings: [...prev.amenity_mappings, created] }));
+        toast.success(`${amenity.name} added`);
       }
     } catch (error) {
       toast.error('Could not update amenity');

@@ -36,6 +36,7 @@ const RoomTypeEditPage = () => {
     currency: 'KES',
     bed_count: 1,
     max_occupancy: 2,
+    total_rooms: 1,
     is_available: true,
     has_balcony: false,
     has_kitchen: false,
@@ -149,6 +150,7 @@ const RoomTypeEditPage = () => {
           currency: room.currency || 'KES',
           bed_count: room.bed_count || 1,
           max_occupancy: room.max_occupancy || room.max_adults || 2,
+          total_rooms: room.total_rooms || 1,
           is_available: room.is_available !== false,
           is_active: room.is_active !== false,
           has_balcony: room.has_balcony || false,
@@ -264,6 +266,7 @@ const RoomTypeEditPage = () => {
         currency: roomType.currency,
         bed_count: parseInt(roomType.bed_count || 1),
         max_occupancy: parseInt(roomType.max_occupancy || roomType.max_adults || 2),
+        total_rooms: parseInt(roomType.total_rooms || 1),
         is_available: roomType.is_available !== false,
         is_active: roomType.is_active !== false,
         has_balcony: roomType.has_balcony || false,
@@ -556,6 +559,20 @@ const RoomTypeEditPage = () => {
                     min="1"
                     value={roomType.max_occupancy}
                     onChange={(e) => handleInputChange('max_occupancy', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Total Rooms Available */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Total Rooms Available
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={roomType.total_rooms}
+                    onChange={(e) => handleInputChange('total_rooms', e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
