@@ -118,7 +118,13 @@ class Booking(models.Model):
 
     def clean(self):
         """Validate that either hotel+room_type OR bnb_listing is provided"""
-        has_hotel_booking = self.hotel is not None and self.room_type is not None
+        # `_has_booking_items` is a transient (non-persisted) flag set by
+        # MultiRoomBookingSerializer before save(): a multi-room-type booking
+        # has no single `room_type` of its own, its rooms live in BookingItem
+        # rows created right after this Booking gets a pk.
+        has_hotel_booking = self.hotel is not None and (
+            self.room_type is not None or getattr(self, '_has_booking_items', False)
+        )
         has_bnb_booking = self.bnb_listing is not None
         
         if not (has_hotel_booking or has_bnb_booking):
@@ -131,7 +137,7 @@ class Booking(models.Model):
                 "Cannot have both hotel and BnB booking. Please specify either hotel+room_type OR bnb_listing."
             )
         
-        if has_hotel_booking and self.room_type.hotel != self.hotel:
+        if has_hotel_booking and self.room_type is not None and self.room_type.hotel != self.hotel:
             raise ValidationError(
                 "Room type must belong to the specified hotel."
             )
@@ -143,3 +149,22 @@ class Booking(models.Model):
     def __str__(self):
         booking_type = "Hotel" if self.hotel else "BnB"
         return f"Booking #{self.id} - {booking_type} - {self.traveler_id} - {self.check_in} to {self.check_out}"
+
+
+class BookingItem(models.Model):
+    """
+    One room-type line within a multi-room-type booking (e.g. 2x Standard +
+    1x Family in a single reservation). `Booking.room_type` stays null for
+    bookings that use items instead of the single legacy room_type field.
+    """
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name='items')
+    room_type = models.ForeignKey('listings.RoomType', on_delete=models.PROTECT, related_name='booking_items')
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)], default=1)
+    nightly_price = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.quantity}x {self.room_type.name} for Booking #{self.booking_id}"

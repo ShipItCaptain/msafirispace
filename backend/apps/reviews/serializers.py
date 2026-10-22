@@ -66,13 +66,17 @@ class ReviewSerializer(serializers.ModelSerializer):
 class ReviewListSerializer(serializers.ModelSerializer):
     traveler_name = serializers.CharField(source='traveler.get_display_name', read_only=True)
     traveler_avatar = serializers.SerializerMethodField()
+    hotel_id = serializers.IntegerField(read_only=True)
     hotel_name = serializers.CharField(source='hotel.name', read_only=True)
+    room_type_id = serializers.IntegerField(read_only=True)
+    room_type_name = serializers.CharField(source='room_type.name', read_only=True)
     bnb_listing_title = serializers.CharField(source='bnb_listing.title', read_only=True)
 
     class Meta:
         model = Review
         fields = [
-            'id', 'traveler_name', 'traveler_avatar', 'hotel_name', 'bnb_listing_title',
+            'id', 'traveler_name', 'traveler_avatar', 'hotel_id', 'hotel_name',
+            'room_type_id', 'room_type_name', 'bnb_listing_title',
             'rating', 'title', 'comment', 'host_reply', 'host_reply_updated_at', 'created_at'
         ]
 

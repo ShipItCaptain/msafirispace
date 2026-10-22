@@ -372,6 +372,43 @@ def test_guest_can_confirm_pay_at_premises_after_host_approval(user_model):
     booking.refresh_from_db()
     assert booking.status == Booking.BookingStatus.CONFIRMED
 
+    notification = Notification.objects.get(user=host, data__booking_id=booking.id)
+    assert 'paying at the property' in notification.title.lower()
+    assert notification.data['payment_method'] == Booking.PaymentMethod.PAY_AT_PREMISES
+
+
+@pytest.mark.django_db
+def test_host_can_retrieve_guest_booking_detail(user_model):
+    host = _create_user(user_model, 'host_retrieve', 'hostretrieve@example.com')
+    traveler = _create_user(user_model, 'trav_retrieve', 'travretrieve@example.com')
+    hotel, room = _create_hotel_with_room(host)
+
+    booking = Booking.objects.create(
+        traveler=traveler,
+        hotel=hotel,
+        room_type=room,
+        check_in=date.today() + timedelta(days=5),
+        check_out=date.today() + timedelta(days=6),
+        num_adults=1,
+        num_children=0,
+        nightly_price=room.base_price,
+        currency='KES',
+        total_nights=1,
+        total_amount=room.base_price,
+        guest_full_name='Traveler Retrieve',
+        guest_email=traveler.email,
+        guest_phone='+254722222222',
+        status=Booking.BookingStatus.PENDING,
+        payment_method=Booking.PaymentMethod.ONLINE,
+        host_approval_status=Booking.HostApprovalStatus.PENDING,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=host)
+    response = client.get(f'/api/v1/bookings/{booking.id}/')
+    assert response.status_code == 200
+    assert response.data['id'] == booking.id
+
 
 @pytest.mark.django_db
 def test_bnb_booking_creates_host_notification(user_model):

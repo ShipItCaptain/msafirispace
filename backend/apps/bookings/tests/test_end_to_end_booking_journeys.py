@@ -79,6 +79,10 @@ def test_guest_can_register_login_and_book_hotel_and_bnb():
             "username": f"guest_{unique}",
             "first_name": "Guest",
             "last_name": "Traveler",
+            "id_full_name": "Guest Traveler",
+            "id_number": "99887766",
+            "phone_number": "+254799887766",
+            "verification_method": "email",
             "password": "testpass123",
             "password_confirm": "testpass123",
             "roles": ["guest"],
@@ -86,6 +90,13 @@ def test_guest_can_register_login_and_book_hotel_and_bnb():
         format="json",
     )
     assert register_response.status_code == 201, register_response.data
+
+    # Registration no longer auto-verifies the account -- simulate the OTP
+    # confirmation step (out of scope for this booking-journey test) so the
+    # subsequent login isn't blocked by the new account_verified gate.
+    new_guest = user_model.objects.get(email=guest_email)
+    new_guest.account_verified = True
+    new_guest.save()
 
     login_response = public_client.post(
         "/api/v1/auth/login/",

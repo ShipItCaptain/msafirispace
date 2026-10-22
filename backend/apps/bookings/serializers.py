@@ -3,11 +3,22 @@ Serializers for bookings app
 """
 from datetime import timedelta
 
+from django.db import transaction
+from django.db.models import Sum
 from rest_framework import serializers
 
-from .models import Booking
+from .models import Booking, BookingItem
 from apps.listings.serializers import RoomTypeListSerializer, BnBListingSerializer
-from apps.listings.models import RoomType, BnBListing, BnBAvailability, RoomAvailability
+from apps.listings.models import Hotel, RoomType, BnBListing, BnBAvailability, RoomAvailability
+
+
+class BookingItemSerializer(serializers.ModelSerializer):
+    room_type_id = serializers.IntegerField(source='room_type.id', read_only=True)
+    room_type_name = serializers.CharField(source='room_type.name', read_only=True)
+
+    class Meta:
+        model = BookingItem
+        fields = ['id', 'room_type_id', 'room_type_name', 'quantity', 'nightly_price', 'subtotal']
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -156,9 +167,17 @@ class BookingSerializer(serializers.ModelSerializer):
                     .first()
                 )
                 if blocked_day:
-                    raise serializers.ValidationError({
-                        'check_in': f'This listing is unavailable on {blocked_day.date} ({blocked_day.status}).'
-                    })
+                    status = blocked_day.status
+                    day = blocked_day.date.isoformat()
+                    if status == BnBAvailability.AvailabilityStatus.OCCUPIED:
+                        human = f'Those dates aren’t available — already booked for {day}.'
+                    elif status == BnBAvailability.AvailabilityStatus.MAINTENANCE:
+                        human = f'Those dates aren’t available — the listing is under maintenance on {day}.'
+                    elif status == BnBAvailability.AvailabilityStatus.OUT_OF_ORDER:
+                        human = f'Those dates aren’t available — the listing is out of order on {day}.'
+                    else:
+                        human = f'Those dates aren’t available for {day}. Please try different dates.'
+                    raise serializers.ValidationError({'check_in': human})
         
         return attrs
 
@@ -277,13 +296,14 @@ class BookingListSerializer(serializers.ModelSerializer):
     room_type = RoomTypeListSerializer(read_only=True, allow_null=True)
     bnb_listing = BnBListingSerializer(read_only=True, allow_null=True)
     booking_type = serializers.SerializerMethodField()
+    items = BookingItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Booking
         fields = [
             'id', 'check_in', 'check_out', 'total_nights', 'total_amount',
             'currency', 'status', 'host_approval_status', 'payment_status',
-            'room_type', 'bnb_listing', 'booking_type', 'created_at'
+            'room_type', 'bnb_listing', 'booking_type', 'items', 'created_at'
         ]
 
     def get_booking_type(self, obj):
@@ -294,9 +314,10 @@ class BookingListSerializer(serializers.ModelSerializer):
 class BookingDetailSerializer(BookingSerializer):
     booking_type = serializers.SerializerMethodField()
     review = serializers.SerializerMethodField()
+    items = BookingItemSerializer(many=True, read_only=True)
 
     class Meta(BookingSerializer.Meta):
-        fields = BookingSerializer.Meta.fields + ['booking_type', 'review']
+        fields = BookingSerializer.Meta.fields + ['booking_type', 'review', 'items']
 
     def get_review(self, obj):
         review = getattr(obj, 'review', None)
@@ -318,9 +339,11 @@ class BookingDetailSerializer(BookingSerializer):
 class HostBookingListSerializer(serializers.ModelSerializer):
     traveler_name = serializers.CharField(source='traveler.get_display_name', read_only=True)
     traveler_email = serializers.CharField(source='traveler.email', read_only=True)
+    traveler_avatar = serializers.SerializerMethodField()
     hotel_id = serializers.IntegerField(source='hotel.id', read_only=True, allow_null=True)
     hotel_name = serializers.CharField(source='hotel.name', read_only=True, allow_null=True)
-    room_name = serializers.CharField(source='room_type.name', read_only=True, allow_null=True)
+    room_name = serializers.SerializerMethodField()
+    items = BookingItemSerializer(many=True, read_only=True)
     bnb_listing_id = serializers.IntegerField(source='bnb_listing.id', read_only=True, allow_null=True)
     bnb_listing_title = serializers.CharField(source='bnb_listing.title', read_only=True, allow_null=True)
     booking_type = serializers.SerializerMethodField()
@@ -331,12 +354,240 @@ class HostBookingListSerializer(serializers.ModelSerializer):
             'id', 'check_in', 'check_out', 'total_nights', 'total_amount', 'currency',
             'status', 'host_approval_status', 'payment_status', 'payment_method',
             'created_at', 'updated_at',
-            'traveler_name', 'traveler_email',
+            'traveler_name', 'traveler_email', 'traveler_avatar',
             'guest_full_name', 'guest_email', 'guest_phone',
-            'hotel_id', 'hotel_name', 'room_name',
+            'hotel_id', 'hotel_name', 'room_name', 'items',
             'bnb_listing_id', 'bnb_listing_title',
             'booking_type',
         ]
 
     def get_booking_type(self, obj):
         return 'hotel' if obj.hotel_id else 'bnb'
+
+    def get_traveler_avatar(self, obj):
+        picture = getattr(obj.traveler, 'profile_picture', None)
+        if not picture:
+            return None
+        url = picture.url
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
+
+    def get_room_name(self, obj):
+        # Legacy single-room-type bookings have room_type set directly;
+        # multi-room-type bookings carry their rooms in `items` instead.
+        if obj.room_type_id:
+            return obj.room_type.name
+        items = list(obj.items.all())
+        if items:
+            return ', '.join(f'{item.quantity}x {item.room_type.name}' for item in items)
+        return None
+
+
+class MultiRoomBookingItemInputSerializer(serializers.Serializer):
+    room_type_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1)
+
+
+class MultiRoomBookingSerializer(serializers.Serializer):
+    """
+    Creates one Booking covering multiple room types with quantities in a
+    single reservation (e.g. 2x Standard + 1x Family), via BookingItem rows.
+    Deliberately separate from BookingSerializer, which is built around a
+    single room_type_id and must keep working unchanged for the existing
+    sidebar quick-book flow.
+    """
+    hotel_id = serializers.IntegerField()
+    check_in = serializers.DateField()
+    check_out = serializers.DateField()
+    num_adults = serializers.IntegerField(min_value=1, default=1)
+    num_children = serializers.IntegerField(min_value=0, default=0)
+    special_requests = serializers.CharField(required=False, allow_blank=True, default='')
+    guest_full_name = serializers.CharField(max_length=150)
+    guest_email = serializers.EmailField()
+    guest_phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    payment_method = serializers.ChoiceField(
+        choices=Booking.PaymentMethod.choices, default=Booking.PaymentMethod.PAY_AT_PREMISES
+    )
+    items = MultiRoomBookingItemInputSerializer(many=True)
+
+    def validate(self, attrs):
+        check_in = attrs['check_in']
+        check_out = attrs['check_out']
+        if check_in >= check_out:
+            raise serializers.ValidationError({'check_out': 'check_out must be after check_in'})
+
+        items = attrs.get('items') or []
+        if not items:
+            raise serializers.ValidationError({'items': 'At least one room type with quantity must be selected.'})
+
+        try:
+            hotel = Hotel.objects.get(pk=attrs['hotel_id'])
+        except Hotel.DoesNotExist as exc:
+            raise serializers.ValidationError({'hotel_id': 'Selected hotel does not exist.'}) from exc
+        attrs['_hotel'] = hotel
+
+        # Merge duplicate room_type_ids in case the same row was somehow sent twice.
+        merged_quantities = {}
+        for item in items:
+            room_type_id = item['room_type_id']
+            merged_quantities[room_type_id] = merged_quantities.get(room_type_id, 0) + item['quantity']
+
+        resolved_items = []
+        total_adults_capacity = 0
+        total_children_capacity = 0
+        total_occupancy_capacity = 0
+        for room_type_id, quantity in merged_quantities.items():
+            try:
+                room_type = RoomType.objects.select_related('hotel').get(pk=room_type_id)
+            except RoomType.DoesNotExist as exc:
+                raise serializers.ValidationError({'items': f'Room type {room_type_id} does not exist.'}) from exc
+            if room_type.hotel_id != hotel.id:
+                raise serializers.ValidationError({
+                    'items': f'{room_type.name} does not belong to the selected hotel.'
+                })
+            if not room_type.is_active or not room_type.is_available:
+                raise serializers.ValidationError({'items': f'{room_type.name} is currently unavailable.'})
+
+            resolved_items.append({'room_type': room_type, 'quantity': quantity})
+            total_adults_capacity += room_type.max_adults * quantity
+            total_children_capacity += room_type.max_children * quantity
+            total_occupancy_capacity += room_type.max_occupancy * quantity
+
+            self._check_room_type_availability(
+                room_type=room_type, quantity=quantity, check_in=check_in, check_out=check_out,
+            )
+
+        num_adults = attrs['num_adults']
+        num_children = attrs['num_children']
+        if num_adults > total_adults_capacity:
+            raise serializers.ValidationError({
+                'num_adults': f'Selected rooms only accommodate {total_adults_capacity} adult(s) in total.'
+            })
+        if num_children > total_children_capacity:
+            raise serializers.ValidationError({
+                'num_children': f'Selected rooms only accommodate {total_children_capacity} child(ren) in total.'
+            })
+        if (num_adults + num_children) > total_occupancy_capacity:
+            raise serializers.ValidationError({
+                'num_adults': f'Selected rooms only accommodate {total_occupancy_capacity} guest(s) in total.'
+            })
+
+        attrs['_resolved_items'] = resolved_items
+        return attrs
+
+    def _check_room_type_availability(self, *, room_type, quantity, check_in, check_out, for_update=False):
+        stay_dates = []
+        current_date = check_in
+        while current_date < check_out:
+            stay_dates.append(current_date)
+            current_date += timedelta(days=1)
+
+        overlapping_item_quantity = BookingItem.objects.filter(
+            room_type=room_type,
+            booking__check_in__lt=check_out,
+            booking__check_out__gt=check_in,
+        ).exclude(
+            booking__status=Booking.BookingStatus.CANCELLED,
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+
+        # Legacy single-room-type bookings (no BookingItem row) each occupy
+        # exactly one unit of this room type — they share the same
+        # RoomAvailability pool, so both paths must be counted together.
+        overlapping_legacy_count = Booking.objects.filter(
+            room_type=room_type,
+        ).exclude(
+            status=Booking.BookingStatus.CANCELLED,
+        ).filter(
+            check_in__lt=check_out, check_out__gt=check_in,
+        ).count()
+
+        overlapping_quantity = overlapping_item_quantity + overlapping_legacy_count
+
+        avail_qs = RoomAvailability.objects.filter(
+            room_type=room_type, date__gte=check_in, date__lt=check_out,
+        )
+        if for_update:
+            avail_qs = avail_qs.select_for_update()
+        availability_rows = {row.date: row for row in avail_qs}
+
+        if not availability_rows:
+            return
+
+        for stay_date in stay_dates:
+            availability = availability_rows.get(stay_date)
+            if availability is None:
+                continue
+            if availability.status != RoomAvailability.AvailabilityStatus.AVAILABLE:
+                raise serializers.ValidationError({
+                    'items': f'No vacancy for {room_type.name} on {stay_date}.'
+                })
+            remaining = availability.available_rooms - overlapping_quantity
+            if remaining < quantity:
+                raise serializers.ValidationError({
+                    'items': f'Only {max(remaining, 0)} {room_type.name} room(s) left on {stay_date}.'
+                })
+
+    def create(self, validated_data):
+        hotel = validated_data['_hotel']
+        resolved_items = validated_data['_resolved_items']
+        check_in = validated_data['check_in']
+        check_out = validated_data['check_out']
+        total_nights = (check_out - check_in).days
+
+        payment_method = validated_data.get('payment_method', Booking.PaymentMethod.PAY_AT_PREMISES)
+        payment_status = (
+            Booking.PaymentStatus.PENDING if payment_method == Booking.PaymentMethod.ONLINE
+            else Booking.PaymentStatus.UNPAID
+        )
+
+        with transaction.atomic():
+            # Re-check availability under row locks to close the race window
+            # between validate() (unlocked, for fast user-facing feedback)
+            # and this commit.
+            for entry in resolved_items:
+                self._check_room_type_availability(
+                    room_type=entry['room_type'], quantity=entry['quantity'],
+                    check_in=check_in, check_out=check_out, for_update=True,
+                )
+
+            lowest_nightly_price = min(entry['room_type'].base_price for entry in resolved_items)
+            currency = resolved_items[0]['room_type'].currency
+            total_amount = sum(
+                (entry['room_type'].base_price * entry['quantity'] * total_nights for entry in resolved_items),
+                start=0,
+            )
+
+            booking = Booking(
+                traveler=validated_data['traveler'],
+                hotel=hotel,
+                room_type=None,
+                check_in=check_in,
+                check_out=check_out,
+                num_adults=validated_data['num_adults'],
+                num_children=validated_data['num_children'],
+                special_requests=validated_data.get('special_requests', ''),
+                nightly_price=lowest_nightly_price,
+                currency=currency,
+                total_nights=total_nights,
+                total_amount=total_amount,
+                payment_method=payment_method,
+                payment_status=payment_status,
+                guest_full_name=validated_data['guest_full_name'],
+                guest_email=validated_data['guest_email'],
+                guest_phone=validated_data.get('guest_phone', ''),
+            )
+            booking._has_booking_items = True
+            booking.save()
+
+            BookingItem.objects.bulk_create([
+                BookingItem(
+                    booking=booking,
+                    room_type=entry['room_type'],
+                    quantity=entry['quantity'],
+                    nightly_price=entry['room_type'].base_price,
+                    subtotal=entry['room_type'].base_price * entry['quantity'] * total_nights,
+                )
+                for entry in resolved_items
+            ])
+
+        return booking

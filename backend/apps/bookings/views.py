@@ -18,6 +18,7 @@ from .serializers import (
     BookingListSerializer,
     BookingDetailSerializer,
     HostBookingListSerializer,
+    MultiRoomBookingSerializer,
 )
 from apps.notifications.models import Notification
 
@@ -117,8 +118,90 @@ def notify_guest_about_host_decision(booking: Booking, *, approved: bool):
             )
 
 
+def _booking_host(booking: Booking):
+    if booking.hotel_id:
+        return getattr(booking.hotel, 'host', None)
+    if booking.bnb_listing_id:
+        return getattr(booking.bnb_listing, 'host', None)
+    return None
+
+
+def notify_host_about_guest_payment_decision(booking: Booking, *, pay_at_premises: bool):
+    """Tell the host when a guest locks in pay-now or pay-at-property after approval."""
+    host = _booking_host(booking)
+    if not host:
+        return
+    # Avoid noisy self-notify when someone books their own listing in testing.
+    if host.id == booking.traveler_id:
+        return
+
+    is_hotel_booking = bool(booking.hotel_id)
+    stay_name = (
+        booking.hotel.name
+        if is_hotel_booking
+        else (booking.bnb_listing.title if booking.bnb_listing_id else 'your property')
+    )
+    guest_name = booking.guest_full_name or booking.traveler.get_full_name() or 'A guest'
+
+    if pay_at_premises:
+        title = 'Guest confirmed — paying at the property'
+        message = (
+            f'{guest_name} confirmed their stay at {stay_name} '
+            f'from {booking.check_in} to {booking.check_out}. '
+            f'They will pay on arrival.'
+        )
+        notification_type = Notification.Type.SUCCESS
+    else:
+        title = 'Guest chose to pay online'
+        message = (
+            f'{guest_name} selected online payment for {stay_name} '
+            f'({booking.check_in} to {booking.check_out}). '
+            f'You will be notified once payment clears.'
+        )
+        notification_type = Notification.Type.INFO
+
+    Notification.objects.create(
+        user=host,
+        title=title,
+        message=message,
+        notification_type=notification_type,
+        data={
+            'booking_id': booking.id,
+            'hotel_id': booking.hotel_id,
+            'bnb_listing_id': booking.bnb_listing_id,
+            'payment_method': (
+                Booking.PaymentMethod.PAY_AT_PREMISES
+                if pay_at_premises
+                else Booking.PaymentMethod.ONLINE
+            ),
+            'channel_status': {
+                'in_app': 'sent',
+                'email': 'queued',
+                'whatsapp': 'pending',
+            },
+        },
+    )
+
+    if host.email:
+        try:
+            send_mail(
+                title,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [host.email],
+                fail_silently=True,
+            )
+        except Exception:
+            logger.exception(
+                "Guest payment-decision host email failed",
+                extra={"booking_id": booking.id, "host_id": host.id},
+            )
+
+
 class BookingListCreateView(generics.ListCreateAPIView):
-    queryset = Booking.objects.select_related('traveler', 'hotel', 'room_type', 'bnb_listing')
+    queryset = Booking.objects.select_related(
+        'traveler', 'hotel', 'room_type', 'bnb_listing'
+    ).prefetch_related('items__room_type')
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
@@ -169,8 +252,47 @@ class BookingListCreateView(generics.ListCreateAPIView):
             raise
 
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_multi_room_booking(request):
+    """
+    Create one reservation covering multiple room types with quantities
+    (e.g. 2x Standard + 1x Family) in a single hotel booking.
+    """
+    serializer = MultiRoomBookingSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        booking = serializer.save(traveler=request.user)
+    except ValidationError:
+        logger.warning(
+            "Multi-room booking creation validation failed",
+            extra={
+                "request_id": getattr(request, "request_id", None),
+                "user_id": getattr(request.user, "id", None),
+                "path": request.path,
+            },
+        )
+        raise
+    except Exception:
+        logger.exception(
+            "Multi-room booking creation crashed",
+            extra={
+                "request_id": getattr(request, "request_id", None),
+                "user_id": getattr(request.user, "id", None),
+                "path": request.path,
+            },
+        )
+        raise
+
+    notify_host_about_booking(booking)
+    response_serializer = BookingDetailSerializer(booking)
+    return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
 class BookingDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Booking.objects.select_related('traveler', 'hotel', 'room_type', 'bnb_listing')
+    queryset = Booking.objects.select_related(
+        'traveler', 'hotel', 'room_type', 'bnb_listing'
+    ).prefetch_related('items__room_type')
     permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
@@ -179,10 +301,33 @@ class BookingDetailView(generics.RetrieveUpdateDestroyAPIView):
         return BookingSerializer
 
     def get_queryset(self):
-        # Users can only access their own bookings
-        return super().get_queryset().filter(traveler=self.request.user)
-    
+        # Traveler OR host of the listing can retrieve (avoids a confusing 404
+        # when a host opens /booking/:id from a shared link / old tab).
+        # Updates/cancels stay traveler-owned via perform_update / destroy checks.
+        user = self.request.user
+        return super().get_queryset().filter(
+            Q(traveler=user) | Q(hotel__host=user) | Q(bnb_listing__host=user)
+        )
+
+    def perform_update(self, serializer):
+        if serializer.instance.traveler_id != self.request.user.id:
+            raise ValidationError('Only the guest who made this booking can update it.')
+        previous_method = serializer.instance.payment_method
+        booking = serializer.save()
+        new_method = booking.payment_method
+        if (
+            new_method != previous_method
+            and booking.host_approval_status == Booking.HostApprovalStatus.APPROVED
+            and booking.status == Booking.BookingStatus.PENDING
+        ):
+            notify_host_about_guest_payment_decision(
+                booking,
+                pay_at_premises=(new_method == Booking.PaymentMethod.PAY_AT_PREMISES),
+            )
+
     def perform_destroy(self, instance):
+        if instance.traveler_id != self.request.user.id:
+            raise ValidationError('Only the guest who made this booking can cancel it.')
         # Soft delete - set status to cancelled
         if instance.status not in ['completed', 'cancelled']:
             instance.status = Booking.BookingStatus.CANCELLED
@@ -198,7 +343,7 @@ class MyBookingsListView(generics.ListAPIView):
     def get_queryset(self):
         return Booking.objects.select_related(
             'traveler', 'hotel', 'room_type', 'bnb_listing'
-        ).filter(traveler=self.request.user)
+        ).prefetch_related('items__room_type').filter(traveler=self.request.user)
 
 
 class HostBookingsListView(generics.ListAPIView):
@@ -212,7 +357,7 @@ class HostBookingsListView(generics.ListAPIView):
     def get_queryset(self):
         return Booking.objects.select_related(
             'traveler', 'hotel', 'room_type', 'bnb_listing'
-        ).filter(
+        ).prefetch_related('items__room_type').filter(
             Q(hotel__host=self.request.user) | Q(bnb_listing__host=self.request.user)
         ).order_by('-created_at')
 
@@ -276,7 +421,7 @@ def host_update_booking_status(request, pk):
         if new_status == Booking.BookingStatus.CANCELLED:
             notify_guest_about_host_decision(booking, approved=False)
 
-    serializer = BookingDetailSerializer(booking)
+    serializer = HostBookingListSerializer(booking)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -288,7 +433,9 @@ def confirm_pay_at_premises(request, pk):
     without going through the online payment flow.
     """
     try:
-        booking = Booking.objects.select_related('hotel', 'bnb_listing').get(pk=pk, traveler=request.user)
+        booking = Booking.objects.select_related(
+            'hotel', 'hotel__host', 'bnb_listing', 'bnb_listing__host', 'traveler'
+        ).get(pk=pk, traveler=request.user)
     except Booking.DoesNotExist:
         return Response({'detail': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -303,6 +450,8 @@ def confirm_pay_at_premises(request, pk):
     booking.payment_method = Booking.PaymentMethod.PAY_AT_PREMISES
     booking.status = Booking.BookingStatus.CONFIRMED
     booking.save(update_fields=['payment_method', 'status', 'updated_at'])
+
+    notify_host_about_guest_payment_decision(booking, pay_at_premises=True)
 
     serializer = BookingDetailSerializer(booking)
     return Response(serializer.data, status=status.HTTP_200_OK)

@@ -4,6 +4,7 @@ from .views import (
     BookingDetailView,
     cancel_booking,
     confirm_pay_at_premises,
+    create_multi_room_booking,
     MyBookingsListView,
     HostBookingsListView,
     host_update_booking_status,
@@ -13,6 +14,7 @@ app_name = 'bookings'
 
 urlpatterns = [
     path('', BookingListCreateView.as_view(), name='booking-list-create'),
+    path('multi-room/', create_multi_room_booking, name='booking-multi-room-create'),
     path('my-bookings/', MyBookingsListView.as_view(), name='booking-my-list'),
     path('host/', HostBookingsListView.as_view(), name='booking-host-list'),
     path('<int:pk>/', BookingDetailView.as_view(), name='booking-detail'),
