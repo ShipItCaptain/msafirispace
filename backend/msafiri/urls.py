@@ -46,7 +46,8 @@ urlpatterns = [
         path('payments/', include('apps.payments.urls')),
         path('reviews/', include('apps.reviews.urls')),
         path('promotions/', include('apps.promotions.urls')),
-        # path('referrals/', include('apps.referrals.urls')),
+        # Referrals already live under auth/ (apps.users.urls) -- the separate
+        # apps.referrals app was an abandoned placeholder, removed Day 4.
         path('notifications/', include('apps.notifications.urls')),
         path('messaging/', include('apps.messaging.urls')),
     ])),

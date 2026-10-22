@@ -45,3 +45,4 @@ whitenoise==6.6.0
 
 # Additional dependencies
 python-magic==0.4.27
+requests==2.34.2

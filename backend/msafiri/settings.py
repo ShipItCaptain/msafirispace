@@ -51,7 +51,6 @@ LOCAL_APPS = [
     'apps.payments',
     'apps.reviews',
     'apps.promotions',
-    'apps.referrals',
     'apps.notifications',
     'apps.messaging',
 ]
@@ -164,7 +163,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
-        'user': '1000/hour'
+        'user': '1000/hour',
+        'otp_resend': '5/hour'
     }
 }
 
@@ -206,19 +206,47 @@ CORS_ALLOWED_ORIGINS = config(
     default='http://localhost:3000,http://127.0.0.1:3000'
 ).split(',')
 
+# Optional, development-only origins (for example, a temporary Cloudflare
+# preview tunnel). Keep this empty by default so production remains explicit.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    origin for origin in config('CORS_ALLOWED_ORIGIN_REGEXES', default='').split(',')
+    if origin
+]
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ['X-Request-ID']
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'X-Request-ID',
 ]
 
-# Cache Configuration (using local memory for development)
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+# Cache Configuration -- shared, not per-process local memory. This matters
+# beyond general caching: DRF's rate throttles read/write this same cache, so
+# under gunicorn with multiple workers, LocMemCache gave each worker its own
+# counter and silently multiplied the configured rate limits.
+#
+# CACHE_BACKEND=database uses Postgres instead of Redis -- for shared hosting
+# (Namecheap cPanel plans don't offer Redis at all), where it's still shared
+# across workers correctly, just slower than Redis. Requires a one-time
+# `python manage.py createcachetable` before first use.
+CACHE_BACKEND = config('CACHE_BACKEND', default='redis')
+if CACHE_BACKEND == 'database':
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'django_cache_table',
+        }
     }
-}
+else:
+    REDIS_URL = config('REDIS_URL', default='redis://127.0.0.1:6379/0')
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+        }
+    }
 
 # Cloudinary Configuration
 CLOUDINARY_STORAGE = {
@@ -254,6 +282,20 @@ EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='dev@msafirispace.local')
 SITE_URL = config('SITE_URL', default='http://localhost:3000')
 
+# OTP / signup verification code settings
+OTP_CODE_LENGTH = config('OTP_CODE_LENGTH', default=6, cast=int)
+OTP_EXPIRY_MINUTES = config('OTP_EXPIRY_MINUTES', default=10, cast=int)
+OTP_MAX_ATTEMPTS = config('OTP_MAX_ATTEMPTS', default=5, cast=int)
+OTP_RESEND_COOLDOWN_SECONDS = config('OTP_RESEND_COOLDOWN_SECONDS', default=60, cast=int)
+# Phone/WhatsApp OTP delivery backend. 'console' (default) just logs the
+# code -- safe for local dev. 'whatsapp_web' sends through the pilot
+# whatsapp-service (see services/otp.py WhatsAppWebOTPSender and
+# ../whatsapp-service/README.md). This is the kill switch: set back to
+# 'console' to instantly stop real WhatsApp sends without touching code.
+OTP_SENDER_BACKEND = config('OTP_SENDER_BACKEND', default='console')
+WHATSAPP_SERVICE_URL = config('WHATSAPP_SERVICE_URL', default='http://127.0.0.1:4001')
+WHATSAPP_SERVICE_TOKEN = config('WHATSAPP_SERVICE_TOKEN', default='')
+
 # Celery Configuration (disabled for development)
 # CELERY_BROKER_URL = REDIS_URL
 # CELERY_RESULT_BACKEND = REDIS_URL
@@ -266,7 +308,13 @@ SITE_URL = config('SITE_URL', default='http://localhost:3000')
 MPESA_CONSUMER_KEY = config('MPESA_CONSUMER_KEY', default='')
 MPESA_CONSUMER_SECRET = config('MPESA_CONSUMER_SECRET', default='')
 MPESA_PASSKEY = config('MPESA_PASSKEY', default='')
+MPESA_SHORTCODE = config('MPESA_SHORTCODE', default='')
 MPESA_ENVIRONMENT = config('MPESA_ENVIRONMENT', default='sandbox')
+# Comma-separated Safaricom callback source IPs. Empty = no IP filtering (the
+# Daraja go-live application, Day 7, is what supplies the real list).
+MPESA_WEBHOOK_ALLOWED_IPS = [
+    ip.strip() for ip in config('MPESA_WEBHOOK_ALLOWED_IPS', default='').split(',') if ip.strip()
+]
 
 # Paystack Configuration
 PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY', default='')
@@ -275,6 +323,16 @@ PAYSTACK_ENVIRONMENT = config('PAYSTACK_ENVIRONMENT', default='test')
 WEBHOOK_TEST_TOKEN = config('WEBHOOK_TEST_TOKEN', default='')
 
 # Security Settings
+
+# Set unconditionally, not just under `if not DEBUG` below: this only takes
+# effect when the specific X-Forwarded-Proto header is actually present, so
+# it's a no-op locally (nothing sends that header in dev) but is required
+# once this sits behind any reverse proxy/load balancer in production --
+# otherwise Django can't tell a proxied HTTPS request from plain HTTP, which
+# breaks SECURE_SSL_REDIRECT and secure cookies below (redirect loops, or
+# cookies silently never getting set).
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
