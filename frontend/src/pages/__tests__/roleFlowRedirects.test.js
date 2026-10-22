@@ -53,7 +53,7 @@ describe('Homepage always shows the guest experience', () => {
       </MemoryRouter>
     );
 
-    await harness.waitForCondition(() => harness.container.textContent.includes('Find your next stay'));
+    await harness.waitForCondition(() => harness.container.textContent.includes('Stays across East Africa'));
     expect(harness.container.querySelector('[data-testid="host-home-page"]')).toBeNull();
   });
 
@@ -72,7 +72,7 @@ describe('Homepage always shows the guest experience', () => {
       </MemoryRouter>
     );
 
-    await harness.waitForCondition(() => harness.container.textContent.includes('Find your next stay'));
+    await harness.waitForCondition(() => harness.container.textContent.includes('Stays across East Africa'));
     expect(harness.container.querySelector('[data-testid="host-home-page"]')).toBeNull();
   });
 });

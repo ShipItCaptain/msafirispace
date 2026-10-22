@@ -1,4 +1,5 @@
 import React from 'react';
+import { act } from 'react';
 import BnBBookingsPanel from '../dashboard/BnBBookingsPanel';
 import { bookingsAPI } from '../../services/api';
 import { createDomTestHarness } from '../../test/testHarness';
@@ -46,26 +47,29 @@ describe('BnBBookingsPanel', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
     harness = createDomTestHarness();
   });
 
   afterEach(async () => {
     await harness.unmount();
+    jest.useRealTimers();
   });
 
-  it('loads host bookings and shows an approve-request alert for pending ones', async () => {
+  it('loads host bookings and shows needs-response queue for pending ones', async () => {
     bookingsAPI.getHostBookings.mockResolvedValue({ results: [baseBooking] });
 
     harness.render(<BnBBookingsPanel />);
 
     await harness.waitForCondition(() =>
-      harness.container.textContent.includes('reservation request')
+      harness.container.textContent.includes('Needs your response')
     );
-    expect(harness.container.textContent).toContain('waiting for your confirmation');
     expect(harness.container.textContent).toContain('Savannah Stay');
+    expect(harness.container.textContent).toContain('Alice Guest');
+    expect(harness.container.textContent).toContain('Needs response');
   });
 
-  it('approving a pending booking calls the API and keeps status pending while flipping request stage', async () => {
+  it('approving a pending booking calls the API after undo window', async () => {
     bookingsAPI.getHostBookings.mockResolvedValue({ results: [baseBooking] });
     bookingsAPI.updateHostBookingStatus.mockResolvedValue({
       ...baseBooking,
@@ -80,30 +84,26 @@ describe('BnBBookingsPanel', () => {
     );
 
     const approveButton = Array.from(harness.container.querySelectorAll('button')).find(
-      (btn) => btn.textContent.trim() === 'Approve Booking'
+      (btn) => btn.textContent.trim() === 'Approve'
     );
     expect(approveButton).toBeTruthy();
     harness.click(approveButton);
+
+    expect(bookingsAPI.updateHostBookingStatus).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+      await Promise.resolve();
+    });
 
     await harness.waitForCondition(() =>
       bookingsAPI.updateHostBookingStatus.mock.calls.length > 0
     );
     expect(bookingsAPI.updateHostBookingStatus).toHaveBeenCalledWith(200, 'confirmed');
-
-    await harness.waitForCondition(() => {
-      const btn = Array.from(harness.container.querySelectorAll('button')).find(
-        (b) => b.textContent.trim() === 'Approved'
-      );
-      return Boolean(btn);
-    });
-
-    // handleStatusChange's finally-block setBookingActionLoadingId(null) lands
-    // in a microtask after the button text has already updated, so flush it
-    // inside act() before the test ends to avoid a stray warning.
     await harness.settle();
   });
 
-  it('declining a pending booking calls the API with cancelled', async () => {
+  it('declining a pending booking calls the API after undo window', async () => {
     bookingsAPI.getHostBookings.mockResolvedValue({ results: [baseBooking] });
     bookingsAPI.updateHostBookingStatus.mockResolvedValue({
       ...baseBooking,
@@ -118,9 +118,14 @@ describe('BnBBookingsPanel', () => {
     );
 
     const declineButton = Array.from(harness.container.querySelectorAll('button')).find(
-      (btn) => btn.textContent.trim() === 'Decline Booking'
+      (btn) => btn.textContent.trim() === 'Decline'
     );
     harness.click(declineButton);
+
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+      await Promise.resolve();
+    });
 
     await harness.waitForCondition(() =>
       bookingsAPI.updateHostBookingStatus.mock.calls.length > 0

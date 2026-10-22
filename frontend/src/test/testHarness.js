@@ -1,14 +1,18 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { HelmetProvider } from 'react-helmet-async';
 
 export const createDomTestHarness = () => {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
 
+  // Layout renders <SEO> (react-helmet-async) on every page, which throws
+  // without a HelmetProvider ancestor -- App.js provides one for the real
+  // app, so tests that render pages directly need the same here.
   const render = (node) => {
     act(() => {
-      root.render(node);
+      root.render(<HelmetProvider>{node}</HelmetProvider>);
     });
   };
 

@@ -57,6 +57,9 @@ describe('Favorites flows', () => {
       isHotelRestaurantHost: false,
     });
     listingsAPI.getCombinedFavorites.mockResolvedValue({ results: [] });
+    authAPI.getUserDashboard.mockResolvedValue({});
+    const { bookingsAPI } = require('../../services/api');
+    bookingsAPI.getBookings.mockResolvedValue({ results: [] });
 
     harness = createDomTestHarness();
     container = harness.container;
