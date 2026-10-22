@@ -25,11 +25,33 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'email', 'username', 'first_name', 'last_name', 'password', 'password_confirm',
-            'phone_number', 'referral_code'
+            'phone_number', 'referral_code', 'id_full_name', 'id_number', 'verification_method'
         ]
         extra_kwargs = {
             'username': {'required': False},
+            'phone_number': {'required': True, 'allow_blank': False, 'allow_null': False},
+            'id_full_name': {'required': True, 'allow_blank': False},
+            'id_number': {'required': True, 'allow_blank': False},
+            'verification_method': {'required': True},
         }
+
+    def validate_phone_number(self, value):
+        import re
+        if not re.match(r'^[+]?[0-9\s\-()]{7,20}$', value or ''):
+            raise serializers.ValidationError('Enter a valid phone number.')
+        return value
+
+    def validate_id_full_name(self, value):
+        value = (value or '').strip()
+        if len(value) < 2:
+            raise serializers.ValidationError('Enter your full name as it appears on your ID.')
+        return value
+
+    def validate_id_number(self, value):
+        value = (value or '').strip()
+        if len(value) < 4:
+            raise serializers.ValidationError('Enter a valid ID number.')
+        return value
 
     def validate(self, attrs):
         # Check if passwords match
@@ -178,11 +200,12 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'country', 'user_type', 'host_type', 'roles', 'active_role', 'is_verified', 'is_premium', 'company_name',
             'business_license', 'tax_id', 'preferred_language', 'preferred_currency', 'notification_preferences',
             'referral_code', 'referred_by', 'profile', 'addresses', 'created_at',
-            'updated_at', 'last_login'
+            'updated_at', 'last_login', 'account_verified', 'verification_method'
         ]
         read_only_fields = [
             'id', 'email', 'username', 'user_type', 'is_verified', 'is_premium',
-            'referral_code', 'referred_by', 'created_at', 'updated_at', 'last_login'
+            'referral_code', 'referred_by', 'created_at', 'updated_at', 'last_login',
+            'account_verified', 'verification_method'
         ]
 
 
@@ -249,11 +272,19 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         return attrs
 
 
-class EmailVerificationSerializer(serializers.Serializer):
+class VerifyCodeSerializer(serializers.Serializer):
     """
-    Serializer for email verification
+    Serializer for confirming the signup OTP (email or WhatsApp/phone).
     """
-    token = serializers.CharField()
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=10)
+
+
+class ResendCodeSerializer(serializers.Serializer):
+    """
+    Serializer for requesting a new signup OTP.
+    """
+    email = serializers.EmailField()
 
 
 class ReferralSerializer(serializers.Serializer):
@@ -419,6 +450,10 @@ class HostOnboardingSerializer(serializers.Serializer):
             first_name=first_name,
             last_name=last_name,
             phone_number=validated_data.get('contact_phone', ''),
+            # A host who has submitted ID photos + KRA PIN + permits has already
+            # cleared a stronger identity check than the guest-signup OTP, so
+            # gating them behind it too would be a regression, not a safeguard.
+            account_verified=True,
         )
         UserProfile.objects.create(user=user)
         return user

@@ -117,7 +117,30 @@ class User(AbstractUser):
     # Password reset
     password_reset_token = models.CharField(max_length=100, blank=True, null=True)
     password_reset_expires = models.DateTimeField(blank=True, null=True)
-    
+
+    class VerificationMethod(models.TextChoices):
+        EMAIL = 'email', _('Email')
+        PHONE = 'phone', _('Phone (WhatsApp)')
+
+    # ID details (required at guest signup; kept separate from host KYC fields
+    # like BnBHostProfile.owner_id_number, which serve a different purpose)
+    id_full_name = models.CharField(max_length=150, blank=True, default='')
+    id_number = models.CharField(max_length=50, blank=True, default='')
+
+    # Signup verification (OTP-based account activation)
+    verification_method = models.CharField(
+        max_length=10, choices=VerificationMethod.choices, blank=True, default=''
+    )
+    phone_verified = models.BooleanField(default=False)
+    account_verified = models.BooleanField(
+        default=False,
+        help_text="Gate checked at login. True once the signup OTP is confirmed."
+    )
+    verification_code_hash = models.CharField(max_length=128, blank=True, null=True)
+    verification_code_expires = models.DateTimeField(blank=True, null=True)
+    verification_code_attempts = models.PositiveSmallIntegerField(default=0)
+    verification_last_sent_at = models.DateTimeField(blank=True, null=True)
+
     class Meta:
         verbose_name = _('User')
         verbose_name_plural = _('Users')

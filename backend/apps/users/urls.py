@@ -33,9 +33,9 @@ urlpatterns = [
     path('reset-password/', views.PasswordResetRequestView.as_view(), name='reset-password-request'),
     path('reset-password/confirm/', views.PasswordResetConfirmView.as_view(), name='reset-password-confirm'),
     
-    # Email verification
-    path('verify-email/', views.EmailVerificationView.as_view(), name='verify-email'),
-    path('resend-verification/', views.resend_verification_email, name='resend-verification'),
+    # Signup OTP verification (email or WhatsApp/phone)
+    path('verify-code/', views.VerifyCodeView.as_view(), name='verify-code'),
+    path('resend-code/', views.ResendCodeView.as_view(), name='resend-code'),
     
     # Referral system
     path('apply-referral/', views.ReferralView.as_view(), name='apply-referral'),

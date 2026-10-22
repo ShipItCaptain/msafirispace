@@ -4,6 +4,7 @@ Views for the Users app
 from rest_framework import status, generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
@@ -14,6 +15,7 @@ from django.db import transaction
 from django.db.models import Avg, Q, Sum
 from datetime import timedelta
 from collections import Counter
+import logging
 import secrets
 import string
 
@@ -21,14 +23,17 @@ from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserProfileSerializer,
     UserUpdateSerializer, UserAddressSerializer, UserDetailSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer,
-    PasswordResetConfirmSerializer, EmailVerificationSerializer,
+    PasswordResetConfirmSerializer,
+    VerifyCodeSerializer, ResendCodeSerializer,
     ReferralSerializer, UserStatsSerializer,
     AddRoleSerializer, SwitchRoleSerializer,
     HotelRestaurantHostProfileSerializer, BnBHostProfileSerializer,
     HostOnboardingSerializer
 )
 from .models import User, UserProfile, UserAddress
+from .services.otp import send_verification_code, check_code
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
@@ -44,48 +49,39 @@ class UserRegistrationView(APIView):
             try:
                 with transaction.atomic():
                     user = serializer.save()
-                    
-                    # Generate email verification token
-                    token = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
-                    user.email_verification_token = token
-                    user.save()
-                    
-                    # Send verification email (in production, use Celery task)
-                    if settings.EMAIL_BACKEND != 'django.core.mail.backends.console.EmailBackend':
-                        send_mail(
-                            'Verify your email - Msafiri Space',
-                            f'Click here to verify your email: {settings.SITE_URL}/verify-email/{token}',
-                            settings.DEFAULT_FROM_EMAIL,
-                            [user.email],
-                            fail_silently=True,
+
+                    # Send the signup verification code on whichever channel
+                    # the user picked. A send failure shouldn't roll back
+                    # account creation -- the user can still request a resend.
+                    try:
+                        send_verification_code(user)
+                    except Exception:
+                        logger.exception(
+                            'Failed to send signup verification code to %s',
+                            user.email,
                         )
-                    
-                    # Generate JWT tokens
-                    refresh = RefreshToken.for_user(user)
-                    
+
                     return Response({
-                        'message': 'User registered successfully. Please check your email for verification.',
+                        'message': (
+                            'Registration successful. We sent a verification code to your '
+                            + ('email.' if user.verification_method == 'email' else 'phone.')
+                        ),
                         'user': {
                             'id': user.id,
                             'email': user.email,
                             'first_name': user.first_name,
                             'last_name': user.last_name,
-                            'active_role': user.active_role,
-                            'roles': user.roles,
-                            'is_verified': user.is_verified,
+                            'verification_method': user.verification_method,
+                            'account_verified': user.account_verified,
                         },
-                        'tokens': {
-                            'access': str(refresh.access_token),
-                            'refresh': str(refresh),
-                        }
                     }, status=status.HTTP_201_CREATED)
-                    
+
             except Exception as e:
                 return Response({
                     'error': 'Registration failed. Please try again.',
                     'detail': str(e)
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -99,7 +95,15 @@ class UserLoginView(APIView):
         serializer = UserLoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
-            
+
+            if not user.account_verified:
+                return Response({
+                    'error': 'account_not_verified',
+                    'message': 'Please verify your account before logging in.',
+                    'email': user.email,
+                    'verification_method': user.verification_method,
+                }, status=status.HTTP_403_FORBIDDEN)
+
             # Update last login
             user.last_login = timezone.now()
             user.save()
@@ -358,38 +362,98 @@ class PasswordResetConfirmView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class EmailVerificationView(APIView):
+class VerifyCodeView(APIView):
     """
-    Email verification endpoint
+    Confirms the signup verification code (sent via email or WhatsApp/phone)
+    and activates the account. This is the only place JWTs are issued after
+    registration -- registration itself no longer logs the user in.
     """
     permission_classes = [permissions.AllowAny]
-    
+
     def post(self, request):
-        serializer = EmailVerificationSerializer(data=request.data)
-        if serializer.is_valid():
-            token = serializer.validated_data['token']
-            
+        serializer = VerifyCodeSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data['email']
+        code = serializer.validated_data['code']
+        generic_error = {'error': 'Invalid or expired verification code.'}
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if not user or user.account_verified or not user.verification_code_hash:
+            return Response(generic_error, status=status.HTTP_400_BAD_REQUEST)
+
+        if user.verification_code_attempts >= settings.OTP_MAX_ATTEMPTS:
+            return Response({
+                'error': 'Too many incorrect attempts. Please request a new code.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.verification_code_expires or user.verification_code_expires < timezone.now():
+            return Response(generic_error, status=status.HTTP_400_BAD_REQUEST)
+
+        if not check_code(user, code):
+            user.verification_code_attempts += 1
+            user.save(update_fields=['verification_code_attempts'])
+            return Response(generic_error, status=status.HTTP_400_BAD_REQUEST)
+
+        user.account_verified = True
+        if user.verification_method == 'email':
+            user.email_verified = True
+        elif user.verification_method == 'phone':
+            user.phone_verified = True
+        user.verification_code_hash = None
+        user.verification_code_expires = None
+        user.verification_code_attempts = 0
+        user.save()
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'message': 'Account verified successfully.',
+            'user': UserDetailSerializer(user).data,
+            'tokens': {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class ResendCodeView(APIView):
+    """
+    Requests a new signup verification code. Always returns the same
+    generic response regardless of whether the account exists or is
+    already verified, to avoid leaking account existence via this endpoint.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'otp_resend'
+
+    def post(self, request):
+        serializer = ResendCodeSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data['email']
+        user = User.objects.filter(email__iexact=email, is_active=True, account_verified=False).first()
+
+        if user:
+            if user.verification_last_sent_at:
+                elapsed = (timezone.now() - user.verification_last_sent_at).total_seconds()
+                if elapsed < settings.OTP_RESEND_COOLDOWN_SECONDS:
+                    return Response({
+                        'error': 'Please wait before requesting another code.'
+                    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
             try:
-                user = User.objects.get(
-                    email_verification_token=token,
-                    is_active=True
+                send_verification_code(user)
+            except Exception:
+                logger.exception(
+                    'Failed to resend verification code to %s',
+                    user.email,
                 )
-                
-                # Verify email
-                user.email_verified = True
-                user.email_verification_token = None
-                user.save()
-                
-                return Response({
-                    'message': 'Email verified successfully'
-                }, status=status.HTTP_200_OK)
-                
-            except User.DoesNotExist:
-                return Response({
-                    'error': 'Invalid verification token'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'message': 'If an account exists and is not yet verified, a new code has been sent.'
+        }, status=status.HTTP_200_OK)
 
 
 class ReferralView(APIView):
@@ -397,7 +461,7 @@ class ReferralView(APIView):
     Referral code application endpoint
     """
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def post(self, request):
         serializer = ReferralSerializer(data=request.data)
         if serializer.is_valid():
@@ -754,39 +818,6 @@ class SwitchRoleView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def resend_verification_email(request):
-    """
-    Resend email verification endpoint
-    """
-    user = request.user
-    
-    if user.email_verified:
-        return Response({
-            'error': 'Email is already verified'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Generate new verification token
-    token = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
-    user.email_verification_token = token
-    user.save()
-    
-    # Send verification email (in production, use Celery task)
-    if settings.EMAIL_BACKEND != 'django.core.mail.backends.console.EmailBackend':
-        send_mail(
-            'Verify your email - Msafiri Space',
-            f'Click here to verify your email: {settings.SITE_URL}/verify-email/{token}',
-            settings.DEFAULT_FROM_EMAIL,
-            [user.email],
-            fail_silently=True,
-        )
-    
-    return Response({
-        'message': 'Verification email sent. Please check your email.'
-    }, status=status.HTTP_200_OK)
-
-
 class HostOnboardingView(APIView):
     """
     Host onboarding wizard submission (KYC): account type, host category,
@@ -976,7 +1007,9 @@ class HostDashboardView(APIView):
             check_out=today,
         ).count()
 
-        total_rooms = RoomType.objects.filter(hotel__host=user, is_active=True).count()
+        total_rooms = RoomType.objects.filter(hotel__host=user, is_active=True).aggregate(
+            total=Sum('total_rooms')
+        )['total'] or 0
         occupied_rooms = host_bookings.filter(
             status=Booking.BookingStatus.CONFIRMED,
             check_in__lte=today,
