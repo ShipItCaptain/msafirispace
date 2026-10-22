@@ -37,7 +37,8 @@ export const getApiErrorDetails = (error, fallbackMessage = 'Request failed. Ple
   return {
     message,
     requestId,
-    fullMessage: requestId ? `${message} (Ref: ${requestId})` : message,
+    // User-facing copy only — keep requestId for logs, not toast UI.
+    fullMessage: message,
   };
 };
 
@@ -170,7 +171,18 @@ export const authAPI = {
 
   // Update user detail
   updateUserDetail: async (userData) => {
-    const response = await api.patch('/auth/detail/', userData);
+    const isFormData = typeof FormData !== 'undefined' && userData instanceof FormData;
+    const config = isFormData
+      ? {
+          transformRequest: [
+            (data, headers) => {
+              delete headers['Content-Type'];
+              return data;
+            },
+          ],
+        }
+      : undefined;
+    const response = await api.patch('/auth/detail/', userData, config);
     return response.data;
   },
 
@@ -192,15 +204,15 @@ export const authAPI = {
     return response.data;
   },
 
-  // Verify email
-  verifyEmail: async (token) => {
-    const response = await api.post('/auth/verify-email/', { token });
+  // Confirm the signup OTP (email or WhatsApp/phone)
+  verifyCode: async ({ email, code }) => {
+    const response = await api.post('/auth/verify-code/', { email, code });
     return response.data;
   },
 
-  // Resend verification email
-  resendVerification: async () => {
-    const response = await api.post('/auth/resend-verification/');
+  // Request a new signup OTP
+  resendCode: async ({ email }) => {
+    const response = await api.post('/auth/resend-code/', { email });
     return response.data;
   },
 
@@ -622,6 +634,13 @@ export const bookingsAPI = {
   // Create booking
   createBooking: async (bookingData) => {
     const response = await api.post('/bookings/', bookingData);
+    return response.data;
+  },
+
+  // Create a reservation covering multiple room types with quantities
+  // (e.g. 2x Standard + 1x Family) in one booking
+  createMultiRoomBooking: async (bookingData) => {
+    const response = await api.post('/bookings/multi-room/', bookingData);
     return response.data;
   },
 

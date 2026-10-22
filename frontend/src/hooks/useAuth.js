@@ -12,6 +12,8 @@ import {
   selectProfileError,
   loginUser,
   registerUser,
+  verifyAccountCode,
+  resendAccountCode,
   logoutUser,
   fetchUserProfile,
   updateUserProfile,
@@ -75,10 +77,34 @@ export const useAuth = () => {
   const register = async (userData) => {
     try {
       const result = await dispatch(registerUser(userData)).unwrap();
-      toast.success('Registration successful! Please check your email for verification.');
+      toast.success('Registration successful! Please enter the verification code we sent you.');
       return result;
     } catch (error) {
       const errorMessage = extractErrorMessage(error) || 'Registration failed';
+      toast.error(errorMessage);
+      throw error;
+    }
+  };
+
+  const verifyCode = async ({ email, code }) => {
+    try {
+      const result = await dispatch(verifyAccountCode({ email, code })).unwrap();
+      toast.success('Account verified successfully!');
+      return result;
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error) || 'Verification failed';
+      toast.error(errorMessage);
+      throw error;
+    }
+  };
+
+  const resendCode = async ({ email }) => {
+    try {
+      const result = await dispatch(resendAccountCode({ email })).unwrap();
+      toast.success('A new code has been sent.');
+      return result;
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error) || 'Failed to resend code';
       toast.error(errorMessage);
       throw error;
     }
@@ -209,6 +235,8 @@ export const useAuth = () => {
     // Actions
     login,
     register,
+    verifyCode,
+    resendCode,
     logout,
     getProfile,
     updateProfile,

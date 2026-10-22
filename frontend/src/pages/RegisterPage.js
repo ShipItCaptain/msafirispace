@@ -24,8 +24,11 @@ const RegisterPage = () => {
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
+    id_full_name: '',
+    id_number: '',
     email: '',
     phone: '',
+    verification_method: 'email',
     password: '',
     confirm_password: '',
     country: 'Kenya',
@@ -34,8 +37,12 @@ const RegisterPage = () => {
   });
 
   useEffect(() => {
+    // clearAuthError is a new function reference on every render, so
+    // depending on it here would re-run this effect after every render and
+    // wipe out any error state set in between -- run once on mount only.
     clearAuthError();
-  }, [clearAuthError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -67,6 +74,18 @@ const RegisterPage = () => {
       newErrors.last_name = 'Last name must be at least 2 characters';
     }
 
+    if (!data.id_full_name.trim()) {
+      newErrors.id_full_name = 'Full name as on your ID is required';
+    } else if (data.id_full_name.trim().length < 2) {
+      newErrors.id_full_name = 'Enter your full name as it appears on your ID';
+    }
+
+    if (!data.id_number.trim()) {
+      newErrors.id_number = 'ID number is required';
+    } else if (data.id_number.trim().length < 4) {
+      newErrors.id_number = 'Enter a valid ID number';
+    }
+
     if (!data.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(data.email)) {
@@ -77,6 +96,10 @@ const RegisterPage = () => {
       newErrors.phone = 'Phone number is required';
     } else if (!/^[+]?[0-9\s\-()]{10,}$/.test(data.phone.replace(/\s/g, ''))) {
       newErrors.phone = 'Please enter a valid phone number';
+    }
+
+    if (!['email', 'phone'].includes(data.verification_method)) {
+      newErrors.verification_method = 'Choose how to receive your verification code';
     }
 
     if (!data.password.trim()) {
@@ -115,8 +138,11 @@ const RegisterPage = () => {
       const {
         first_name,
         last_name,
+        id_full_name,
+        id_number,
         email,
         phone,
+        verification_method,
         password,
         confirm_password,
         referral_code,
@@ -127,15 +153,21 @@ const RegisterPage = () => {
         username: email, // backend falls back to email if not provided
         first_name,
         last_name,
+        id_full_name: id_full_name.trim(),
+        id_number: id_number.trim(),
         password,
         password_confirm: confirm_password,
         phone_number: phone,
+        verification_method,
         ...(referral_code ? { referral_code: referral_code.trim() } : {}),
       };
 
       await register(registrationData);
-      // After registration (and auto login), redirect to intended page or home
-      navigate(from, { replace: true });
+      // Registration no longer logs the user in -- they must confirm the
+      // verification code we just sent before a session is established.
+      navigate('/verify-account', {
+        state: { email: registrationData.email, verification_method, from },
+      });
     } catch (error) {
       // Map backend validation errors to local field errors for inline display
       const backend = error || {};
@@ -153,6 +185,9 @@ const RegisterPage = () => {
       pushFirst('first_name', 'first_name');
       pushFirst('last_name', 'last_name');
       pushFirst('phone_number', 'phone');
+      pushFirst('id_full_name', 'id_full_name');
+      pushFirst('id_number', 'id_number');
+      pushFirst('verification_method', 'verification_method');
       pushFirst('password', 'password');
       pushFirst('password_confirm', 'confirm_password');
       pushFirst('city', 'city');

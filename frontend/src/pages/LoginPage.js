@@ -20,14 +20,19 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [unverifiedAccount, setUnverifiedAccount] = useState(null);
 
   // Get the intended destination from location state
   const from = location.state?.from?.pathname || '/';
 
   useEffect(() => {
-    // Clear any previous errors when component mounts
+    // Clear any previous errors when component mounts. clearAuthError is a
+    // new function reference on every render (useAuth doesn't memoize it),
+    // so depending on it here would re-run this effect after every render
+    // and wipe out any error state set in between -- run once on mount only.
     clearAuthError();
-  }, [clearAuthError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -70,11 +75,15 @@ const LoginPage = () => {
     if (!validateForm()) return;
     
     setIsSubmitting(true);
+    setUnverifiedAccount(null);
     try {
       await login(formData);
       // After successful login, redirect to intended page or home
       navigate(from, { replace: true });
     } catch (error) {
+      if (error?.error === 'account_not_verified') {
+        setUnverifiedAccount({ email: error.email, verification_method: error.verification_method });
+      }
       console.error('Login error:', error);
     } finally {
       setIsSubmitting(false);
@@ -196,7 +205,7 @@ const LoginPage = () => {
               </div>
 
               {/* Error Message */}
-              {error && (
+              {(error || unverifiedAccount) && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-4">
                   <div className="flex">
                     <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
@@ -204,9 +213,24 @@ const LoginPage = () => {
                       <h3 className="text-sm font-medium text-red-800">
                         Login Failed
                       </h3>
-                      <div className="mt-2 text-sm text-red-700">
-                        <p>{typeof error === 'string' ? error : error?.detail || error?.message || 'An error occurred'}</p>
-                      </div>
+                      {error && (
+                        <div className="mt-2 text-sm text-red-700">
+                          <p>{typeof error === 'string' ? error : error?.detail || error?.message || 'An error occurred'}</p>
+                        </div>
+                      )}
+                      {unverifiedAccount && (
+                        <Link
+                          to="/verify-account"
+                          state={{
+                            email: unverifiedAccount.email,
+                            verification_method: unverifiedAccount.verification_method,
+                            from,
+                          }}
+                          className="mt-2 inline-block text-sm font-medium text-red-800 underline hover:text-red-900"
+                        >
+                          Resume verification
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -21,13 +21,34 @@ export const registerUser = createAsyncThunk(
   'auth/registerUser',
   async (userData, { rejectWithValue }) => {
     try {
+      // Registration no longer logs the user in -- no tokens are returned
+      // until the signup verification code is confirmed (see verifyAccountCode).
       const response = await authAPI.register(userData);
-      // Store tokens in localStorage
-      localStorage.setItem('accessToken', response.tokens.access);
-      localStorage.setItem('refreshToken', response.tokens.refresh);
       return response;
     } catch (error) {
       return rejectWithValue(error.response?.data || 'Registration failed');
+    }
+  }
+);
+
+export const verifyAccountCode = createAsyncThunk(
+  'auth/verifyAccountCode',
+  async ({ email, code }, { rejectWithValue }) => {
+    try {
+      return await authAPI.verifyCode({ email, code });
+    } catch (error) {
+      return rejectWithValue(error.response?.data || 'Verification failed');
+    }
+  }
+);
+
+export const resendAccountCode = createAsyncThunk(
+  'auth/resendAccountCode',
+  async ({ email }, { rejectWithValue }) => {
+    try {
+      return await authAPI.resendCode({ email });
+    } catch (error) {
+      return rejectWithValue(error.response?.data || 'Failed to resend code');
     }
   }
 );
@@ -226,11 +247,10 @@ const authSlice = createSlice({
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(registerUser.fulfilled, (state, action) => {
+      .addCase(registerUser.fulfilled, (state) => {
+        // No session is established yet -- that happens once the
+        // verification code is confirmed (see setSession/establishSession).
         state.isLoading = false;
-        state.isAuthenticated = true;
-        state.user = action.payload.user;
-        state.tokens = action.payload.tokens;
         state.error = null;
       })
       .addCase(registerUser.rejected, (state, action) => {

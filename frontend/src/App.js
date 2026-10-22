@@ -1,13 +1,15 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { HelmetProvider } from 'react-helmet-async';
 
 // Layout Components
 import Layout from './components/layout/Layout';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
+import ErrorBoundary from './components/layout/ErrorBoundary';
 
-// Page Components
+// Page Components (public, loaded eagerly)
 import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
 import ListingDetailPage from './pages/ListingDetailPage';
@@ -15,25 +17,13 @@ import HotelPage from './pages/HotelPage';
 import HotelsPage from './pages/HotelsPage';
 import BnBsPage from './pages/BnBsPage';
 import BnBDetailPage from './pages/BnBDetailPage';
-import ListHotelPage from './pages/ListHotelPage';
-import HotelHostManagementPage from './pages/HotelHostManagementPage';
-import DashboardPage from './pages/DashboardPage';
-import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-import VerifyEmailPage from './pages/VerifyEmailPage';
+import VerifyAccountPage from './pages/VerifyAccountPage';
 import BookingDetailPage from './pages/BookingDetailPage';
 import BecomeHostPage from './pages/BecomeHostPage';
-// Removed HotelRestaurantHostPage form route usage
-import BnBCreatePage from './pages/BnBCreatePage';
-import HotelHostDashboard from './pages/HotelHostDashboardPlaceholder';
-import BnBHostManagementPage from './pages/BnBHostManagementPage';
-import BnBListingDetailPage from './pages/BnBListingDetailPage';
-// Concierge pages removed
-import HostHomePage from './pages/HostHomePage';
-import RoomTypeEditPage from './pages/RoomTypeEditPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 // Protected Route Component
@@ -47,6 +37,18 @@ import { NotificationProvider, useNotifications } from './contexts/NotificationC
 import { FavoritesProvider } from './contexts/FavoritesContext';
 import NotificationContainer from './components/notifications/NotificationContainer';
 
+// Dashboard & host-tool pages (lazy-loaded — guests never need this code)
+const ListHotelPage = React.lazy(() => import('./pages/ListHotelPage'));
+const HotelHostManagementPage = React.lazy(() => import('./pages/HotelHostManagementPage'));
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
+const BnBCreatePage = React.lazy(() => import('./pages/BnBCreatePage'));
+const HotelHostDashboard = React.lazy(() => import('./pages/HotelHostDashboardPlaceholder'));
+const BnBHostManagementPage = React.lazy(() => import('./pages/BnBHostManagementPage'));
+const BnBListingDetailPage = React.lazy(() => import('./pages/BnBListingDetailPage'));
+const HostHomePage = React.lazy(() => import('./pages/HostHomePage'));
+const RoomTypeEditPage = React.lazy(() => import('./pages/RoomTypeEditPage'));
+
 // App Content Component
 function AppContent() {
   const { isAuthenticated } = useAuth();
@@ -54,11 +56,13 @@ function AppContent() {
 
   return (
     <div className="App min-h-screen bg-white">
-      <NotificationContainer 
-        notifications={notifications} 
-        onClose={removeNotification} 
+      <NotificationContainer
+        notifications={notifications}
+        onClose={removeNotification}
       />
+      <ErrorBoundary>
         <AnimatePresence mode="wait">
+          <React.Suspense fallback={<div className="min-h-screen" />}>
           <Routes>
           {/* Public Routes */}
           <Route path="/" element={
@@ -77,7 +81,7 @@ function AppContent() {
           } />
           
           <Route path="/search" element={
-            <Layout>
+            <Layout title="Search" description="Search hotels and BnBs across Kenya on Msafiri Space.">
               <Header />
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -92,7 +96,7 @@ function AppContent() {
           } />
           
           <Route path="/hotels" element={
-            <Layout>
+            <Layout title="Hotels" description="Browse hotels across Kenya on Msafiri Space.">
               <Header />
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -107,7 +111,7 @@ function AppContent() {
           } />
           
           <Route path="/bnbs" element={
-            <Layout>
+            <Layout title="BnBs" description="Browse BnBs and short-term stays across Kenya on Msafiri Space.">
               <Header />
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -247,7 +251,7 @@ function AppContent() {
             </Layout>
           } />
 
-          <Route path="/verify-email/:token" element={
+          <Route path="/verify-account" element={
             <Layout>
               <Header />
               <motion.div
@@ -256,7 +260,7 @@ function AppContent() {
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.3 }}
               >
-                <VerifyEmailPage />
+                <VerifyAccountPage />
               </motion.div>
               <Footer />
             </Layout>
@@ -518,20 +522,24 @@ function AppContent() {
             </Layout>
           } />
         </Routes>
-      </AnimatePresence>
+          </React.Suspense>
+        </AnimatePresence>
+      </ErrorBoundary>
     </div>
   );
 }
 
 function App() {
   return (
-    <AuthInitializer>
-      <NotificationProvider>
-        <FavoritesProvider>
-          <AppContent />
-        </FavoritesProvider>
-      </NotificationProvider>
-    </AuthInitializer>
+    <HelmetProvider>
+      <AuthInitializer>
+        <NotificationProvider>
+          <FavoritesProvider>
+            <AppContent />
+          </FavoritesProvider>
+        </NotificationProvider>
+      </AuthInitializer>
+    </HelmetProvider>
   );
 }
 

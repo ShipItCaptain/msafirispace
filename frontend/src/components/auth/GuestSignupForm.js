@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
+import { toast } from 'react-hot-toast';
+import {
   EyeIcon,
   EyeSlashIcon,
   ExclamationTriangleIcon
@@ -10,6 +11,13 @@ const GuestSignupForm = ({ formData, setFormData, errors, handleInputChange, onS
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  const handleWhatsAppDisabledClick = () => {
+    toast('WhatsApp verification is temporarily unavailable — we\'ll send your code by email instead.', {
+      icon: '⚠️',
+      duration: 4500,
+    });
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -95,6 +103,59 @@ const GuestSignupForm = ({ formData, setFormData, errors, handleInputChange, onS
           </div>
         </div>
 
+        {/* ID Fields */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="id_full_name" className="block text-sm font-medium text-gray-700">
+              Full Name (as on ID)
+            </label>
+            <div className="mt-1">
+              <input
+                id="id_full_name"
+                name="id_full_name"
+                type="text"
+                value={formData.id_full_name}
+                onChange={handleInputChange}
+                className={`appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm ${
+                  errors.id_full_name ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="John Michael Doe"
+              />
+            </div>
+            {errors.id_full_name && (
+              <p className="mt-1 text-sm text-red-600 flex items-center">
+                <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+                {errors.id_full_name}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="id_number" className="block text-sm font-medium text-gray-700">
+              ID Number
+            </label>
+            <div className="mt-1">
+              <input
+                id="id_number"
+                name="id_number"
+                type="text"
+                value={formData.id_number}
+                onChange={handleInputChange}
+                className={`appearance-none block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm ${
+                  errors.id_number ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="12345678"
+              />
+            </div>
+            {errors.id_number && (
+              <p className="mt-1 text-sm text-red-600 flex items-center">
+                <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+                {errors.id_number}
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Email Field */}
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -147,6 +208,40 @@ const GuestSignupForm = ({ formData, setFormData, errors, handleInputChange, onS
               {errors.phone}
             </p>
           )}
+        </div>
+
+        {/* Verification method: WhatsApp stays visible but disabled --
+            clicking it warns and does nothing, rather than silently
+            vanishing the option. formData.verification_method is never set
+            to 'phone' here, so email stays the only real path regardless of
+            what's clicked. See backend/.env for the paused Meta setup. */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            How should we send your verification code?
+          </label>
+          <div className="mt-2 grid grid-cols-2 gap-4">
+            <label className="flex items-center justify-center px-3 py-2 border rounded-md shadow-sm text-sm cursor-pointer border-red-500 ring-1 ring-red-500 text-red-700">
+              <input
+                type="radio"
+                name="verification_method"
+                value="email"
+                checked
+                readOnly
+                className="sr-only"
+              />
+              Email
+            </label>
+            <button
+              type="button"
+              onClick={handleWhatsAppDisabledClick}
+              className="flex items-center justify-center px-3 py-2 border rounded-md shadow-sm text-sm border-gray-300 text-gray-400 cursor-not-allowed"
+            >
+              Phone (WhatsApp)
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            WhatsApp verification is temporarily unavailable — your code will be sent by email.
+          </p>
         </div>
 
         {/* Location */}
