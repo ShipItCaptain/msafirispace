@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 
+from . import mpesa_client
 from .models import Payment, PaymentIntent, PaymentWebhookEvent
 from .serializers import (
     PaymentIntentCreateSerializer,
@@ -182,11 +183,47 @@ class WebhookPaystackView(APIView):
         return Response({'ok': True})
 
 
+def _client_ip(request) -> str:
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', '')
+
+
+def _mpesa_callback_is_verified(request, checkout_ref: str, claimed_result_code) -> bool:
+    """
+    An M-Pesa STK callback has no signature Safaricom controls, so a POST body
+    claiming success can't be trusted on its own. Independently ask Safaricom
+    for the real status via the STK Push Query API before crediting anything.
+
+    Falls back to trusting the callback only in DEBUG with the same shared
+    WEBHOOK_TEST_TOKEN the Paystack webhook uses for local testing, since
+    there is no sandbox-callable Daraja setup to verify against in dev.
+    """
+    result = mpesa_client.query_stk_status(checkout_ref)
+    if result is not None:
+        verified_code = result.get('ResultCode')
+        return str(verified_code) == '0'
+
+    if settings.DEBUG:
+        debug_token = getattr(settings, 'WEBHOOK_TEST_TOKEN', '')
+        supplied_token = request.headers.get('X-Msafiri-Webhook-Token', '')
+        if debug_token and supplied_token and hmac.compare_digest(debug_token, supplied_token):
+            return str(claimed_result_code) == '0'
+
+    return False
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class WebhookMpesaView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        allowed_ips = getattr(settings, 'MPESA_WEBHOOK_ALLOWED_IPS', [])
+        if allowed_ips and _client_ip(request) not in allowed_ips:
+            logger.warning("M-Pesa webhook rejected: source IP not allowlisted")
+            return Response({'detail': 'Forbidden'}, status=403)
+
         try:
             data = json.loads(request.body.decode('utf-8'))
         except Exception:
@@ -246,7 +283,7 @@ class WebhookMpesaView(APIView):
 
         normalized_result = int(result_code) if str(result_code).isdigit() else None
 
-        if normalized_result == 0:
+        if normalized_result == 0 and _mpesa_callback_is_verified(request, checkout_ref, normalized_result):
             intent.status = PaymentIntent.Status.COMPLETED
             intent.save(update_fields=['status', 'updated_at'])
             provider_reference = checkout_ref or intent.client_secret or intent.reference
@@ -266,6 +303,12 @@ class WebhookMpesaView(APIView):
             _update_booking_payment_state(intent.booking)
             event.processed = True
             event.processing_notes = 'success_applied'
+        elif normalized_result == 0:
+            # Callback claims success but server-side verification couldn't confirm it.
+            # Don't credit the booking from an unverified callback alone.
+            event.processing_notes = 'unverified_success_claim'
+            event.save(update_fields=['processing_notes', 'updated_at'])
+            return Response({'ok': True, 'verified': False})
         else:
             intent.status = PaymentIntent.Status.FAILED
             intent.save(update_fields=['status', 'updated_at'])
