@@ -401,7 +401,10 @@ def host_update_booking_status(request, pk):
         # the guest has actually paid (or confirmed pay-at-premises).
         if new_status == Booking.BookingStatus.CONFIRMED:
             booking.host_approval_status = Booking.HostApprovalStatus.APPROVED
-            booking.save(update_fields=['host_approval_status', 'updated_at'])
+            # No longer a timed hold once approved -- it's a real commitment
+            # awaiting payment now, not a soft lock that should lapse.
+            booking.hold_expires_at = None
+            booking.save(update_fields=['host_approval_status', 'hold_expires_at', 'updated_at'])
             notify_guest_about_host_decision(booking, approved=True)
         elif new_status == Booking.BookingStatus.CANCELLED:
             booking.host_approval_status = Booking.HostApprovalStatus.DECLINED

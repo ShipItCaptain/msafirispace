@@ -75,11 +75,19 @@ class Booking(models.Model):
     num_children = models.PositiveIntegerField(default=0)
     special_requests = models.TextField(blank=True)
 
-    # Pricing snapshot (copied from room at time of booking)
+    # Pricing snapshot (copied from room/listing at time of booking, so a
+    # later price change on the listing doesn't retroactively change what a
+    # guest was already quoted/charged)
     nightly_price = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='KES')
     total_nights = models.PositiveIntegerField()
+    # One-time fee (BnBListing.cleaning_fee at booking time); 0 for hotel
+    # bookings, which have no equivalent fee today.
+    cleaning_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    # Refundable security deposit (BnBListing.security_deposit at booking
+    # time) -- shown to the guest, not folded into total_amount since it
+    # isn't a charge.
     deposit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # Status
@@ -95,6 +103,21 @@ class Booking(models.Model):
         choices=HostApprovalStatus.choices,
         default=HostApprovalStatus.PENDING,
     )
+
+    # True if real day-level availability data (RoomAvailability/
+    # BnBAvailability rows) existed for every night of this stay at booking
+    # time -- i.e. the host runs a live calendar we could check instantly,
+    # vs. us having to ask the host directly with no data to go on.
+    calendar_verified = models.BooleanField(default=True)
+    # Soft inventory hold while this request is host_approval_status=PENDING.
+    # A short window (settings.BOOKING_HOLD_MINUTES) when calendar_verified,
+    # a longer one (settings.BOOKING_HOST_RESPONSE_SLA_HOURS) when it isn't
+    # and the host has to be asked directly. Past this timestamp, a pending
+    # booking no longer blocks other guests from booking the same dates --
+    # checked lazily wherever availability is computed, not by a background
+    # job (no scheduler is running yet; see BOOKING_HOLD_MINUTES comment in
+    # settings.py for the upgrade path). Cleared once the host approves.
+    hold_expires_at = models.DateTimeField(null=True, blank=True)
 
     # Contact snapshot
     guest_full_name = models.CharField(max_length=150)
@@ -145,6 +168,15 @@ class Booking(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+    @property
+    def is_hold_expired(self):
+        from django.utils import timezone
+        return (
+            self.host_approval_status == self.HostApprovalStatus.PENDING
+            and self.hold_expires_at is not None
+            and self.hold_expires_at < timezone.now()
+        )
 
     def __str__(self):
         booking_type = "Hotel" if self.hotel else "BnB"

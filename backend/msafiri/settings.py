@@ -296,6 +296,20 @@ OTP_SENDER_BACKEND = config('OTP_SENDER_BACKEND', default='console')
 WHATSAPP_SERVICE_URL = config('WHATSAPP_SERVICE_URL', default='http://127.0.0.1:4001')
 WHATSAPP_SERVICE_TOKEN = config('WHATSAPP_SERVICE_TOKEN', default='')
 
+# Booking hold / host-response SLA. A pending booking (host_approval_status
+# still PENDING) soft-locks its dates until whichever of these applies:
+# the short window when we have real day-level availability data to check
+# instantly (calendar_verified=True), the longer one when there's no
+# calendar data at all and the host has to be asked directly. Checked
+# lazily at read/validation time (see Booking.is_hold_expired) rather than
+# by a scheduled task -- celery/django-celery-beat are already installed
+# (see requirements.txt) but not wired up; if the product ever needs the
+# booking to actively flip to CANCELLED and notify the guest the moment it
+# expires rather than just stopping it from blocking new bookings, that's
+# the upgrade path.
+BOOKING_HOLD_MINUTES = config('BOOKING_HOLD_MINUTES', default=30, cast=int)
+BOOKING_HOST_RESPONSE_SLA_HOURS = config('BOOKING_HOST_RESPONSE_SLA_HOURS', default=2, cast=int)
+
 # Celery Configuration (disabled for development)
 # CELERY_BROKER_URL = REDIS_URL
 # CELERY_RESULT_BACKEND = REDIS_URL

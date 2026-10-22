@@ -3,13 +3,29 @@ Serializers for bookings app
 """
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import Booking, BookingItem
 from apps.listings.serializers import RoomTypeListSerializer, BnBListingSerializer
 from apps.listings.models import Hotel, RoomType, BnBListing, BnBAvailability, RoomAvailability
+
+
+def _exclude_expired_holds(queryset, path=''):
+    """
+    A pending booking whose hold has lapsed no longer reserves its dates --
+    checked here, lazily, rather than by a background job flipping its
+    status (see BOOKING_HOLD_MINUTES in settings.py). `path` lets this
+    filter a queryset of a related model (e.g. BookingItem) by its
+    `booking__` relation instead of the fields directly.
+    """
+    return queryset.exclude(
+        Q(**{f'{path}host_approval_status': Booking.HostApprovalStatus.PENDING})
+        & Q(**{f'{path}hold_expires_at__lt': timezone.now()})
+    )
 
 
 class BookingItemSerializer(serializers.ModelSerializer):
@@ -28,6 +44,7 @@ class BookingSerializer(serializers.ModelSerializer):
     room_type = RoomTypeListSerializer(read_only=True, allow_null=True)
     bnb_listing_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     bnb_listing = BnBListingSerializer(read_only=True, allow_null=True)
+    is_hold_expired = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Booking
@@ -36,14 +53,16 @@ class BookingSerializer(serializers.ModelSerializer):
             'bnb_listing', 'bnb_listing_id',
             'check_in', 'check_out', 'num_adults', 'num_children',
             'special_requests', 'nightly_price', 'currency', 'total_nights',
-            'total_amount', 'deposit_amount', 'status', 'host_approval_status',
+            'cleaning_fee', 'total_amount', 'deposit_amount', 'status', 'host_approval_status',
+            'calendar_verified', 'hold_expires_at', 'is_hold_expired',
             'payment_method', 'payment_status', 'guest_full_name', 'guest_email',
             'guest_phone', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'traveler', 'hotel', 'nightly_price', 'currency', 'total_nights',
-            'total_amount', 'status', 'host_approval_status', 'payment_status',
-            'created_at', 'updated_at'
+            'cleaning_fee', 'total_amount', 'deposit_amount', 'status', 'host_approval_status',
+            'calendar_verified', 'hold_expires_at',
+            'payment_status', 'created_at', 'updated_at'
         ]
 
     def validate(self, attrs):
@@ -151,17 +170,25 @@ class BookingSerializer(serializers.ModelSerializer):
                 )
                 if instance:
                     overlap_qs = overlap_qs.exclude(pk=instance.pk)
+                overlap_qs = _exclude_expired_holds(overlap_qs)
                 if overlap_qs.exists():
                     raise serializers.ValidationError({
                         'check_in': 'These dates are already booked for this listing.'
                     })
 
+                availability_rows_in_range = BnBAvailability.objects.filter(
+                    bnb_listing=bnb_listing,
+                    date__gte=check_in,
+                    date__lt=check_out,
+                )
+                nights = (check_out - check_in).days
+                # Verified only if the host's calendar has an explicit row for
+                # every night of the stay -- a partial calendar is as good as
+                # no calendar for deciding whether we can trust it blind.
+                attrs['_bnb_calendar_verified'] = availability_rows_in_range.count() >= nights
+
                 blocked_day = (
-                    BnBAvailability.objects.filter(
-                        bnb_listing=bnb_listing,
-                        date__gte=check_in,
-                        date__lt=check_out,
-                    )
+                    availability_rows_in_range
                     .exclude(status=BnBAvailability.AvailabilityStatus.AVAILABLE)
                     .order_by('date')
                     .first()
@@ -198,6 +225,7 @@ class BookingSerializer(serializers.ModelSerializer):
         )
         if instance:
             overlapping_bookings = overlapping_bookings.exclude(pk=instance.pk)
+        overlapping_bookings = _exclude_expired_holds(overlapping_bookings)
         overlapping_count = overlapping_bookings.count()
 
         availability_rows = {
@@ -235,8 +263,9 @@ class BookingSerializer(serializers.ModelSerializer):
         bnb_listing_id = validated_data.pop('bnb_listing_id', None)
         room_type = validated_data.pop('_resolved_room_type', None)
         bnb_listing = validated_data.pop('_resolved_bnb_listing', None)
-        validated_data.pop('_hotel_availability', None)
-        
+        hotel_availability = validated_data.pop('_hotel_availability', None)
+        bnb_calendar_verified = validated_data.pop('_bnb_calendar_verified', None)
+
         if room_type_id:
             # Hotel booking
             room_type = room_type or RoomType.objects.select_related('hotel').get(pk=room_type_id)
@@ -247,6 +276,9 @@ class BookingSerializer(serializers.ModelSerializer):
                 validated_data['nightly_price'] = room_type.base_price
             if 'currency' not in validated_data:
                 validated_data['currency'] = room_type.currency
+            # 'room_type_only' mode means no RoomAvailability rows existed at
+            # all for these dates -- nothing to trust, so treat as unverified.
+            calendar_verified = bool(hotel_availability) and hotel_availability.get('mode') == 'daily_availability'
         elif bnb_listing_id:
             # BnB booking
             bnb_listing = bnb_listing or BnBListing.objects.get(pk=bnb_listing_id)
@@ -256,16 +288,31 @@ class BookingSerializer(serializers.ModelSerializer):
                 validated_data['nightly_price'] = bnb_listing.price_per_night
             if 'currency' not in validated_data:
                 validated_data['currency'] = bnb_listing.currency or 'KES'
-        
+            if 'cleaning_fee' not in validated_data:
+                validated_data['cleaning_fee'] = bnb_listing.cleaning_fee
+            if 'deposit_amount' not in validated_data:
+                validated_data['deposit_amount'] = bnb_listing.security_deposit
+            calendar_verified = bool(bnb_calendar_verified)
+        else:
+            calendar_verified = True
+
         # Calculate total nights and amount
         check_in = validated_data['check_in']
         check_out = validated_data['check_out']
         total_nights = (check_out - check_in).days
         validated_data['total_nights'] = total_nights
-        
+
+        validated_data['calendar_verified'] = calendar_verified
+        hold_window = (
+            timedelta(minutes=settings.BOOKING_HOLD_MINUTES) if calendar_verified
+            else timedelta(hours=settings.BOOKING_HOST_RESPONSE_SLA_HOURS)
+        )
+        validated_data['hold_expires_at'] = timezone.now() + hold_window
+
         if 'total_amount' not in validated_data:
             nightly_price = validated_data.get('nightly_price', 0)
-            validated_data['total_amount'] = nightly_price * total_nights
+            cleaning_fee = validated_data.get('cleaning_fee', 0)
+            validated_data['total_amount'] = (nightly_price * total_nights) + cleaning_fee
 
         payment_method = validated_data.get('payment_method', Booking.PaymentMethod.PAY_AT_PREMISES)
         if payment_method == Booking.PaymentMethod.ONLINE:
@@ -281,6 +328,7 @@ class BookingSerializer(serializers.ModelSerializer):
         validated_data.pop('_resolved_room_type', None)
         validated_data.pop('_resolved_bnb_listing', None)
         validated_data.pop('_hotel_availability', None)
+        validated_data.pop('_bnb_calendar_verified', None)
 
         payment_method = validated_data.get('payment_method')
         if payment_method and instance.payment_status != Booking.PaymentStatus.PAID:
@@ -301,8 +349,9 @@ class BookingListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = [
-            'id', 'check_in', 'check_out', 'total_nights', 'total_amount',
-            'currency', 'status', 'host_approval_status', 'payment_status',
+            'id', 'check_in', 'check_out', 'total_nights', 'cleaning_fee', 'total_amount',
+            'currency', 'status', 'host_approval_status', 'calendar_verified',
+            'hold_expires_at', 'is_hold_expired', 'payment_status',
             'room_type', 'bnb_listing', 'booking_type', 'items', 'created_at'
         ]
 
@@ -351,8 +400,9 @@ class HostBookingListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = [
-            'id', 'check_in', 'check_out', 'total_nights', 'total_amount', 'currency',
-            'status', 'host_approval_status', 'payment_status', 'payment_method',
+            'id', 'check_in', 'check_out', 'total_nights', 'cleaning_fee', 'total_amount', 'currency',
+            'status', 'host_approval_status', 'calendar_verified', 'hold_expires_at',
+            'is_hold_expired', 'payment_status', 'payment_method',
             'created_at', 'updated_at',
             'traveler_name', 'traveler_email', 'traveler_avatar',
             'guest_full_name', 'guest_email', 'guest_phone',
@@ -453,9 +503,13 @@ class MultiRoomBookingSerializer(serializers.Serializer):
             total_children_capacity += room_type.max_children * quantity
             total_occupancy_capacity += room_type.max_occupancy * quantity
 
-            self._check_room_type_availability(
+            room_type_verified = self._check_room_type_availability(
                 room_type=room_type, quantity=quantity, check_in=check_in, check_out=check_out,
             )
+            # Verified only if every room type in this multi-room booking had
+            # real calendar data -- one unverified room type is enough doubt
+            # to treat the whole booking as needing a host to confirm it.
+            attrs['_calendar_verified'] = attrs.get('_calendar_verified', True) and room_type_verified
 
         num_adults = attrs['num_adults']
         num_children = attrs['num_children']
@@ -476,30 +530,31 @@ class MultiRoomBookingSerializer(serializers.Serializer):
         return attrs
 
     def _check_room_type_availability(self, *, room_type, quantity, check_in, check_out, for_update=False):
+        """Returns True if real RoomAvailability data covered these dates (calendar_verified), False otherwise."""
         stay_dates = []
         current_date = check_in
         while current_date < check_out:
             stay_dates.append(current_date)
             current_date += timedelta(days=1)
 
-        overlapping_item_quantity = BookingItem.objects.filter(
+        overlapping_item_quantity = _exclude_expired_holds(BookingItem.objects.filter(
             room_type=room_type,
             booking__check_in__lt=check_out,
             booking__check_out__gt=check_in,
         ).exclude(
             booking__status=Booking.BookingStatus.CANCELLED,
-        ).aggregate(total=Sum('quantity'))['total'] or 0
+        ), path='booking__').aggregate(total=Sum('quantity'))['total'] or 0
 
         # Legacy single-room-type bookings (no BookingItem row) each occupy
         # exactly one unit of this room type — they share the same
         # RoomAvailability pool, so both paths must be counted together.
-        overlapping_legacy_count = Booking.objects.filter(
+        overlapping_legacy_count = _exclude_expired_holds(Booking.objects.filter(
             room_type=room_type,
         ).exclude(
             status=Booking.BookingStatus.CANCELLED,
         ).filter(
             check_in__lt=check_out, check_out__gt=check_in,
-        ).count()
+        )).count()
 
         overlapping_quantity = overlapping_item_quantity + overlapping_legacy_count
 
@@ -511,7 +566,7 @@ class MultiRoomBookingSerializer(serializers.Serializer):
         availability_rows = {row.date: row for row in avail_qs}
 
         if not availability_rows:
-            return
+            return False
 
         for stay_date in stay_dates:
             availability = availability_rows.get(stay_date)
@@ -526,6 +581,7 @@ class MultiRoomBookingSerializer(serializers.Serializer):
                 raise serializers.ValidationError({
                     'items': f'Only {max(remaining, 0)} {room_type.name} room(s) left on {stay_date}.'
                 })
+        return True
 
     def create(self, validated_data):
         hotel = validated_data['_hotel']
@@ -556,6 +612,11 @@ class MultiRoomBookingSerializer(serializers.Serializer):
                 (entry['room_type'].base_price * entry['quantity'] * total_nights for entry in resolved_items),
                 start=0,
             )
+            calendar_verified = validated_data.get('_calendar_verified', True)
+            hold_window = (
+                timedelta(minutes=settings.BOOKING_HOLD_MINUTES) if calendar_verified
+                else timedelta(hours=settings.BOOKING_HOST_RESPONSE_SLA_HOURS)
+            )
 
             booking = Booking(
                 traveler=validated_data['traveler'],
@@ -570,6 +631,8 @@ class MultiRoomBookingSerializer(serializers.Serializer):
                 currency=currency,
                 total_nights=total_nights,
                 total_amount=total_amount,
+                calendar_verified=calendar_verified,
+                hold_expires_at=timezone.now() + hold_window,
                 payment_method=payment_method,
                 payment_status=payment_status,
                 guest_full_name=validated_data['guest_full_name'],
