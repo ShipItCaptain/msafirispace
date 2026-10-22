@@ -1,18 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import {
-  MagnifyingGlassIcon,
-  FunnelIcon,
-  HomeModernIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-} from '@heroicons/react/24/outline';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { bnbAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import BnBCard from '../components/bnb/BnBCard';
 import { useFavorites } from '../contexts/FavoritesContext';
+import {
+  DiscoveryStickyBar,
+  DiscoveryBarField,
+  FiltersSheet,
+  DiscoveryResultsHeader,
+  DiscoveryEmptyState,
+  fieldInputClass,
+} from '../components/discovery/DiscoveryChrome';
 
 const DEFAULT_FILTERS = {
   city: '',
@@ -25,8 +25,8 @@ const DEFAULT_FILTERS = {
   amenities: [],
 };
 
-const propertyTypeOptions = [
-  { value: '', label: 'All Types' },
+const PROPERTY_TYPES = [
+  { value: '', label: 'All types' },
   { value: 'apartment', label: 'Apartment' },
   { value: 'house', label: 'House' },
   { value: 'villa', label: 'Villa' },
@@ -35,12 +35,27 @@ const propertyTypeOptions = [
   { value: 'cottage', label: 'Cottage' },
 ];
 
-const amenityOptions = [
-  'WiFi', 'Kitchen', 'Air conditioning', 'Free parking', 'Pool', 'Washer',
-  'TV', 'Hot tub', 'Gym', 'Balcony',
+const AMENITY_OPTIONS = [
+  'WiFi',
+  'Kitchen',
+  'Air conditioning',
+  'Free parking',
+  'Pool',
+  'Washer',
+  'TV',
+  'Hot tub',
+  'Gym',
+  'Balcony',
 ];
 
-const hasActiveFilters = (filters) =>
+const SORT_OPTIONS = [
+  { value: 'featured', label: 'Recommended' },
+  { value: 'price_asc', label: 'Price: low to high' },
+  { value: 'price_desc', label: 'Price: high to low' },
+  { value: 'name', label: 'Name A–Z' },
+];
+
+const hasServerFilters = (filters) =>
   Boolean(
     filters.city ||
       filters.property_type ||
@@ -54,34 +69,82 @@ const hasActiveFilters = (filters) =>
 
 const BnBsPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [where, setWhere] = useState(() => searchParams.get('where') || '');
+  const [filters, setFilters] = useState(() => ({
+    ...DEFAULT_FILTERS,
+    city: searchParams.get('city') || '',
+    check_in: searchParams.get('check_in') || '',
+    check_out: searchParams.get('check_out') || '',
+    guests: searchParams.get('guests') || '',
+    property_type: searchParams.get('property_type') || '',
+    min_price: searchParams.get('min_price') || '',
+    max_price: searchParams.get('max_price') || '',
+  }));
+  const [sortBy, setSortBy] = useState('featured');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { isBnBFavorite, isBnBFavoriteBusy, toggleBnBFavorite } = useFavorites();
 
   useEffect(() => {
-    const fetchBnBs = async () => {
-      setLoading(true);
-      setError(null);
-      try {
+    const nextWhere = searchParams.get('where') || '';
+    if (nextWhere) setWhere(nextWhere);
+    setFilters((prev) => ({
+      ...prev,
+      city: searchParams.get('city') || prev.city,
+      check_in: searchParams.get('check_in') || prev.check_in,
+      check_out: searchParams.get('check_out') || prev.check_out,
+      guests: searchParams.get('guests') || prev.guests,
+      property_type: searchParams.get('property_type') || prev.property_type,
+      min_price: searchParams.get('min_price') || prev.min_price,
+      max_price: searchParams.get('max_price') || prev.max_price,
+    }));
+  }, [searchParams]);
+
+  const loadListings = useCallback(async (nextFilters) => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!hasServerFilters(nextFilters)) {
         const response = await bnbAPI.getListings();
         const data = response?.results || response || [];
         setListings(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load BnB listings:', err);
-        setError('Failed to load BnB listings. Please try again later.');
-      } finally {
-        setLoading(false);
+        return;
       }
-    };
-
-    fetchBnBs();
+      if (nextFilters.check_in && nextFilters.check_out && nextFilters.check_in >= nextFilters.check_out) {
+        toast.error('Check-out must be after check-in');
+        setLoading(false);
+        return;
+      }
+      const params = {};
+      if (nextFilters.city) params.city = nextFilters.city;
+      if (nextFilters.property_type) params.property_type = nextFilters.property_type;
+      if (nextFilters.check_in) params.check_in = nextFilters.check_in;
+      if (nextFilters.check_out) params.check_out = nextFilters.check_out;
+      if (nextFilters.guests) params.guests = nextFilters.guests;
+      if (nextFilters.min_price) params.min_price = nextFilters.min_price;
+      if (nextFilters.max_price) params.max_price = nextFilters.max_price;
+      if (nextFilters.amenities.length > 0) params.amenities = nextFilters.amenities;
+      const response = await bnbAPI.search(params);
+      const data = response?.results || response || [];
+      setListings(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load BnB listings:', err);
+      setError(err?.response?.data?.error || 'Failed to load stays. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadListings(filters);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [filters, loadListings]);
 
   const handleToggleFavorite = async (listingId) => {
     if (!isAuthenticated) {
@@ -96,12 +159,7 @@ const BnBsPage = () => {
     toast.success(result.isFavorite ? 'Added to favorites' : 'Removed from favorites');
   };
 
-  const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
+  const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
 
   const toggleAmenity = (amenity) => {
     setFilters((prev) => ({
@@ -112,334 +170,123 @@ const BnBsPage = () => {
     }));
   };
 
-  const runSearch = async (e) => {
-    if (e) e.preventDefault();
+  const sheetFilterCount =
+    (filters.property_type ? 1 : 0) +
+    (filters.min_price || filters.max_price ? 1 : 0) +
+    filters.amenities.length;
 
-    if (filters.check_in && filters.check_out && filters.check_in >= filters.check_out) {
-      toast.error('Check-out date must be after check-in date');
-      return;
-    }
+  const barActive =
+    Boolean(where.trim() || filters.city || filters.check_in || filters.check_out || filters.guests) ||
+    sheetFilterCount > 0;
 
-    if (!hasActiveFilters(filters)) {
-      // No server-side filters applied — just reload the default listing set.
-      setSearching(true);
-      setError(null);
-      try {
-        const response = await bnbAPI.getListings();
-        const data = response?.results || response || [];
-        setListings(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load BnB listings:', err);
-        setError('Failed to load BnB listings. Please try again later.');
-      } finally {
-        setSearching(false);
-      }
-      return;
-    }
-
-    setSearching(true);
-    setError(null);
-    try {
-      const params = {};
-      if (filters.city) params.city = filters.city;
-      if (filters.property_type) params.property_type = filters.property_type;
-      if (filters.check_in) params.check_in = filters.check_in;
-      if (filters.check_out) params.check_out = filters.check_out;
-      if (filters.guests) params.guests = filters.guests;
-      if (filters.min_price) params.min_price = filters.min_price;
-      if (filters.max_price) params.max_price = filters.max_price;
-      if (filters.amenities.length > 0) params.amenities = filters.amenities;
-
-      const response = await bnbAPI.search(params);
-      const data = response?.results || response || [];
-      setListings(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to search BnB listings:', err);
-      const message = err?.response?.data?.error || 'Search failed. Please adjust your filters and try again.';
-      setError(message);
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const clearFilters = async () => {
+  const clearFilters = () => {
     setFilters(DEFAULT_FILTERS);
-    setSearchQuery('');
-    setSearching(true);
-    setError(null);
-    try {
-      const response = await bnbAPI.getListings();
-      const data = response?.results || response || [];
-      setListings(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to load BnB listings:', err);
-      setError('Failed to load BnB listings. Please try again later.');
-    } finally {
-      setSearching(false);
-    }
+    setWhere('');
   };
 
-  const filteredListings = useMemo(() => {
-    if (!searchQuery) return listings;
-    return listings.filter((listing) => {
-      return (
-        listing.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        listing.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        listing.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const visibleListings = useMemo(() => {
+    const query = where.trim().toLowerCase();
+    let list = listings;
+    if (query) {
+      list = list.filter(
+        (listing) =>
+          listing.title?.toLowerCase().includes(query) ||
+          listing.city?.toLowerCase().includes(query) ||
+          listing.description?.toLowerCase().includes(query)
       );
-    });
-  }, [listings, searchQuery]);
+    }
+    list = [...list];
+    if (sortBy === 'name') list.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    if (sortBy === 'price_asc') {
+      list.sort((a, b) => Number(a.price_per_night || Infinity) - Number(b.price_per_night || Infinity));
+    }
+    if (sortBy === 'price_desc') {
+      list.sort((a, b) => Number(b.price_per_night || 0) - Number(a.price_per_night || 0));
+    }
+    return list;
+  }, [listings, where, sortBy]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading BnB stays...</p>
-        </div>
-      </div>
-    );
-  }
+  const placeLabel = filters.city || (where.trim() ? `“${where.trim()}”` : null);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mb-8"
-        >
-          <div className="flex items-center space-x-3 mb-4">
-            <HomeModernIcon className="w-8 h-8 text-red-600" />
-            <h1 className="text-3xl font-bold text-gray-900">BnB Stays</h1>
+      <DiscoveryStickyBar
+        where={where}
+        onWhereChange={setWhere}
+        wherePlaceholder="Search stays or destinations"
+        filterCount={sheetFilterCount}
+        onOpenFilters={() => setFiltersOpen(true)}
+        onClear={clearFilters}
+        showClear={barActive}
+      >
+        <DiscoveryBarField label="Check-in" className="border-t lg:border-t-0 border-gray-200">
+          <input
+            type="date"
+            value={filters.check_in}
+            onChange={(e) => setFilter('check_in', e.target.value)}
+            className={fieldInputClass}
+          />
+        </DiscoveryBarField>
+        <DiscoveryBarField label="Check-out" className="border-t lg:border-t-0 border-gray-200">
+          <input
+            type="date"
+            value={filters.check_out}
+            onChange={(e) => setFilter('check_out', e.target.value)}
+            className={fieldInputClass}
+          />
+        </DiscoveryBarField>
+        <DiscoveryBarField label="Guests" className="border-t lg:border-t-0 border-gray-200 lg:max-w-[7rem]">
+          <input
+            type="number"
+            min="1"
+            value={filters.guests}
+            onChange={(e) => setFilter('guests', e.target.value)}
+            placeholder="Any"
+            className={fieldInputClass}
+          />
+        </DiscoveryBarField>
+      </DiscoveryStickyBar>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <DiscoveryResultsHeader
+          countLabel={
+            loading
+              ? 'Loading stays…'
+              : `${visibleListings.length} stay${visibleListings.length === 1 ? '' : 's'}`
+          }
+          placeLabel={placeLabel}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          sortOptions={SORT_OPTIONS}
+        />
+
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8" aria-busy="true">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+              <div key={n} className="animate-pulse">
+                <div className="aspect-[4/3] bg-gray-200" />
+                <div className="mt-2 h-4 w-3/4 bg-gray-200" />
+                <div className="mt-1 h-3 w-1/2 bg-gray-200" />
+                <div className="mt-1 h-3 w-1/3 bg-gray-200" />
+              </div>
+            ))}
           </div>
-          <p className="text-lg text-gray-600">
-            Unique homes, cozy apartments, and local stays across East Africa
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="bg-white rounded-xl shadow-lg p-6 mb-8"
-        >
-          <form onSubmit={runSearch}>
-            <div className="relative mb-6">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search stays, cities, or experiences..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-lg"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                <input
-                  type="text"
-                  placeholder="Enter city"
-                  value={filters.city}
-                  onChange={(e) => handleFilterChange('city', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Check-in</label>
-                <input
-                  type="date"
-                  value={filters.check_in}
-                  onChange={(e) => handleFilterChange('check_in', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Check-out</label>
-                <input
-                  type="date"
-                  value={filters.check_out}
-                  onChange={(e) => handleFilterChange('check_out', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Guests</label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="1"
-                  value={filters.guests}
-                  onChange={(e) => handleFilterChange('guests', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((prev) => !prev)}
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-red-600 hover:text-red-700"
-            >
-              {showAdvanced ? <ChevronUpIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
-              {showAdvanced ? 'Hide more filters' : 'More filters (type, price, amenities)'}
-            </button>
-
-            {showAdvanced && (
-              <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Property Type</label>
-                    <select
-                      value={filters.property_type}
-                      onChange={(e) => handleFilterChange('property_type', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    >
-                      {propertyTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Min Price / Night</label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="Any"
-                      value={filters.min_price}
-                      onChange={(e) => handleFilterChange('min_price', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Max Price / Night</label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="Any"
-                      value={filters.max_price}
-                      onChange={(e) => handleFilterChange('max_price', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Amenities</label>
-                  <div className="flex flex-wrap gap-2">
-                    {amenityOptions.map((amenity) => (
-                      <button
-                        key={amenity}
-                        type="button"
-                        onClick={() => toggleAmenity(amenity)}
-                        className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                          filters.amenities.includes(amenity)
-                            ? 'bg-red-600 border-red-600 text-white'
-                            : 'bg-white border-gray-300 text-gray-700 hover:border-red-400'
-                        }`}
-                      >
-                        {amenity}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-3 mt-6">
-              <button
-                type="submit"
-                disabled={searching}
-                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                <MagnifyingGlassIcon className="w-5 h-5" />
-                {searching ? 'Searching...' : 'Search Stays'}
-              </button>
-              <button
-                type="button"
-                onClick={clearFilters}
-                disabled={searching}
-                className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors inline-flex items-center justify-center space-x-2 disabled:opacity-60"
-              >
-                <FunnelIcon className="w-5 h-5" />
-                <span>Clear Filters</span>
-              </button>
-            </div>
-          </form>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="flex items-center justify-between mb-6 flex-wrap gap-4"
-        >
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              {filteredListings.length} stays found
-            </h2>
-            {searchQuery && (
-              <p className="text-gray-600">
-                Showing results for “{searchQuery}”
-              </p>
-            )}
-          </div>
-        </motion.div>
-
-        {error ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="bg-white rounded-xl shadow-lg p-12 text-center"
-          >
-            <HomeModernIcon className="w-12 h-12 mx-auto text-red-600 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h3>
-            <p className="text-gray-600 mb-6">{error}</p>
-            <button
-              onClick={clearFilters}
-              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Reset & Try Again
-            </button>
-          </motion.div>
-        ) : filteredListings.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="bg-white rounded-xl shadow-lg p-12 text-center"
-          >
-            <HomeModernIcon className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No stays match your filters</h3>
-            <p className="text-gray-600 mb-6">
-              Try adjusting your search or clearing the filters to see more options.
-            </p>
-            <button
-              onClick={clearFilters}
-              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Clear Filters
-            </button>
-          </motion.div>
+        ) : error ? (
+          <DiscoveryEmptyState
+            title="Couldn’t load stays"
+            message={error}
+            onClear={clearFilters}
+            clearLabel="Reset & try again"
+          />
+        ) : visibleListings.length === 0 ? (
+          <DiscoveryEmptyState
+            title="No stays match"
+            message="Try different dates, a new destination, or clear filters."
+            onClear={barActive ? clearFilters : undefined}
+          />
         ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
-            {filteredListings.map((listing) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8">
+            {visibleListings.map((listing) => (
               <BnBCard
                 key={listing.id}
                 listing={listing}
@@ -448,9 +295,94 @@ const BnBsPage = () => {
                 onToggleFavorite={handleToggleFavorite}
               />
             ))}
-          </motion.div>
+          </div>
         )}
       </div>
+
+      <FiltersSheet
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Stay filters"
+        activeCount={sheetFilterCount}
+        onClear={() =>
+          setFilters((prev) => ({
+            ...prev,
+            property_type: '',
+            min_price: '',
+            max_price: '',
+            amenities: [],
+            city: prev.city,
+          }))
+        }
+      >
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-2">City</label>
+          <input
+            type="text"
+            value={filters.city}
+            onChange={(e) => setFilter('city', e.target.value)}
+            placeholder="e.g. Nairobi"
+            className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-2">Property type</label>
+          <select
+            value={filters.property_type}
+            onChange={(e) => setFilter('property_type', e.target.value)}
+            className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+          >
+            {PROPERTY_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-2">Min price</label>
+            <input
+              type="number"
+              min="0"
+              value={filters.min_price}
+              onChange={(e) => setFilter('min_price', e.target.value)}
+              placeholder="Any"
+              className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-2">Max price</label>
+            <input
+              type="number"
+              min="0"
+              value={filters.max_price}
+              onChange={(e) => setFilter('max_price', e.target.value)}
+              placeholder="Any"
+              className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-2">Amenities</label>
+          <div className="flex flex-wrap gap-2">
+            {AMENITY_OPTIONS.map((amenity) => (
+              <button
+                key={amenity}
+                type="button"
+                onClick={() => toggleAmenity(amenity)}
+                className={`px-3 py-2 text-sm border ${
+                  filters.amenities.includes(amenity)
+                    ? 'border-red-600 bg-red-50 text-red-700 font-medium'
+                    : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {amenity}
+              </button>
+            ))}
+          </div>
+        </div>
+      </FiltersSheet>
     </div>
   );
 };

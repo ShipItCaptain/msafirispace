@@ -80,12 +80,11 @@ const NotificationBell = ({ isScrolled }) => {
     const bookingId = notification.data?.booking_id;
     if (!bookingId) return;
 
-    // /booking/:id is guest-only (the booking is scoped to its traveler
-    // server-side); a host clicking through would just hit a 404. Route
-    // hosts to their own bookings tab instead, where the same booking (and
-    // its message thread) is reachable via "View".
-    const isHostViewer = Boolean(user?.roles?.includes('bnb_host') || user?.roles?.includes('hotel_host'));
-    if (isHostViewer) {
+    // Route by active role so a guest who also hosts still opens their own trips.
+    // Hosts go to the host bookings tab (guest /booking/:id used to 404 for them).
+    const activeRole = user?.active_role;
+    const isActingAsHost = activeRole === 'bnb_host' || activeRole === 'hotel_host';
+    if (isActingAsHost) {
       const destination = notification.data?.hotel_id ? '/host/hotels' : '/host/bnb';
       navigate(destination, { state: { initialTab: 'bookings' } });
     } else {

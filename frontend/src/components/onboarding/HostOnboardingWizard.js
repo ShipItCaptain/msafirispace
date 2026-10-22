@@ -296,6 +296,18 @@ const HostOnboardingWizard = ({ onComplete }) => {
         // (e.g. hotel creation below) doesn't strand the UI on an
         // out-of-bounds card.
         setCardIndex((i) => Math.max(0, i - 1));
+      } else if (!isAuthenticated) {
+        // The backend only omits `tokens` when it decided `request.user`
+        // was already authenticated (see HostOnboardingView) -- so if we
+        // land here, a token appeared in localStorage (most likely written
+        // by another tab's background refresh) sometime between this page
+        // loading and this submit, and the KYC data just got attached to
+        // THAT account instead of a new one for the email/password just
+        // typed on the first card. Redux still thinks we're signed out, so
+        // without this, the next screen's route guard would redirect to
+        // /login despite the request having actually succeeded -- sync
+        // Redux to match reality before navigating on.
+        await getMe().catch(() => null);
       }
 
       if (hostCategory === 'hotel_restaurant') {
@@ -332,9 +344,16 @@ const HostOnboardingWizard = ({ onComplete }) => {
       const firstMessage = backendErrors && typeof backendErrors === 'object'
         ? Object.values(backendErrors)[0]
         : null;
-      const message = Array.isArray(firstMessage) ? firstMessage[0] : (firstMessage || 'Something went wrong. Please try again.');
+      const message = Array.isArray(firstMessage)
+        ? firstMessage[0]
+        : typeof firstMessage === 'string'
+          ? firstMessage
+          : err?.response?.data?.detail
+            || (err?.request && !err?.response
+              ? 'We could not reach the server. Please check your connection and try again.'
+              : 'Something went wrong. Please try again.');
       setError(message);
-      toast.error('Could not complete onboarding');
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -537,7 +556,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
                 <button
                   type="button"
                   onClick={handleCardNext}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !isCardFilled()}
                   className="mt-6 w-full py-3 bg-red-600 text-white rounded-none font-medium hover:bg-red-700 disabled:opacity-60"
                 >
                   {isSubmitting ? 'Submitting...' : cardIndex === cards.length - 1 ? 'Finish' : 'Continue'}

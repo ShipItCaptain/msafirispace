@@ -1,278 +1,238 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import {
-  CalendarIcon,
-  StarIcon,
-  ArrowRightIcon,
-  UserGroupIcon,
-  HomeIcon
-} from '@heroicons/react/24/outline';
 import FeaturedHotels from '../components/hotel/FeaturedHotels';
 import FeaturedBnBs from '../components/bnb/FeaturedBnBs';
 import DealsSection from '../components/promotions/DealsSection';
 
+const HERO_IMAGE =
+  'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=2400&q=80';
+
+const DESTINATIONS = [
+  {
+    name: 'Nairobi',
+    image: 'https://images.unsplash.com/photo-1611348524140-53c9a25263d6?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    name: 'Mombasa',
+    image: 'https://images.unsplash.com/photo-1580060839134-75a5edca2e99?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    name: 'Kisumu',
+    image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    name: 'Diani',
+    image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80',
+  },
+];
+
 const HomePage = () => {
-  const testimonials = [
-    {
-      name: 'Sarah Johnson',
-      location: 'Nairobi',
-      rating: 5,
-      text: 'Msafiri Space made my trip to Kenya absolutely magical. The villa was perfect and the local experiences were unforgettable.',
-      avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face'
-    },
-    {
-      name: 'David Chen',
-      location: 'Mombasa',
-      rating: 5,
-      text: 'Incredible beachfront property with amazing hosts. The attention to detail and local recommendations were spot on.',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face'
-    },
-    {
-      name: 'Maria Rodriguez',
-      location: 'Kisumu',
-      rating: 5,
-      text: 'A truly authentic African experience. The hosts were welcoming and the property exceeded all expectations.',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face'
+  const navigate = useNavigate();
+  const [mode, setMode] = useState('stays'); // stays | hotels
+  const [where, setWhere] = useState('');
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
+  const [guests, setGuests] = useState('');
+
+  const searchPath = mode === 'hotels' ? '/hotels' : '/bnbs';
+
+  const buildParams = (overrides = {}) => {
+    const params = new URLSearchParams();
+    const nextWhere = overrides.where ?? where;
+    const nextCheckIn = overrides.checkIn ?? checkIn;
+    const nextCheckOut = overrides.checkOut ?? checkOut;
+    const nextGuests = overrides.guests ?? guests;
+    if (nextWhere.trim()) {
+      params.set('where', nextWhere.trim());
+      params.set('city', nextWhere.trim());
     }
-  ];
+    if (nextCheckIn) params.set('check_in', nextCheckIn);
+    if (nextCheckOut) params.set('check_out', nextCheckOut);
+    if (nextGuests) params.set('guests', nextGuests);
+    return params.toString();
+  };
+
+  const handleSearch = (event) => {
+    event.preventDefault();
+    const qs = buildParams();
+    navigate(qs ? `${searchPath}?${qs}` : searchPath);
+  };
+
+  const goDestination = (city) => {
+    const path = mode === 'hotels' ? '/hotels' : '/bnbs';
+    navigate(`${path}?city=${encodeURIComponent(city)}&where=${encodeURIComponent(city)}`);
+  };
+
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Hero Section - Booking.com Inspired */}
-      <section className="relative bg-gradient-to-b from-red-600 via-red-700 to-red-800 py-14 lg:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8">
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-4xl lg:text-6xl font-bold text-white mb-4"
-            >
-              Find your next stay
-            </motion.h1>
+      {/* Full-bleed hero */}
+      <section className="relative min-h-[78vh] lg:min-h-[88vh] flex flex-col">
+        <div className="absolute inset-0">
+          <img
+            src={HERO_IMAGE}
+            alt=""
+            className="w-full h-full object-cover"
+            fetchPriority="high"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/35 to-black/50" />
+        </div>
+
+        <div className="relative z-10 flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-16">
+          <div className="max-w-4xl mx-auto w-full text-center">
             <motion.p
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-xl lg:text-2xl text-white/90 max-w-2xl mx-auto"
+              transition={{ duration: 0.45 }}
+              className="font-serif text-5xl sm:text-6xl lg:text-7xl tracking-tight text-white"
             >
-              Search deals on hotels, homes, and much more...
+              Msafiri <span className="text-red-400">Space</span>
             </motion.p>
-            
-          </div>
-          
-          {/* Enhanced Search Bar - Premium Style */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="mx-auto w-full max-w-5xl px-4 sm:px-6"
-          >
-            {/* Compact Booking.com–style search bar */}
-            <div className="bg-white rounded-xl shadow-md border border-yellow-400/70">
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-0 items-stretch">
-                {/* Where */}
-                <div className="lg:col-span-1 relative group">
-                  <div className="flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors duration-150 cursor-pointer">
-                    <div className="flex-shrink-0">
-                      <HomeIcon className="w-5 h-5 text-red-500 group-hover:text-red-600 transition-colors duration-200" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Where are you going?</label>
-                      <input
-                        type="text"
-                        placeholder="Search destinations"
-                        className="w-full text-sm text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent border-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-px h-12 bg-gray-200 hidden lg:block"></div>
-                </div>
-                
-                {/* Dates */}
-                <div className="lg:col-span-1 relative group">
-                  <div className="flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors duration-150 cursor-pointer">
-                    <div className="flex-shrink-0">
-                      <CalendarIcon className="w-5 h-5 text-red-500 group-hover:text-red-600 transition-colors duration-200" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Check-in — Check-out</label>
-                      <input
-                        type="text"
-                        placeholder="Select dates"
-                        className="w-full text-sm text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent border-none"
-                      />
-                    </div>
-                    <div className="flex-shrink-0">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-px h-12 bg-gray-200 hidden lg:block"></div>
-                </div>
-                
-                {/* Guests */}
-                <div className="lg:col-span-1 relative group">
-                  <div className="flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors duration-150 cursor-pointer">
-                    <div className="flex-shrink-0">
-                      <UserGroupIcon className="w-5 h-5 text-red-500 group-hover:text-red-600 transition-colors duration-200" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Guests & Rooms</label>
-                      <input
-                        type="text"
-                        placeholder="2 adults · 0 children · 1 room"
-                        className="w-full text-sm text-gray-900 placeholder-gray-400 focus:outline-none bg-transparent border-none"
-                      />
-                    </div>
-                    <div className="flex-shrink-0">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-px h-12 bg-gray-200 hidden lg:block"></div>
-                </div>
-                
-                {/* Search Button */}
-                <div className="lg:col-span-1">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full h-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-0 px-6 rounded-none lg:rounded-r-xl font-semibold text-base transition-all duration-200"
+            <motion.p
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.08 }}
+              className="mt-3 text-base sm:text-lg text-white/85"
+            >
+              Stays across East Africa
+            </motion.p>
+
+            <motion.form
+              onSubmit={handleSearch}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.16 }}
+              className="mt-8 sm:mt-10 mx-auto w-full max-w-3xl"
+            >
+              <div className="inline-flex mb-3 border border-white/30 bg-black/25 p-0.5 backdrop-blur-sm" role="group" aria-label="Search type">
+                {[
+                  { id: 'stays', label: 'Stays' },
+                  { id: 'hotels', label: 'Hotels' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setMode(item.id)}
+                    aria-pressed={mode === item.id}
+                    className={`px-4 py-1.5 text-sm font-medium ${
+                      mode === item.id ? 'bg-white text-gray-900' : 'text-white/90 hover:text-white'
+                    }`}
                   >
-                    <div className="flex items-center justify-center space-x-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      <span>Search</span>
-                    </div>
-                  </motion.button>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="bg-white border border-white/20 shadow-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_0.7fr_auto]">
+                  <label className="px-4 py-3 text-left border-b sm:border-b lg:border-b-0 sm:border-r border-gray-200">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Where</span>
+                    <input
+                      type="search"
+                      value={where}
+                      onChange={(e) => setWhere(e.target.value)}
+                      placeholder="Search destinations"
+                      className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                      aria-label="Where"
+                    />
+                  </label>
+                  <label className="px-4 py-3 text-left border-b lg:border-b-0 lg:border-r border-gray-200">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Check-in</span>
+                    <input
+                      type="date"
+                      min={today}
+                      value={checkIn}
+                      onChange={(e) => setCheckIn(e.target.value)}
+                      className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
+                      aria-label="Check-in"
+                    />
+                  </label>
+                  <label className="px-4 py-3 text-left border-b sm:border-b-0 lg:border-r border-gray-200">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Check-out</span>
+                    <input
+                      type="date"
+                      min={checkIn || today}
+                      value={checkOut}
+                      onChange={(e) => setCheckOut(e.target.value)}
+                      className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
+                      aria-label="Check-out"
+                    />
+                  </label>
+                  <label className="px-4 py-3 text-left border-b sm:border-b-0 sm:border-r lg:border-r border-gray-200">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Guests</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={guests}
+                      onChange={(e) => setGuests(e.target.value)}
+                      placeholder="Any"
+                      className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
+                      aria-label="Guests"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="px-6 py-3.5 bg-red-600 text-white text-sm font-semibold hover:bg-red-700 sm:col-span-2 lg:col-span-1"
+                  >
+                    Search
+                  </button>
                 </div>
               </div>
-            </div>
-          </motion.div>
-          
-          {/* Quick Actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="text-center mt-8"
-          >
-            <div className="flex flex-wrap justify-center items-center space-x-6 text-white/80">
-              <span className="text-sm">Popular:</span>
-              <button className="text-sm hover:text-white transition-colors duration-200">Nairobi</button>
-              <button className="text-sm hover:text-white transition-colors duration-200">Mombasa</button>
-              <button className="text-sm hover:text-white transition-colors duration-200">Kisumu</button>
-              <button className="text-sm hover:text-white transition-colors duration-200">Zanzibar</button>
-            </div>
-          </motion.div>
+            </motion.form>
+          </div>
         </div>
       </section>
 
-      {/* Real listings sections */}
-      <DealsSection />
-      <FeaturedHotels />
-      <FeaturedBnBs />
-
-      {/* Testimonials Section */}
-      <section className="py-20 bg-white">
+      {/* Inspiration destinations */}
+      <section className="py-12 sm:py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-            className="text-center mb-20"
-          >
-            <h2 className="text-4xl lg:text-5xl font-bold text-black mb-6">
-              What Our Travelers Say
-            </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-              Don't just take our word for it - hear from travelers who've experienced the magic of Msafiri Space.
-            </p>
-          </motion.div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <motion.div
-                key={testimonial.name}
-                initial={{ opacity: 0, y: 20 }}
+          <div className="flex items-end justify-between gap-4 mb-6">
+            <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">Inspiration</h2>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {DESTINATIONS.map((dest, index) => (
+              <motion.button
+                key={dest.name}
+                type="button"
+                onClick={() => goDestination(dest.name)}
+                initial={{ opacity: 0, y: 12 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
                 viewport={{ once: true }}
-                className="bg-gray-50 rounded-2xl p-8 group hover:bg-white hover:shadow-xl transition-all duration-300"
+                transition={{ duration: 0.35, delay: index * 0.05 }}
+                className="group relative aspect-[4/5] overflow-hidden text-left"
               >
-                <div className="flex items-center mb-6">
-                  <img
-                    src={testimonial.avatar}
-                    alt={testimonial.name}
-                    className="w-16 h-16 rounded-full object-cover mr-4"
-                  />
-                  <div>
-                    <h4 className="font-semibold text-black">{testimonial.name}</h4>
-                    <p className="text-gray-600">{testimonial.location}</p>
-                  </div>
-                </div>
-                <div className="flex items-center mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <StarIcon key={i} className="w-5 h-5 text-yellow-500 fill-current" />
-                  ))}
-                </div>
-                <p className="text-gray-700 leading-relaxed italic">"{testimonial.text}"</p>
-              </motion.div>
+                <img
+                  src={dest.image}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                <span className="absolute bottom-3 left-3 right-3 text-white text-lg font-semibold">
+                  {dest.name}
+                </span>
+              </motion.button>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-black to-gray-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl lg:text-5xl font-bold text-white mb-6">
-              Ready to Start Your Journey?
-            </h2>
-            <p className="text-xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-              Join thousands of travelers who have discovered amazing places and unforgettable experiences 
-              through Msafiri Space.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Link
-                  to="/register"
-                  className="inline-flex items-center px-10 py-4 bg-red-600 hover:bg-red-700 text-white text-lg font-semibold rounded-xl transition-colors duration-200 shadow-lg hover:shadow-xl"
-                >
-                  Get Started Today
-                  <ArrowRightIcon className="w-5 h-5 ml-2" />
-                </Link>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Link
-                  to="/search"
-                  className="inline-flex items-center px-10 py-4 bg-transparent text-white text-lg font-semibold rounded-xl border-2 border-white/30 hover:bg-white/10 transition-all duration-200"
-                >
-                  Explore Listings
-                </Link>
-              </motion.div>
-            </div>
-          </motion.div>
+      <FeaturedBnBs />
+      <FeaturedHotels />
+      <DealsSection />
+
+      <footer className="border-t border-gray-200 py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-sm text-gray-600">
+            Host your place on Msafiri Space
+          </p>
+          <Link to="/become-host" className="text-sm font-semibold text-red-600 hover:text-red-700">
+            Get started →
+          </Link>
         </div>
-      </section>
+      </footer>
     </div>
   );
 };

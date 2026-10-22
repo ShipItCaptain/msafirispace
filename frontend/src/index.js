@@ -28,23 +28,40 @@ root.render(
           <App />
           <Toaster
             position="top-right"
+            containerStyle={{ top: 80, right: 16, zIndex: 100 }}
             toastOptions={{
-              duration: 4000,
+              duration: 4500,
               style: {
-                background: '#1f2937',
-                color: '#f9fafb',
-                border: '1px solid #374151',
+                background: '#ffffff',
+                color: '#111827',
+                borderRadius: '10px',
+                border: '1px solid #e5e7eb',
+                padding: '12px 14px',
+                boxShadow: '0 10px 30px rgba(15, 23, 42, 0.12)',
+                fontSize: '13px',
+                lineHeight: '1.4',
+                maxWidth: '360px',
               },
               success: {
                 iconTheme: {
-                  primary: '#22c55e',
-                  secondary: '#f9fafb',
+                  primary: '#16a34a',
+                  secondary: '#ffffff',
+                },
+                style: {
+                  borderColor: '#bbf7d0',
+                  background: '#f0fdf4',
+                  color: '#14532d',
                 },
               },
               error: {
                 iconTheme: {
-                  primary: '#ef4444',
-                  secondary: '#f9fafb',
+                  primary: '#dc2626',
+                  secondary: '#ffffff',
+                },
+                style: {
+                  borderColor: '#fecaca',
+                  background: '#fef2f2',
+                  color: '#7f1d1d',
                 },
               },
             }}

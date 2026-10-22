@@ -79,7 +79,15 @@ module.exports = {
           700: '#b91c1c',
           800: '#991b1b',
           900: '#7f1d1d',
-        }
+        },
+        // Content typography + structural tokens (Airbnb-benchmarked):
+        // ink.primary/muted for text, hairline for the 1px section-divider
+        // rule. Additive only — doesn't rename or replace any color above.
+        hairline: '#dddddd',
+        ink: {
+          primary: '#222222',
+          muted: '#6a6a6a',
+        },
       },
       fontFamily: {
         'sans': ['Inter', 'Helvetica Neue', 'Arial', 'sans-serif'],

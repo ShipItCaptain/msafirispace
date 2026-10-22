@@ -63,6 +63,13 @@ const Header = () => {
 
   const navigation = NAVIGATION;
 
+  // Transparent-with-white-text only makes sense over the home page's dark
+  // hero banner before it's scrolled past -- every other route has a plain
+  // light background right under the header, so white text there is
+  // unreadable. Everywhere else, render the header as if already scrolled.
+  const isHomePage = location.pathname === '/';
+  const isHeaderSolid = isScrolled || !isHomePage;
+
   const hasBnBRole = Boolean(user?.roles?.includes('bnb_host'));
   const hasHotelRole = Boolean(user?.roles?.includes('hotel_host'));
   const hasHostRoles = hasBnBRole || hasHotelRole;
@@ -84,8 +91,8 @@ const Header = () => {
     <>
       
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled 
-          ? 'bg-white/95 backdrop-blur-md shadow-medium border-b border-secondary-100' 
+        isHeaderSolid
+          ? 'bg-white/95 backdrop-blur-md shadow-medium border-b border-secondary-100'
           : 'bg-transparent'
       }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -101,7 +108,7 @@ const Header = () => {
                 <span className="text-white font-bold text-xl">M</span>
               </div>
               <span className={`text-2xl font-bold ${
-                isScrolled ? 'text-gray-900' : 'text-white'
+                isHeaderSolid ? 'text-gray-900' : 'text-white'
               }`}>
                 Msafiri <span className="text-red-600">Space</span>
               </span>
@@ -117,8 +124,8 @@ const Header = () => {
                 key={item.name}
                 to={item.href}
                 className={`relative group p-3 rounded-lg transition-all duration-200 ${
-                  isScrolled 
-                    ? 'text-gray-600 hover:text-red-600 hover:bg-gray-100' 
+                  isHeaderSolid
+                    ? 'text-gray-600 hover:text-red-600 hover:bg-gray-100'
                     : 'text-white hover:text-gray-200 hover:bg-white/10'
                 }`}
               >
@@ -126,14 +133,14 @@ const Header = () => {
                 
                 {/* Tooltip */}
                 <div className={`absolute -bottom-12 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none ${
-                  isScrolled 
-                    ? 'bg-gray-900 text-white' 
+                  isHeaderSolid
+                    ? 'bg-gray-900 text-white'
                     : 'bg-white text-gray-900'
                 }`}>
                   {item.name}
                   {/* Tooltip arrow */}
                   <div className={`absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 rotate-45 ${
-                    isScrolled ? 'bg-gray-900' : 'bg-white'
+                    isHeaderSolid ? 'bg-gray-900' : 'bg-white'
                   }`}></div>
                 </div>
               </Link>
@@ -157,7 +164,7 @@ const Header = () => {
             {isAuthenticated ? (
               <div className="flex items-center space-x-3">
 
-                <NotificationBell isScrolled={isScrolled} />
+                <NotificationBell isScrolled={isHeaderSolid} />
 
                 {/* User Menu */}
                 <div className="relative user-menu-container">

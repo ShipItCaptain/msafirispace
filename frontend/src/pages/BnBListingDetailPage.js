@@ -1,73 +1,133 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
 import { bnbAPI } from '../services/api';
-import ComprehensiveBnBForm from '../components/forms/ComprehensiveBnBForm';
+import {
+  getBnBListingStatus,
+  BNB_STATUS_LABELS,
+  BNB_STATUS_STYLES,
+  meetsPublishMinimum,
+} from '../utils/bnbOptions';
+import BasicInfoSection from '../components/bnb-sections/BasicInfoSection';
+import LocationSection from '../components/bnb-sections/LocationSection';
+import PricingSection from '../components/bnb-sections/PricingSection';
+import PropertyDetailsSection from '../components/bnb-sections/PropertyDetailsSection';
+import AmenitiesSection from '../components/bnb-sections/AmenitiesSection';
+import PhotosSection from '../components/bnb-sections/PhotosSection';
+import HouseRulesSection from '../components/bnb-sections/HouseRulesSection';
+import ReviewPublishSection from '../components/bnb-sections/ReviewPublishSection';
 import {
   ArrowLeftIcon,
-  PencilIcon,
   TrashIcon,
-  MapPinIcon,
-  HomeIcon,
-  WifiIcon,
-  UsersIcon,
-  ClockIcon,
-  CheckCircleIcon,
   ExclamationTriangleIcon,
-  PhotoIcon,
+  EyeIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
+
+const SECTIONS = [
+  { id: 'photos', label: 'Photos' },
+  { id: 'basics', label: 'Title & type' },
+  { id: 'location', label: 'Location' },
+  { id: 'pricing', label: 'Pricing' },
+  { id: 'details', label: 'Property details' },
+  { id: 'amenities', label: 'Amenities' },
+  { id: 'rules', label: 'House rules' },
+  { id: 'publish', label: 'Publish' },
+];
+
+const REQUIRED_SECTIONS = ['photos', 'basics', 'location', 'pricing'];
+
+const sectionDone = (id, listing) => {
+  if (!listing) return false;
+  const hasPhoto =
+    Boolean(listing.primary_image) ||
+    (Array.isArray(listing.images) && listing.images.length > 0);
+  switch (id) {
+    case 'photos':
+      return hasPhoto;
+    case 'basics':
+      return Boolean(listing.title?.trim());
+    case 'location':
+      return Boolean(listing.city?.trim());
+    case 'pricing':
+      return Number(listing.price_per_night) > 0;
+    case 'details':
+      return Number(listing.bedrooms) > 0 || Number(listing.max_guests) > 0;
+    case 'amenities':
+      return Array.isArray(listing.amenities) && listing.amenities.length > 0;
+    case 'rules':
+      return true;
+    case 'publish':
+      return meetsPublishMinimum(listing) && listing.is_active;
+    default:
+      return false;
+  }
+};
+
+const firstIncompleteSection = (listing) => {
+  const next = SECTIONS.find((s) => !sectionDone(s.id, listing) && s.id !== 'publish');
+  return next?.id || (meetsPublishMinimum(listing) && !listing.is_active ? 'publish' : 'photos');
+};
 
 const BnBListingDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showSuccess, showError } = useNotifications();
   const [listing, setListing] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showEditForm, setShowEditForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isTogglingPublish, setIsTogglingPublish] = useState(false);
+  const [hasLanded, setHasLanded] = useState(Boolean(location.state?.section));
+  const [activeSection, setActiveSection] = useState(
+    SECTIONS.some((s) => s.id === location.state?.section) ? location.state.section : 'photos'
+  );
 
-  // Load listing data from API
+  useEffect(() => {
+    if (location.state?.section && SECTIONS.some((s) => s.id === location.state.section)) {
+      setActiveSection(location.state.section);
+      setHasLanded(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
   useEffect(() => {
     const loadListing = async () => {
       setIsLoading(true);
       try {
-        const foundListing = await bnbAPI.getListing(parseInt(id));
+        const foundListing = await bnbAPI.getListing(parseInt(id, 10));
         setListing(foundListing);
       } catch (error) {
-        console.error('Failed to load listing:', error);
-        showError('Failed to Load Listing', error?.response?.data?.detail || 'Could not load the BnB listing. Please try again.', 7000);
+        showError(
+          'Failed to Load Listing',
+          error?.response?.data?.detail || 'Could not load the BnB listing. Please try again.',
+          7000
+        );
         setListing(null);
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (id) {
-      loadListing();
-    }
+    if (id) loadListing();
   }, [id, showError]);
 
-  const handleEdit = () => {
-    setShowEditForm(true);
-  };
+  useEffect(() => {
+    if (!listing || hasLanded || location.state?.section) return;
+    setActiveSection(firstIncompleteSection(listing));
+    setHasLanded(true);
+  }, [listing, hasLanded, location.state?.section]);
 
   const handleDelete = async () => {
     setIsDeleting(true);
-    
     try {
-      await bnbAPI.remove(parseInt(id));
-      setIsDeleting(false);
-      setShowDeleteConfirm(false);
-      showSuccess(
-        'Listing Deleted!',
-        'The BnB listing has been successfully deleted.',
-        5000
-      );
+      await bnbAPI.remove(parseInt(id, 10));
+      showSuccess('Listing Deleted', 'The BnB listing has been successfully deleted.', 5000);
       navigate('/host/bnb');
     } catch (error) {
-      console.error('Delete error:', error);
       setIsDeleting(false);
       showError(
         'Delete Failed',
@@ -77,70 +137,63 @@ const BnBListingDetailPage = () => {
     }
   };
 
-  const handleSave = async (updatedData) => {
+  const handleTogglePublish = async () => {
+    if (!listing) return;
+    const goingLive = !listing.is_active;
+    if (goingLive && !meetsPublishMinimum(listing)) {
+      setActiveSection(firstIncompleteSection(listing));
+      showError('Not ready', 'Finish photos, title, city, and price before publishing.', 5000);
+      return;
+    }
+    setIsTogglingPublish(true);
     try {
-      // Map form data to API format
-      const apiData = {
-        title: updatedData.title || updatedData.propertyName || listing?.title || '',
-        description: updatedData.description || listing?.description || '',
-        property_type: updatedData.propertyType || listing?.property_type || 'bnb',
-        address: updatedData.address || listing?.address || '',
-        city: updatedData.city || listing?.city || '',
-        country: updatedData.country || listing?.country || 'Kenya',
-        price_per_night: parseFloat(updatedData.pricePerNight || updatedData.price || listing?.price_per_night || 0),
-        is_active: listing?.is_active !== false
-      };
-
-      const updatedListing = await bnbAPI.update(parseInt(id), apiData);
-      setListing(updatedListing);
-      setShowEditForm(false);
+      const updated = await bnbAPI.update(listing.id, { is_active: goingLive });
+      setListing(updated);
       showSuccess(
-        'Changes Updated!',
-        'Your BnB listing has been successfully updated.',
+        goingLive ? 'Listing published' : 'Listing taken offline',
+        goingLive
+          ? 'Your listing is now visible to guests.'
+          : 'Your listing is no longer visible to guests.',
         5000
       );
+      if (goingLive) setActiveSection('publish');
     } catch (error) {
-      console.error('Update error:', error);
-      showError(
-        'Update Failed',
-        error?.response?.data?.detail || error?.message || 'There was an error updating your listing. Please try again.',
-        7000
-      );
+      showError('Update Failed', error?.response?.data?.detail || 'Could not update listing.', 6000);
+    } finally {
+      setIsTogglingPublish(false);
     }
   };
 
-  const propertyTypes = {
-    'apartment': 'Apartment',
-    'house': 'House',
-    'villa': 'Villa',
-    'condo': 'Condo',
-    'studio': 'Studio',
-    'loft': 'Loft',
-    'townhouse': 'Townhouse',
-    'cabin': 'Cabin',
-    'other': 'Other'
-  };
+  const completion = useMemo(() => {
+    if (!listing) return { done: 0, total: SECTIONS.length, requiredDone: 0, requiredTotal: REQUIRED_SECTIONS.length };
+    const done = SECTIONS.filter((s) => sectionDone(s.id, listing)).length;
+    const requiredDone = REQUIRED_SECTIONS.filter((idKey) => sectionDone(idKey, listing)).length;
+    return {
+      done,
+      total: SECTIONS.length,
+      requiredDone,
+      requiredTotal: REQUIRED_SECTIONS.length,
+    };
+  }, [listing]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading listing details...</p>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-20">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600" />
       </div>
     );
   }
 
   if (!listing) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-20">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Listing Not Found</h1>
           <p className="text-gray-600 mb-6">The listing you're looking for doesn't exist.</p>
           <button
+            type="button"
             onClick={() => navigate('/host/bnb')}
-            className="bg-primary-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-600 transition-colors"
+            className="bg-red-600 text-white px-6 py-3 font-medium hover:bg-red-700"
           >
             Back to Listings
           </button>
@@ -149,423 +202,300 @@ const BnBListingDetailPage = () => {
     );
   }
 
+  const status = getBnBListingStatus(listing);
+  const locationLabel = [listing.city, listing.country].filter(Boolean).join(', ');
+  const canPublish = meetsPublishMinimum(listing);
+  const progressPct = Math.round((completion.done / completion.total) * 100);
+
+  const renderSection = () => {
+    switch (activeSection) {
+      case 'photos':
+        return <PhotosSection listing={listing} onUpdated={setListing} />;
+      case 'basics':
+        return <BasicInfoSection listing={listing} onUpdated={setListing} />;
+      case 'location':
+        return <LocationSection listing={listing} onUpdated={setListing} />;
+      case 'pricing':
+        return <PricingSection listing={listing} onUpdated={setListing} />;
+      case 'details':
+        return <PropertyDetailsSection listing={listing} onUpdated={setListing} />;
+      case 'amenities':
+        return <AmenitiesSection listing={listing} onUpdated={setListing} />;
+      case 'rules':
+        return <HouseRulesSection listing={listing} onUpdated={setListing} />;
+      case 'publish':
+        return <ReviewPublishSection listing={listing} onUpdated={setListing} />;
+      default:
+        return null;
+    }
+  };
+
+  const activeIndex = SECTIONS.findIndex((s) => s.id === activeSection);
+  const goNext = () => {
+    const remaining = SECTIONS.slice(activeIndex + 1).find((s) => !sectionDone(s.id, listing));
+    if (remaining) {
+      setActiveSection(remaining.id);
+      return;
+    }
+    if (activeIndex < SECTIONS.length - 1) setActiveSection(SECTIONS[activeIndex + 1].id);
+  };
+  const goPrev = () => {
+    if (activeIndex > 0) setActiveSection(SECTIONS[activeIndex - 1].id);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+    <div className="min-h-screen bg-gray-50 pt-20 pb-16">
+      <div className="bg-white border-b border-gray-200 sticky top-16 lg:top-20 z-30">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3 min-w-0">
               <button
+                type="button"
                 onClick={() => navigate('/host/bnb')}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                className="mt-0.5 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                aria-label="Back to listings"
               >
                 <ArrowLeftIcon className="w-5 h-5" />
               </button>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{listing.title}</h1>
-                <p className="text-gray-600">{listing.city}, {listing.country}</p>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-bold text-gray-900 truncate">
+                    {listing.title || 'Untitled listing'}
+                  </h1>
+                  <span className={`px-2.5 py-0.5 text-xs font-semibold ${BNB_STATUS_STYLES[status]}`}>
+                    {BNB_STATUS_LABELS[status]}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {completion.done} of {completion.total} sections ready
+                  {completion.requiredDone < completion.requiredTotal
+                    ? ` · ${completion.requiredTotal - completion.requiredDone} required left`
+                    : ''}
+                </p>
+                <div
+                  className="mt-2 h-1 w-40 max-w-full bg-gray-100 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={progressPct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Listing readiness"
+                >
+                  <div className="h-full bg-red-600 transition-all" style={{ width: `${progressPct}%` }} />
+                </div>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
-                listing.is_active !== false 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {listing.is_active !== false ? 'Active' : 'Inactive'}
-              </span>
-              <button
-                onClick={handleEdit}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+              <Link
+                to={`/bnb/${listing.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50"
               >
-                <PencilIcon className="w-4 h-4" />
-                <span>Edit</span>
-              </button>
+                <EyeIcon className="w-4 h-4" />
+                Preview
+              </Link>
+              {listing.is_active ? (
+                <button
+                  type="button"
+                  onClick={handleTogglePublish}
+                  disabled={isTogglingPublish}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {isTogglingPublish ? 'Updating…' : 'Take offline'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleTogglePublish}
+                  disabled={isTogglingPublish || !canPublish}
+                  title={!canPublish ? 'Finish required sections first' : undefined}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                >
+                  {isTogglingPublish ? 'Publishing…' : 'Publish'}
+                </button>
+              )}
               <button
+                type="button"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center space-x-2 px-4 py-2 text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-700 border border-red-200 bg-red-50 hover:bg-red-100"
               >
                 <TrashIcon className="w-4 h-4" />
-                <span>Delete</span>
+                Delete
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Image Gallery */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-4">
-                {(listing.images || []).map((image, index) => {
-                  const src = typeof image === 'string' ? image : image?.image;
-                  if (!src) return null;
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        <div className="lg:hidden mb-4 -mx-1 overflow-x-auto" role="tablist" aria-label="Listing sections">
+          <div className="flex gap-2 px-1 pb-1 min-w-max">
+            {SECTIONS.map((section, index) => {
+              const done = sectionDone(section.id, listing);
+              const active = activeSection === section.id;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setActiveSection(section.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border whitespace-nowrap ${
+                    active
+                      ? 'border-red-600 bg-red-50 text-red-700'
+                      : 'border-gray-200 bg-white text-gray-600'
+                  }`}
+                >
+                  <span className="text-[10px] text-gray-400">{index + 1}</span>
+                  {done && <CheckCircleIcon className="w-3.5 h-3.5 text-green-600" aria-hidden />}
+                  {section.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6">
+          <aside className="hidden lg:block">
+            <nav className="sticky top-40 bg-white border border-gray-200 p-3" aria-label="Edit listing sections">
+              <p className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                Edit listing
+              </p>
+              <ul className="space-y-0.5">
+                {SECTIONS.map((section) => {
+                  const done = sectionDone(section.id, listing);
+                  const active = activeSection === section.id;
+                  const required = REQUIRED_SECTIONS.includes(section.id);
                   return (
-                    <div key={image.id || index} className="relative group">
-                      <img
-                        src={src}
-                        alt={`${listing.title} - Slide ${index + 1}`}
-                        className="w-full h-48 object-cover rounded-lg"
-                      />
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-center justify-center">
-                        <button className="opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-white/80 rounded-full">
-                          <PhotoIcon className="w-5 h-5 text-gray-600" />
-                        </button>
-                      </div>
-                    </div>
+                    <li key={section.id}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection(section.id)}
+                        aria-current={active ? 'step' : undefined}
+                        className={`w-full flex items-center gap-2 px-2.5 py-2 text-left text-sm ${
+                          active
+                            ? 'bg-red-50 text-red-700 font-semibold'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            done ? 'bg-green-500' : required ? 'bg-amber-400' : 'bg-gray-300'
+                          }`}
+                          aria-hidden
+                        />
+                        <span className="flex-1">{section.label}</span>
+                        {!done && required && (
+                          <span className="text-[10px] font-medium text-amber-600">Required</span>
+                        )}
+                      </button>
+                    </li>
                   );
                 })}
-              </div>
-            </motion.div>
+              </ul>
+              {locationLabel && (
+                <div className="mt-4 pt-3 border-t border-gray-100 px-2">
+                  <p className="text-[11px] text-gray-400 mb-1">Location</p>
+                  <a
+                    href={
+                      listing.latitude && listing.longitude
+                        ? `https://www.google.com/maps?q=${listing.latitude},${listing.longitude}`
+                        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationLabel)}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-red-600 hover:text-red-700"
+                  >
+                    {locationLabel}
+                  </a>
+                </div>
+              )}
+            </nav>
+          </aside>
 
-            {/* Basic Information */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-            >
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">About this place</h2>
-              <p className="text-gray-700 leading-relaxed mb-6">{listing.description}</p>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="flex items-center space-x-2">
-                  <UsersIcon className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-600">{listing.guests} guests</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <HomeIcon className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-600">{listing.bedrooms} bedrooms</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <WifiIcon className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-600">{listing.bathrooms} bathrooms</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <HomeIcon className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-600">{propertyTypes[listing.propertyType]}</span>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Amenities */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-            >
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">What this place offers</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(listing.amenities || []).map((amenity, index) => (
-                  <div key={index} className="flex items-center space-x-3">
-                    <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                    <span className="text-gray-700">{amenity}</span>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* House Rules */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-            >
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">House rules</h2>
-              <div className="space-y-3">
-                {(listing.houseRules || []).map((rule, index) => (
-                  <div key={index} className="flex items-center space-x-3">
-                    <ExclamationTriangleIcon className="w-5 h-5 text-yellow-500" />
-                    <span className="text-gray-700">{rule}</span>
-                  </div>
-                ))}
-                
-                <div className="pt-4 border-t border-gray-200 space-y-3">
-                  <h3 className="font-medium text-gray-900">Additional Policies</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-sm text-gray-600">Smoking:</span>
-                      <span className={`text-sm font-medium ${listing.smokingAllowed ? 'text-green-600' : 'text-red-600'}`}>
-                        {listing.smokingAllowed ? 'Allowed' : 'Not allowed'}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className="text-sm text-gray-600">Pets:</span>
-                      <span className={`text-sm font-medium ${listing.petsAllowed ? 'text-green-600' : 'text-red-600'}`}>
-                        {listing.petsAllowed ? 'Allowed' : 'Not allowed'}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className="text-sm text-gray-600">Parties:</span>
-                      <span className={`text-sm font-medium ${listing.partiesAllowed ? 'text-green-600' : 'text-red-600'}`}>
-                        {listing.partiesAllowed ? 'Allowed' : 'Not allowed'}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className="text-sm text-gray-600">Children:</span>
-                      <span className={`text-sm font-medium ${listing.childrenAllowed ? 'text-green-600' : 'text-red-600'}`}>
-                        {listing.childrenAllowed ? 'Allowed' : 'Not allowed'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Location & Nearby */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-            >
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Where you'll be</h2>
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <MapPinIcon className="w-5 h-5 text-gray-400 mt-1" />
-                  <div>
-                    {listing.address && <p className="font-medium text-gray-900">{listing.address}</p>}
-                    <p className="text-gray-600">{listing.city}, {listing.country}</p>
-                  </div>
-                </div>
-                
-                {listing.transportation && (
-                  <div>
-                    <h3 className="font-medium text-gray-900 mb-2">Getting around</h3>
-                    <p className="text-gray-700">{listing.transportation}</p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Pricing Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900">KSh {(listing.price_per_night || 0).toLocaleString()}</p>
-                  <p className="text-gray-600">per night</p>
-                </div>
-                {listing.property_type && (
-                  <div className="text-sm px-3 py-1 bg-gray-100 text-gray-600 rounded">
-                    {listing.property_type}
-                  </div>
-                )}
-              </div>
-              
-              <div className="space-y-3 text-sm">
-                {listing.cleaningFee && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Cleaning fee</span>
-                    <span className="font-medium">KSh {(listing.cleaningFee || 0).toLocaleString()}</span>
-                  </div>
-                )}
-                {listing.securityDeposit && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Security deposit</span>
-                    <span className="font-medium">KSh {(listing.securityDeposit || 0).toLocaleString()}</span>
-                  </div>
-                )}
-                {listing.minimumNights && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Minimum stay</span>
-                    <span className="font-medium">{listing.minimumNights} nights</span>
-                  </div>
-                )}
-                {listing.maximumNights && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Maximum stay</span>
-                    <span className="font-medium">{listing.maximumNights} nights</span>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Check-in/out Times */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-            >
-              <h3 className="font-semibold text-gray-900 mb-4">Check-in & Check-out</h3>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3">
-                  <ClockIcon className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm text-gray-600">Check-in</p>
-                    <p className="font-medium">{listing.checkInTime}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <ClockIcon className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm text-gray-600">Check-out</p>
-                    <p className="font-medium">{listing.checkOutTime}</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Host Information */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-            >
-              <h3 className="font-semibold text-gray-900 mb-4">Host information</h3>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <p className="text-gray-600">Name</p>
-                  <p className="font-medium">{listing.hostName}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Phone</p>
-                  <p className="font-medium">{listing.hostPhone}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Email</p>
-                  <p className="font-medium">{listing.hostEmail}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Emergency contact</p>
-                  <p className="font-medium">{listing.emergencyContact}</p>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* Special Instructions */}
-            {listing.specialInstructions && (
+          <div>
+            <AnimatePresence mode="wait">
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                key={activeSection}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.8 }}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
               >
-                <h3 className="font-semibold text-gray-900 mb-4">Special instructions</h3>
-                <p className="text-sm text-gray-700">{listing.specialInstructions}</p>
+                {renderSection()}
               </motion.div>
-            )}
+            </AnimatePresence>
 
-            {/* Stats */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.9 }}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
-            >
-              <h3 className="font-semibold text-gray-900 mb-4">Listing statistics</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total bookings</span>
-                  <span className="font-medium">{listing.bookings || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total revenue</span>
-                  <span className="font-medium">KSh {(listing.revenue || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Created</span>
-                  <span className="font-medium">{new Date(listing.created_at).toLocaleDateString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Last booking</span>
-                  <span className="font-medium">{new Date(listing.last_booking).toLocaleDateString()}</span>
-                </div>
-              </div>
-            </motion.div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={goPrev}
+                disabled={activeIndex <= 0}
+                className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 hover:bg-white disabled:opacity-40"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={activeIndex >= SECTIONS.length - 1}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-40"
+              >
+                {activeIndex >= SECTIONS.length - 1
+                  ? 'Done'
+                  : SECTIONS.slice(activeIndex + 1).some((s) => !sectionDone(s.id, listing))
+                    ? 'Next incomplete'
+                    : 'Next'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Edit Form Modal */}
-      <AnimatePresence>
-        {showEditForm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto"
-            >
-              <ComprehensiveBnBForm
-                editingListing={listing}
-                onClose={() => setShowEditForm(false)}
-                onSave={handleSave}
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {showDeleteConfirm && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-lg shadow-xl w-full max-w-md"
+              className="bg-white shadow-xl w-full max-w-md"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-listing-title"
             >
               <div className="p-6">
                 <div className="flex items-center space-x-3 mb-4">
                   <div className="bg-red-100 p-2 rounded-full">
                     <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Delete listing</h3>
+                  <h3 id="delete-listing-title" className="text-lg font-semibold text-gray-900">
+                    Delete listing
+                  </h3>
                 </div>
                 <p className="text-gray-600 mb-6">
-                  Are you sure you want to delete "{listing.title}"? This action cannot be undone and will remove all associated data.
+                  Are you sure you want to delete &ldquo;{listing.title}&rdquo;? This cannot be undone.
                 </p>
                 <div className="flex space-x-3">
                   <button
+                    type="button"
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
                   </button>
                   <button
+                    type="button"
                     onClick={handleDelete}
                     disabled={isDeleting}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    className="flex-1 px-4 py-2 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                   >
-                    {isDeleting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Deleting...
-                      </>
-                    ) : (
-                      'Delete'
-                    )}
+                    {isDeleting ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               </div>

@@ -72,39 +72,35 @@ const Notification = ({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -50, scale: 0.95 }}
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -50, scale: 0.95 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className={`max-w-sm w-full bg-white rounded-lg shadow-lg border ${getBackgroundColor()} overflow-hidden`}
+      exit={{ opacity: 0, y: -8, scale: 0.98 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+      className={`w-full rounded-lg border shadow-lg ${getBackgroundColor()}`}
+      role="status"
     >
-      <div className="p-4">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">
-            {getIcon()}
-          </div>
-          <div className="ml-3 w-0 flex-1">
-            {title && (
-              <p className={`text-sm font-medium ${getTextColor()}`}>
-                {title}
-              </p>
-            )}
-            {message && (
-              <p className={`mt-1 text-sm ${getTextColor()}`}>
-                {message}
-              </p>
-            )}
-          </div>
-          <div className="ml-4 flex-shrink-0 flex">
-            <button
-              onClick={() => onClose(id)}
-              className={`inline-flex ${getTextColor()} hover:opacity-75 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-primary-500 rounded-md`}
-            >
-              <span className="sr-only">Close</span>
-              <XMarkIcon className="h-5 w-5" />
-            </button>
-          </div>
+      <div className="flex items-start gap-3 p-4">
+        <div className="flex-shrink-0 pt-0.5">{getIcon()}</div>
+        <div className="min-w-0 flex-1">
+          {title && (
+            <p className={`text-sm font-semibold leading-5 ${getTextColor()}`}>
+              {title}
+            </p>
+          )}
+          {message && (
+            <p className={`mt-0.5 text-sm leading-5 ${getTextColor()} opacity-90`}>
+              {message}
+            </p>
+          )}
         </div>
+        <button
+          type="button"
+          onClick={() => onClose(id)}
+          className={`flex-shrink-0 rounded-md p-0.5 ${getTextColor()} opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500`}
+        >
+          <span className="sr-only">Close</span>
+          <XMarkIcon className="h-5 w-5" />
+        </button>
       </div>
     </motion.div>
   );

@@ -1,46 +1,97 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  MagnifyingGlassIcon,
-  ListBulletIcon,
-  BuildingOfficeIcon
-} from '@heroicons/react/24/outline';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import HotelCard from '../components/hotel/HotelCard';
 import { useFavorites } from '../contexts/FavoritesContext';
+import {
+  DiscoveryStickyBar,
+  DiscoveryBarField,
+  FiltersSheet,
+  DiscoveryResultsHeader,
+  DiscoveryEmptyState,
+  fieldInputClass,
+} from '../components/discovery/DiscoveryChrome';
+
+const PROPERTY_TYPES = [
+  { value: '', label: 'All types' },
+  { value: 'hotel', label: 'Hotel' },
+  { value: 'resort', label: 'Resort' },
+  { value: 'boutique_hotel', label: 'Boutique hotel' },
+  { value: 'business_hotel', label: 'Business hotel' },
+  { value: 'luxury_hotel', label: 'Luxury hotel' },
+  { value: 'budget_hotel', label: 'Budget hotel' },
+  { value: 'bed_and_breakfast', label: 'Bed & breakfast' },
+  { value: 'hostel', label: 'Hostel' },
+  { value: 'apartment', label: 'Apartment' },
+  { value: 'villa', label: 'Villa' },
+];
+
+const STAR_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: '3', label: '3+' },
+  { value: '4', label: '4+' },
+  { value: '5', label: '5' },
+];
+
+const SORT_OPTIONS = [
+  { value: 'featured', label: 'Recommended' },
+  { value: 'rating', label: 'Highest rated' },
+  { value: 'name', label: 'Name A–Z' },
+  { value: 'price', label: 'Price: low to high' },
+];
 
 const HotelsPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const [hotels, setHotels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [where, setWhere] = useState(() => searchParams.get('where') || searchParams.get('city') || '');
+  const [debouncedWhere, setDebouncedWhere] = useState(() => searchParams.get('where') || searchParams.get('city') || '');
   const [filters, setFilters] = useState({
-    city: '',
-    property_type: '',
-    min_stars: '',
-    max_stars: '',
-    amenities: []
+    city: searchParams.get('city') || '',
+    property_type: searchParams.get('property_type') || '',
+    min_stars: searchParams.get('min_stars') || '',
   });
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
-  const [sortBy, setSortBy] = useState('featured'); // 'featured', 'price', 'rating', 'name'
+  const [sortBy, setSortBy] = useState('featured');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { isHotelFavorite, isHotelFavoriteBusy, toggleHotelFavorite } = useFavorites();
+
+  useEffect(() => {
+    const nextWhere = searchParams.get('where') || '';
+    const nextCity = searchParams.get('city') || '';
+    if (nextWhere || nextCity) {
+      setWhere(nextWhere || nextCity);
+      setDebouncedWhere(nextWhere || nextCity);
+    }
+    setFilters((prev) => ({
+      ...prev,
+      city: nextCity || prev.city,
+      property_type: searchParams.get('property_type') || prev.property_type,
+      min_stars: searchParams.get('min_stars') || prev.min_stars,
+    }));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedWhere(where.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [where]);
 
   useEffect(() => {
     const fetchHotels = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/listings/hotels/', {
-          params: {
-            search: searchQuery,
-            ...filters
-          }
-        });
-        setHotels(response.data.results || response.data);
+        setError(null);
+        const params = {};
+        if (debouncedWhere) params.search = debouncedWhere;
+        if (filters.city) params.city = filters.city;
+        if (filters.property_type) params.property_type = filters.property_type;
+        if (filters.min_stars) params.min_stars = filters.min_stars;
+        const response = await api.get('/listings/hotels/', { params });
+        setHotels(response.data.results || response.data || []);
       } catch (err) {
         setError('Failed to load hotels');
         console.error('Error fetching hotels:', err);
@@ -48,9 +99,8 @@ const HotelsPage = () => {
         setLoading(false);
       }
     };
-
     fetchHotels();
-  }, [searchQuery, filters]);
+  }, [debouncedWhere, filters]);
 
   const handleToggleFavorite = async (hotelId) => {
     if (!isAuthenticated) {
@@ -65,309 +115,154 @@ const HotelsPage = () => {
     toast.success(result.isFavorite ? 'Added to favorites' : 'Removed from favorites');
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    // Search is handled by useEffect when searchQuery changes
-  };
-
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
+  const sheetFilterCount = [filters.property_type, filters.min_stars].filter(Boolean).length;
+  const activeCount =
+    sheetFilterCount + (filters.city ? 1 : 0) + (where.trim() ? 1 : 0);
 
   const clearFilters = () => {
-    setFilters({
-      city: '',
-      property_type: '',
-      min_stars: '',
-      max_stars: '',
-      amenities: []
-    });
-    setSearchQuery('');
+    setFilters({ city: '', property_type: '', min_stars: '' });
+    setWhere('');
   };
 
+  const sortedHotels = useMemo(() => {
+    const list = [...hotels];
+    if (sortBy === 'name') {
+      return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }
+    if (sortBy === 'rating') {
+      return list.sort(
+        (a, b) =>
+          Number(b.average_rating ?? b.star_rating ?? 0) -
+          Number(a.average_rating ?? a.star_rating ?? 0)
+      );
+    }
+    if (sortBy === 'price') {
+      return list.sort(
+        (a, b) =>
+          Number(a.starting_price ?? a.price_per_night ?? a.min_price ?? Infinity) -
+          Number(b.starting_price ?? b.price_per_night ?? b.min_price ?? Infinity)
+      );
+    }
+    return list;
+  }, [hotels, sortBy]);
 
-  const propertyTypes = [
-    { value: '', label: 'All Types' },
-    { value: 'hotel', label: 'Hotel' },
-    { value: 'resort', label: 'Resort' },
-    { value: 'boutique_hotel', label: 'Boutique Hotel' },
-    { value: 'business_hotel', label: 'Business Hotel' },
-    { value: 'luxury_hotel', label: 'Luxury Hotel' },
-    { value: 'budget_hotel', label: 'Budget Hotel' },
-    { value: 'bed_and_breakfast', label: 'Bed & Breakfast' },
-    { value: 'hostel', label: 'Hostel' },
-    { value: 'apartment', label: 'Apartment' },
-    { value: 'villa', label: 'Villa' }
-  ];
-
-  const starOptions = [
-    { value: '', label: 'Any Stars' },
-    { value: '1', label: '1+ Stars' },
-    { value: '2', label: '2+ Stars' },
-    { value: '3', label: '3+ Stars' },
-    { value: '4', label: '4+ Stars' },
-    { value: '5', label: '5 Stars' }
-  ];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading hotels...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const placeLabel = filters.city || (debouncedWhere ? `“${debouncedWhere}”` : null);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mb-8"
-        >
-          <div className="flex items-center space-x-3 mb-4">
-            <BuildingOfficeIcon className="w-8 h-8 text-red-600" />
-            <h1 className="text-3xl font-bold text-gray-900">Hotels</h1>
-          </div>
-          <p className="text-lg text-gray-600">
-            Discover amazing hotels and accommodations for your next trip
-          </p>
-        </motion.div>
+      <DiscoveryStickyBar
+        where={where}
+        onWhereChange={setWhere}
+        wherePlaceholder="Search hotels or destinations"
+        filterCount={sheetFilterCount}
+        onOpenFilters={() => setFiltersOpen(true)}
+        onClear={clearFilters}
+        showClear={activeCount > 0}
+      >
+        <DiscoveryBarField label="City" className="border-t lg:border-t-0 border-gray-200">
+          <input
+            type="text"
+            value={filters.city}
+            onChange={(e) => setFilters((prev) => ({ ...prev, city: e.target.value }))}
+            placeholder="Any city"
+            className={fieldInputClass}
+          />
+        </DiscoveryBarField>
+      </DiscoveryStickyBar>
 
-        {/* Search and Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="bg-white rounded-xl shadow-lg p-6 mb-8"
-        >
-          {/* Search Bar */}
-          <form onSubmit={handleSearch} className="mb-6">
-            <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search hotels, cities, or destinations..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-lg"
-              />
-            </div>
-          </form>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <DiscoveryResultsHeader
+          countLabel={
+            loading
+              ? 'Loading hotels…'
+              : `${sortedHotels.length} hotel${sortedHotels.length === 1 ? '' : 's'}`
+          }
+          placeLabel={placeLabel}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          sortOptions={SORT_OPTIONS}
+        />
 
-          {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* City Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                City
-              </label>
-              <input
-                type="text"
-                placeholder="Enter city"
-                value={filters.city}
-                onChange={(e) => handleFilterChange('city', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Property Type Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Property Type
-              </label>
-              <select
-                value={filters.property_type}
-                onChange={(e) => handleFilterChange('property_type', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                {propertyTypes.map(type => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Star Rating Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Star Rating
-              </label>
-              <select
-                value={filters.min_stars}
-                onChange={(e) => handleFilterChange('min_stars', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              >
-                {starOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Clear Filters */}
-            <div className="flex items-end">
-              <button
-                onClick={clearFilters}
-                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Clear Filters
-              </button>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Results Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6"
-        >
-          <div className="mb-4 sm:mb-0">
-            <h2 className="text-xl font-semibold text-gray-900">
-              {hotels.length} hotels found
-            </h2>
-            <p className="text-gray-600">
-              {searchQuery && `Search results for "${searchQuery}"`}
-            </p>
-          </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg ${
-                  viewMode === 'grid' 
-                    ? 'bg-red-600 text-white' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <BuildingOfficeIcon className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg ${
-                  viewMode === 'list' 
-                    ? 'bg-red-600 text-white' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <ListBulletIcon className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Sort Dropdown */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            >
-              <option value="featured">Featured</option>
-              <option value="rating">Highest Rated</option>
-              <option value="name">Name A-Z</option>
-              <option value="price">Price Low to High</option>
-            </select>
-          </div>
-        </motion.div>
-
-        {/* Hotels Grid/List */}
-        {error ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center py-12"
-          >
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BuildingOfficeIcon className="w-8 h-8 text-red-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Hotels</h3>
-            <p className="text-gray-600 mb-6">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Try Again
-            </button>
-          </motion.div>
-        ) : hotels.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center py-12"
-          >
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BuildingOfficeIcon className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Hotels Found</h3>
-            <p className="text-gray-600 mb-6">
-              Try adjusting your search criteria or filters
-            </p>
-            <button
-              onClick={clearFilters}
-              className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Clear Filters
-            </button>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className={`grid gap-6 ${
-              viewMode === 'grid' 
-                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
-                : 'grid-cols-1'
-            }`}
-          >
-            {hotels.map((hotel, index) => (
-              <motion.div
-                key={hotel.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-              >
-                <HotelCard
-                  hotel={hotel}
-                  isFavorite={isHotelFavorite(hotel.id)}
-                  favoriteLoading={isHotelFavoriteBusy(hotel.id)}
-                  onToggleFavorite={handleToggleFavorite}
-                />
-              </motion.div>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8" aria-busy="true">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+              <div key={n} className="animate-pulse">
+                <div className="aspect-[4/3] bg-gray-200" />
+                <div className="mt-2 h-4 w-3/4 bg-gray-200" />
+                <div className="mt-1 h-3 w-1/2 bg-gray-200" />
+                <div className="mt-1 h-3 w-1/3 bg-gray-200" />
+              </div>
             ))}
-          </motion.div>
-        )}
-
-        {/* Load More Button */}
-        {hotels.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="text-center mt-12"
-          >
-            <button className="bg-red-600 text-white px-8 py-3 rounded-lg hover:bg-red-700 transition-colors font-medium">
-              Load More Hotels
-            </button>
-          </motion.div>
+          </div>
+        ) : error ? (
+          <DiscoveryEmptyState
+            title="Couldn’t load hotels"
+            message={error}
+            onClear={() => window.location.reload()}
+            clearLabel="Try again"
+          />
+        ) : sortedHotels.length === 0 ? (
+          <DiscoveryEmptyState
+            title="No hotels match"
+            message="Try another destination or clear your filters."
+            onClear={activeCount > 0 ? clearFilters : undefined}
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8">
+            {sortedHotels.map((hotel) => (
+              <HotelCard
+                key={hotel.id}
+                hotel={hotel}
+                isFavorite={isHotelFavorite(hotel.id)}
+                favoriteLoading={isHotelFavoriteBusy(hotel.id)}
+                onToggleFavorite={handleToggleFavorite}
+              />
+            ))}
+          </div>
         )}
       </div>
+
+      <FiltersSheet
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Hotel filters"
+        activeCount={sheetFilterCount}
+        onClear={() => setFilters((prev) => ({ ...prev, property_type: '', min_stars: '' }))}
+      >
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-2">Property type</label>
+          <select
+            value={filters.property_type}
+            onChange={(e) => setFilters((prev) => ({ ...prev, property_type: e.target.value }))}
+            className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+          >
+            {PROPERTY_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-2">Star rating</label>
+          <div className="flex flex-wrap gap-2">
+            {STAR_OPTIONS.map((option) => (
+              <button
+                key={option.value || 'any'}
+                type="button"
+                onClick={() => setFilters((prev) => ({ ...prev, min_stars: option.value }))}
+                className={`px-3 py-2 text-sm border ${
+                  filters.min_stars === option.value
+                    ? 'border-red-600 bg-red-50 text-red-700 font-medium'
+                    : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </FiltersSheet>
     </div>
   );
 };
