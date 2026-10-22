@@ -24,7 +24,7 @@ Msafiri Space is a production-ready hospitality marketplace connecting hotels, r
 - [x] Security configurations and middleware
 - [x] Redis cache configuration
 - [x] Cloudinary image storage setup
-- [x] Payment gateway configurations (Mpesa + Flutterwave)
+- [x] Payment gateway configurations (Mpesa + Paystack)
 - [x] Email configuration and templates
 - [x] Logging and monitoring setup
 
@@ -57,7 +57,7 @@ Msafiri Space is a production-ready hospitality marketplace connecting hotels, r
 ### 🔧 Backend Development
 - [ ] **Listings App**: Models, serializers, views, and endpoints
 - [ ] **Bookings App**: Reservation system with availability management
-- [ ] **Payments App**: Mpesa STK Push and Flutterwave integration
+- [ ] **Payments App**: Mpesa STK Push and Paystack integration
 - [ ] **Reviews App**: Rating and review system
 - [ ] **Referrals App**: User referral program
 - [ ] **Notifications App**: Email and in-app notifications
@@ -95,7 +95,7 @@ Msafiri Space is a production-ready hospitality marketplace connecting hotels, r
 - **Cache**: Redis for session and data caching
 - **Authentication**: JWT + Django Allauth
 - **File Storage**: Cloudinary for image optimization
-- **Payments**: Mpesa STK Push + Flutterwave
+- **Payments**: Mpesa STK Push + Paystack
 - **Email**: SMTP with Celery for async processing
 - **Documentation**: Swagger/ReDoc with drf-yasg
 

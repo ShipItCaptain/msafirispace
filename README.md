@@ -7,7 +7,7 @@ A production-ready hospitality marketplace connecting hotels, restaurants, and B
 - **User Management**: Authentication, profiles, dashboards
 - **Host Management**: Listing management, analytics, subscriptions
 - **Search & Discovery**: Smart search with filters and interactive maps
-- **Booking & Payments**: Mpesa STK Push + Flutterwave integration
+- **Booking & Payments**: Mpesa STK Push + Paystack integration
 - **Reviews & Ratings**: Verified review system
 - **Referral Program**: User and host referral system
 
@@ -17,7 +17,7 @@ A production-ready hospitality marketplace connecting hotels, restaurants, and B
 - **Frontend**: React with TailwindCSS
 - **Database**: PostgreSQL
 - **Cache**: Redis
-- **Payments**: Mpesa (Kenya) + Flutterwave (Africa)
+- **Payments**: Mpesa (Kenya) + Paystack (Africa)
 - **Images**: Cloudinary
 - **Deployment**: Docker + CI/CD ready
 
