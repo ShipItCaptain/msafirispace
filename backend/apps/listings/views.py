@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Q
+from django.db.models import Q, Count
 from rest_framework.pagination import PageNumberPagination
 from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import cache_page
@@ -828,7 +828,8 @@ def search_available_rooms(request):
     children = int(request.query_params.get('children', 0))
     room_category = request.query_params.get('category')
     max_price = request.query_params.get('max_price')
-    
+    amenities = request.query_params.getlist('amenities')
+
     # Validate dates
     if not check_in or not check_out:
         return Response({'error': 'check_in and check_out dates are required'}, status=400)
@@ -858,7 +859,19 @@ def search_available_rooms(request):
     
     if max_price:
         queryset = queryset.filter(base_price__lte=max_price)
-    
+
+    if amenities:
+        # Require ALL listed amenities (matches the BnB search endpoint's
+        # semantics), not just any one of them -- a plain __in filter would
+        # only check "has at least one".
+        queryset = queryset.annotate(
+            _matched_amenity_count=Count(
+                'amenity_mappings__amenity',
+                filter=Q(amenity_mappings__amenity__name__in=amenities, amenity_mappings__is_available=True),
+                distinct=True,
+            )
+        ).filter(_matched_amenity_count=len(set(amenities)))
+
     # Filter by availability for the date range
     available_rooms = []
     for room_type in queryset:
