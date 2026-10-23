@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
 
+from msafiri.image_utils import compress_image_field
 from msafiri.validators import validate_image_extension, validate_image_size
 
 User = get_user_model()
@@ -72,6 +73,11 @@ class Promotion(models.Model):
 
     def __str__(self):
         return f"{self.get_promotion_type_display()}: {self.title}"
+
+    def save(self, *args, **kwargs):
+        if self.image and not self.image._committed:
+            compress_image_field(self.image)
+        super().save(*args, **kwargs)
 
     @property
     def is_active(self):

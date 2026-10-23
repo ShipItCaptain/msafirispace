@@ -8,6 +8,7 @@ import Layout from './components/layout/Layout';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import ErrorBoundary from './components/layout/ErrorBoundary';
+import CookieConsentBanner from './components/common/CookieConsentBanner';
 
 // Page Components (public, loaded eagerly)
 import HomePage from './pages/HomePage';
@@ -25,6 +26,9 @@ import VerifyAccountPage from './pages/VerifyAccountPage';
 import BookingDetailPage from './pages/BookingDetailPage';
 import BecomeHostPage from './pages/BecomeHostPage';
 import NotFoundPage from './pages/NotFoundPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsPage from './pages/TermsPage';
+import CookiePolicyPage from './pages/CookiePolicyPage';
 
 // Protected Route Component
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -60,13 +64,14 @@ function AppContent() {
         notifications={notifications}
         onClose={removeNotification}
       />
+      <CookieConsentBanner />
       <ErrorBoundary>
         <AnimatePresence mode="wait">
           <React.Suspense fallback={<div className="min-h-screen" />}>
           <Routes>
           {/* Public Routes */}
           <Route path="/" element={
-            <Layout>
+            <Layout title="Hotels & BnBs in Kenya" description="Discover extraordinary places to stay, unique experiences, and unforgettable adventures across Kenya and beyond.">
               <Header />
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -192,7 +197,7 @@ function AppContent() {
           
           {/* Authentication Routes */}
           <Route path="/login" element={
-            <Layout>
+            <Layout title="Log In" description="Log in to your Msafiri Space account to manage bookings and listings.">
               <Header />
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -207,7 +212,7 @@ function AppContent() {
           } />
           
           <Route path="/register" element={
-            <Layout>
+            <Layout title="Create Account" description="Sign up for Msafiri Space to book hotels and BnBs across Kenya.">
               <Header />
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -320,7 +325,7 @@ function AppContent() {
           
           {/* Host Onboarding Routes */}
           <Route path="/become-host" element={
-            <Layout>
+            <Layout title="Become a Host" description="List your hotel, BnB, or restaurant on Msafiri Space and start earning.">
               <Header />
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -506,6 +511,51 @@ function AppContent() {
           } />
           
           
+          <Route path="/privacy" element={
+            <Layout title="Privacy Policy" description="How Msafiri Space collects, uses, and protects your personal data.">
+              <Header />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <PrivacyPolicyPage />
+              </motion.div>
+              <Footer />
+            </Layout>
+          } />
+
+          <Route path="/terms" element={
+            <Layout title="Terms & Conditions" description="The terms that govern your use of Msafiri Space.">
+              <Header />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <TermsPage />
+              </motion.div>
+              <Footer />
+            </Layout>
+          } />
+
+          <Route path="/cookies" element={
+            <Layout title="Cookie Policy" description="How Msafiri Space uses cookies and how to control them.">
+              <Header />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <CookiePolicyPage />
+              </motion.div>
+              <Footer />
+            </Layout>
+          } />
+
           {/* 404 Route */}
           <Route path="*" element={
             <Layout>

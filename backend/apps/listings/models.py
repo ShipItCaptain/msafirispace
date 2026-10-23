@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 from msafiri.encrypted_storage import encrypt_field_file
+from msafiri.image_utils import compress_image_field
 from msafiri.validators import (
     validate_document_extension,
     validate_document_size,
@@ -309,6 +310,8 @@ class BnBImage(models.Model):
         # up primary at once.
         if self.is_primary:
             BnBImage.objects.filter(bnb_listing_id=self.bnb_listing_id, is_primary=True).exclude(pk=self.pk).update(is_primary=False)
+        if self.image and not self.image._committed:
+            compress_image_field(self.image)
         super().save(*args, **kwargs)
 
 
@@ -420,6 +423,11 @@ class HotelImage(models.Model):
     
     def __str__(self):
         return f"{self.hotel.name} - {self.get_image_type_display()}"
+
+    def save(self, *args, **kwargs):
+        if self.image and not self.image._committed:
+            compress_image_field(self.image)
+        super().save(*args, **kwargs)
 
 
 class HotelAmenity(models.Model):
@@ -616,6 +624,11 @@ class RoomImage(models.Model):
     
     def __str__(self):
         return f"{self.room_type.name} - {self.get_image_type_display()}"
+
+    def save(self, *args, **kwargs):
+        if self.image and not self.image._committed:
+            compress_image_field(self.image)
+        super().save(*args, **kwargs)
 
 
 class RoomAmenity(models.Model):

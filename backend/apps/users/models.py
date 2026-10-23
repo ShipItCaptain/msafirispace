@@ -5,6 +5,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from msafiri.image_utils import compress_image_field
 from msafiri.validators import (
     validate_document_extension,
     validate_document_size,
@@ -164,6 +165,8 @@ class User(AbstractUser):
         return f"{self.get_full_name()} ({self.email})"
     
     def save(self, *args, **kwargs):
+        if self.profile_picture and not self.profile_picture._committed:
+            compress_image_field(self.profile_picture)
         # Generate referral code if not exists
         if not self.referral_code:
             import secrets

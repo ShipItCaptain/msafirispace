@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /host-dashboard
+Disallow: /host/
+Disallow: /booking/
+Disallow: /become-host
+Disallow: /admin
+
+Sitemap: https://msafirispace.com/sitemap.xml
