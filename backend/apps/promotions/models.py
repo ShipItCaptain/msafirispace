@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
 
+from msafiri.validators import validate_image_extension, validate_image_size
+
 User = get_user_model()
 
 
@@ -29,7 +31,10 @@ class Promotion(models.Model):
     promotion_type = models.CharField(max_length=20, choices=PromotionType.choices)
     title = models.CharField(max_length=200)
     description = models.TextField()
-    image = models.ImageField(upload_to='promotions/images/', blank=True)
+    image = models.ImageField(
+        upload_to='promotions/images/', blank=True,
+        validators=[validate_image_extension, validate_image_size],
+    )
     
     # Pricing
     original_price = models.DecimalField(max_digits=10, decimal_places=2)

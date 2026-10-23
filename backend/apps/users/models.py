@@ -5,6 +5,13 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from msafiri.validators import (
+    validate_document_extension,
+    validate_document_size,
+    validate_image_extension,
+    validate_image_size,
+)
+
 
 class User(AbstractUser):
     """
@@ -42,7 +49,8 @@ class User(AbstractUser):
     profile_picture = models.ImageField(
         upload_to='users/profile_pictures/',
         blank=True,
-        null=True
+        null=True,
+        validators=[validate_image_extension, validate_image_size],
     )
     bio = models.TextField(max_length=500, blank=True)
     location = models.CharField(max_length=100, blank=True)
@@ -378,7 +386,8 @@ class BnBHostProfile(models.Model):
     insurance_document = models.FileField(
         upload_to='hosts/insurance/',
         blank=True,
-        null=True
+        null=True,
+        validators=[validate_document_extension, validate_document_size],
     )
     property_management_style = models.CharField(
         max_length=50,
@@ -412,14 +421,26 @@ class BnBHostProfile(models.Model):
     owner_name = models.CharField(max_length=150, blank=True)
     owner_kra_pin = models.CharField(max_length=20, blank=True)
     owner_id_number = models.CharField(max_length=50, blank=True)
-    owner_id_front = models.FileField(upload_to='hosts/bnb/owner_id/', blank=True, null=True)
-    owner_id_back = models.FileField(upload_to='hosts/bnb/owner_id/', blank=True, null=True)
-    owner_permit = models.FileField(upload_to='hosts/bnb/permits/', blank=True, null=True)
+    owner_id_front = models.FileField(
+        upload_to='hosts/bnb/owner_id/', blank=True, null=True,
+        validators=[validate_document_extension, validate_document_size],
+    )
+    owner_id_back = models.FileField(
+        upload_to='hosts/bnb/owner_id/', blank=True, null=True,
+        validators=[validate_document_extension, validate_document_size],
+    )
+    owner_permit = models.FileField(
+        upload_to='hosts/bnb/permits/', blank=True, null=True,
+        validators=[validate_document_extension, validate_document_size],
+    )
 
     # Company branch
     company_name = models.CharField(max_length=200, blank=True)
     company_kra_pin = models.CharField(max_length=20, blank=True)
-    company_permit = models.FileField(upload_to='hosts/bnb/permits/', blank=True, null=True)
+    company_permit = models.FileField(
+        upload_to='hosts/bnb/permits/', blank=True, null=True,
+        validators=[validate_document_extension, validate_document_size],
+    )
 
     # Shared
     contact_email = models.EmailField(blank=True)
@@ -439,6 +460,13 @@ class BnBHostProfile(models.Model):
 
     def __str__(self):
         return f"BnB Profile for {self.user.email}"
+
+    def save(self, *args, **kwargs):
+        for field_name in ('insurance_document', 'owner_id_front', 'owner_id_back', 'owner_permit', 'company_permit'):
+            field_file = getattr(self, field_name)
+            if field_file and not field_file._committed:
+                encrypt_field_file(field_file)
+        super().save(*args, **kwargs)
 
 
 class HotelRestaurantHostProfile(models.Model):
@@ -464,12 +492,14 @@ class HotelRestaurantHostProfile(models.Model):
     health_certificate = models.FileField(
         upload_to='hosts/health_certs/',
         blank=True,
-        null=True
+        null=True,
+        validators=[validate_document_extension, validate_document_size],
     )
     food_handling_certificate = models.FileField(
         upload_to='hosts/food_certs/',
         blank=True,
-        null=True
+        null=True,
+        validators=[validate_document_extension, validate_document_size],
     )
     
     # Business details
@@ -508,8 +538,14 @@ class HotelRestaurantHostProfile(models.Model):
         choices=[('manager', 'Manager'), ('director', 'Director')],
         blank=True,
     )
-    business_permit = models.FileField(upload_to='hosts/hotel/permits/', blank=True, null=True)
-    business_registration_certificate = models.FileField(upload_to='hosts/hotel/registration/', blank=True, null=True)
+    business_permit = models.FileField(
+        upload_to='hosts/hotel/permits/', blank=True, null=True,
+        validators=[validate_document_extension, validate_document_size],
+    )
+    business_registration_certificate = models.FileField(
+        upload_to='hosts/hotel/registration/', blank=True, null=True,
+        validators=[validate_document_extension, validate_document_size],
+    )
 
     # Set once, on successful onboarding submission -- the source of truth
     # for "has this user completed host KYC" (see HostOnboardingSerializer).
@@ -525,3 +561,13 @@ class HotelRestaurantHostProfile(models.Model):
 
     def __str__(self):
         return f"Hotel/Restaurant Profile for {self.user.email}"
+
+    def save(self, *args, **kwargs):
+        for field_name in (
+            'health_certificate', 'food_handling_certificate',
+            'business_permit', 'business_registration_certificate',
+        ):
+            field_file = getattr(self, field_name)
+            if field_file and not field_file._committed:
+                encrypt_field_file(field_file)
+        super().save(*args, **kwargs)

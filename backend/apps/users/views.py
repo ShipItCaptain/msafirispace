@@ -8,6 +8,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
+
+from msafiri.permissions import IsOwner
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
@@ -90,7 +92,9 @@ class UserLoginView(APIView):
     User login endpoint
     """
     permission_classes = [permissions.AllowAny]
-    
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
+
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data)
         if serializer.is_valid():
@@ -238,7 +242,7 @@ class UserAddressDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     User address detail - retrieve, update, delete
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsOwner]
     serializer_class = UserAddressSerializer
     
     def get_queryset(self):

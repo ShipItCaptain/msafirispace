@@ -2,6 +2,8 @@
 Django settings for msafiri project.
 """
 
+import base64
+import hashlib
 import os
 from pathlib import Path
 from decouple import config
@@ -12,6 +14,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-in-production')
+
+# Key for encrypting sensitive uploaded documents (KYC/ID/permits) at rest --
+# see msafiri/encrypted_storage.py. Defaults to a key derived from
+# SECRET_KEY so local dev works out of the box; production should set
+# FILE_ENCRYPTION_KEY explicitly (generate with
+# `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+# so rotating SECRET_KEY doesn't also lock out previously-uploaded documents.
+FILE_ENCRYPTION_KEY = config(
+    'FILE_ENCRYPTION_KEY',
+    default=base64.urlsafe_b64encode(hashlib.sha256(SECRET_KEY.encode()).digest()).decode(),
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
@@ -164,7 +177,8 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
         'user': '1000/hour',
-        'otp_resend': '5/hour'
+        'otp_resend': '5/hour',
+        'login': '10/hour'
     }
 }
 

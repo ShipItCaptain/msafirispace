@@ -33,7 +33,8 @@ const RegisterPage = () => {
     confirm_password: '',
     country: 'Kenya',
     city: '',
-    referral_code: referralCodeFromLink
+    referral_code: referralCodeFromLink,
+    website: '' // honeypot -- stays empty for real users
   });
 
   useEffect(() => {
@@ -146,6 +147,7 @@ const RegisterPage = () => {
         password,
         confirm_password,
         referral_code,
+        website,
       } = formDataToSubmit;
 
       const registrationData = {
@@ -159,6 +161,7 @@ const RegisterPage = () => {
         password_confirm: confirm_password,
         phone_number: phone,
         verification_method,
+        website,
         ...(referral_code ? { referral_code: referral_code.trim() } : {}),
       };
 

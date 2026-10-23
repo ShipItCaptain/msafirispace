@@ -2,6 +2,14 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
 
+from msafiri.encrypted_storage import encrypt_field_file
+from msafiri.validators import (
+    validate_document_extension,
+    validate_document_size,
+    validate_image_extension,
+    validate_image_size,
+)
+
 User = get_user_model()
 
 
@@ -193,12 +201,18 @@ class BnBListing(models.Model):
     )
     owner_id_number = models.CharField(max_length=50, blank=True, help_text="Individual owner's national ID number")
     owner_kra_pin = models.CharField(max_length=20, blank=True, help_text="Individual owner's KRA PIN")
-    owner_permit = models.FileField(upload_to='bnb/permits/', blank=True, null=True)
+    owner_permit = models.FileField(
+        upload_to='bnb/permits/', blank=True, null=True,
+        validators=[validate_document_extension, validate_document_size],
+    )
     company_name = models.CharField(max_length=200, blank=True)
     company_kra_pin = models.CharField(max_length=20, blank=True)
     company_contact_phone = models.CharField(max_length=20, blank=True)
     company_contact_email = models.EmailField(blank=True)
-    company_permit = models.FileField(upload_to='bnb/permits/', blank=True, null=True)
+    company_permit = models.FileField(
+        upload_to='bnb/permits/', blank=True, null=True,
+        validators=[validate_document_extension, validate_document_size],
+    )
 
     # Status
     is_active = models.BooleanField(default=True)
@@ -221,7 +235,14 @@ class BnBListing(models.Model):
 
     def __str__(self) -> str:
         return f"{self.title} - {self.city}, {self.country}"
-    
+
+    def save(self, *args, **kwargs):
+        for field_name in ('owner_permit', 'company_permit'):
+            field_file = getattr(self, field_name)
+            if field_file and not field_file._committed:
+                encrypt_field_file(field_file)
+        super().save(*args, **kwargs)
+
     @property
     def full_address(self):
         """Return formatted full address"""
@@ -259,7 +280,8 @@ class BnBImage(models.Model):
     )
     image = models.ImageField(
         upload_to='bnb/images/',
-        help_text="BnB listing image"
+        help_text="BnB listing image",
+        validators=[validate_image_extension, validate_image_size],
     )
     image_type = models.CharField(
         max_length=20,
@@ -378,7 +400,8 @@ class HotelImage(models.Model):
     )
     image = models.ImageField(
         upload_to='hotels/images/',
-        help_text="Hotel image"
+        help_text="Hotel image",
+        validators=[validate_image_extension, validate_image_size],
     )
     image_type = models.CharField(
         max_length=20,
@@ -573,7 +596,8 @@ class RoomImage(models.Model):
     )
     image = models.ImageField(
         upload_to='rooms/images/',
-        help_text="Room image"
+        help_text="Room image",
+        validators=[validate_image_extension, validate_image_size],
     )
     image_type = models.CharField(
         max_length=20,

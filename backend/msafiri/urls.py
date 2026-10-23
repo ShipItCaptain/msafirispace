@@ -9,6 +9,8 @@ from django.http import HttpResponse
 from rest_framework import permissions
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
+from .secure_files import SecureDocumentView
+
 # API Schema for Swagger Documentation
 # schema_view = get_schema_view(
 #     openapi.Info(
@@ -50,6 +52,12 @@ urlpatterns = [
         # apps.referrals app was an abandoned placeholder, removed Day 4.
         path('notifications/', include('apps.notifications.urls')),
         path('messaging/', include('apps.messaging.urls')),
+
+        path(
+            'secure-documents/<str:app_label>/<str:model_name>/<int:pk>/<str:field_name>/',
+            SecureDocumentView.as_view(),
+            name='secure-document',
+        ),
     ])),
     
     # Allauth URLs (for social authentication)

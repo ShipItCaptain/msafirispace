@@ -48,6 +48,17 @@ const GuestSignupForm = ({ formData, setFormData, errors, handleInputChange, onS
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Honeypot: hidden from real users, bots that auto-fill every field trip it */}
+        <input
+          type="text"
+          name="website"
+          value={formData.website}
+          onChange={handleInputChange}
+          tabIndex="-1"
+          autoComplete="off"
+          aria-hidden="true"
+          className="absolute -left-[9999px] h-0 w-0 opacity-0"
+        />
         {/* Name Fields */}
         <div className="grid grid-cols-2 gap-4">
           <div>

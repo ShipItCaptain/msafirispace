@@ -20,12 +20,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
     referral_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    # Honeypot: a hidden field real users never see or fill (frontend keeps it
+    # visually hidden), so anything that fills it is a bot -- reject silently
+    # as a normal validation error rather than standing up a captcha service.
+    website = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
         fields = [
             'email', 'username', 'first_name', 'last_name', 'password', 'password_confirm',
-            'phone_number', 'referral_code', 'id_full_name', 'id_number', 'verification_method'
+            'phone_number', 'referral_code', 'id_full_name', 'id_number', 'verification_method',
+            'website',
         ]
         extra_kwargs = {
             'username': {'required': False},
@@ -54,6 +59,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if attrs.pop('website', ''):
+            raise serializers.ValidationError("Registration failed.")
+
         # Check if passwords match
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError("Passwords don't match")

@@ -47,6 +47,9 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python manage.py migrate --noinput
       - run: pytest
+      - run: pip install pip-audit && pip-audit -r requirements.txt
+        # ponytail: non-blocking until we've triaged the current baseline, make it required once clean
+        continue-on-error: true
 
   frontend-test:
     runs-on: ubuntu-latest
@@ -61,6 +64,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --legacy-peer-deps
+      - run: npm audit --audit-level=high
+        # ponytail: non-blocking until we've triaged the current baseline, make it required once clean
+        continue-on-error: true
       - run: npm test -- --watchAll=false
       - run: npm run build
         env:
