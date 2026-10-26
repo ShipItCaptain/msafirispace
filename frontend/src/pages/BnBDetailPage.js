@@ -222,7 +222,7 @@ const BnBDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white pt-20">
+      <div className="min-h-screen bg-white pt-14 lg:pt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse">
           <div className="h-4 w-24 bg-gray-200 rounded mb-6" />
           <div className="h-8 w-2/3 bg-gray-200 rounded mb-2" />
@@ -249,9 +249,9 @@ const BnBDetailPage = () => {
 
   if (error || !listing) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">BnB Not Found</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-4">BnB Not Found</h1>
           <p className="text-gray-600 mb-6">{error || 'The BnB listing you are looking for does not exist.'}</p>
           <Link
             to="/bnbs"
@@ -330,13 +330,13 @@ const BnBDetailPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-white pt-20">
+    <div className="min-h-screen bg-white pt-14 lg:pt-20">
       <SEO title={listing.title} description={listing.description} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Button */}
         <button
           onClick={() => navigate('/bnbs')}
-          className="mb-6 flex items-center text-ink-muted hover:text-ink-primary transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 rounded"
+          className="mb-6 flex items-center text-gray-500 hover:text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 rounded"
         >
           <ArrowLeftIcon className="w-5 h-5 mr-2" />
           Back to BnBs
@@ -350,8 +350,8 @@ const BnBDetailPage = () => {
         >
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-3xl font-bold text-ink-primary mb-2 break-words">{listing.title}</h1>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-2 break-words">{listing.title}</h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
                 {(listing.city || listing.country || listing.address || (listing.latitude && listing.longitude)) && (
                   <a
                     href={
@@ -476,12 +476,12 @@ const BnBDetailPage = () => {
         )}
 
         {/* Mobile Quick Reserve Bar */}
-        <div className="lg:hidden sticky top-20 z-20 mb-5">
+        <div className="lg:hidden sticky top-14 z-20 mb-5">
           <div className="bg-white border border-gray-200 rounded-xl shadow-md px-4 py-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-ink-muted">From</p>
-                <p className="text-lg font-bold text-ink-primary">{formatCurrency(nightlyPrice)}<span className="text-xs font-medium text-ink-muted"> / night</span></p>
+                <p className="text-xs text-gray-500">From</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(nightlyPrice)}<span className="text-xs font-medium text-gray-500"> / night</span></p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-16">
@@ -513,7 +513,7 @@ const BnBDetailPage = () => {
             {listing.description && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                 <div className="flex items-baseline gap-2 mb-4">
-                  <h2 className="text-xl font-bold text-ink-primary">About this place</h2>
+                  <h2 className="text-xl font-bold text-gray-900">About this place</h2>
                   <span className="text-xs font-medium text-green-700">
                     {listing.property_type || 'BnB'}
                   </span>
@@ -525,7 +525,7 @@ const BnBDetailPage = () => {
             <SectionDivider />
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <h2 className="text-xl font-bold text-ink-primary mb-4">Listing Highlights</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Listing Highlights</h2>
 
               <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                 <StayFactRow icon={IconDoor} quantity={listing.bedrooms} label="bedroom" />
@@ -555,9 +555,9 @@ const BnBDetailPage = () => {
               <>
                 <SectionDivider />
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                  <h2 className="text-xl font-bold text-ink-primary mb-4">House Rules</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">House Rules</h2>
                   {houseRules.length > 0 && (
-                    <ul className="list-disc list-inside text-ink-primary text-sm space-y-1.5 mb-4">
+                    <ul className="list-disc list-inside text-gray-900 text-sm space-y-1.5 mb-4">
                       {displayedRules.map((rule) => (
                         <li key={rule}>{rule}</li>
                       ))}
@@ -567,13 +567,13 @@ const BnBDetailPage = () => {
                     <button
                       type="button"
                       onClick={() => setShowAllRules((prev) => !prev)}
-                      className="mb-4 text-sm font-semibold text-ink-primary underline hover:text-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 rounded"
+                      className="mb-4 text-sm font-semibold text-gray-900 underline hover:text-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 rounded"
                     >
                       {showAllRules ? 'Show fewer house rules' : `Show all house rules (${houseRules.length})`}
                     </button>
                   )}
                   {!showAllRules && extraRulesCount > 0 && (
-                    <p className="mb-4 text-xs text-ink-muted">+{extraRulesCount} more rule(s)</p>
+                    <p className="mb-4 text-xs text-gray-500">+{extraRulesCount} more rule(s)</p>
                   )}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {policyItems.map((policy) => (
@@ -597,10 +597,10 @@ const BnBDetailPage = () => {
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-ink-primary">
+                <h2 className="text-xl font-bold text-gray-900">
                   Reviews
                   {reviewStats && (
-                    <span className="ml-3 text-base font-normal text-ink-muted">
+                    <span className="ml-3 text-base font-normal text-gray-500">
                       ({reviewStats.total_reviews})
                     </span>
                   )}
@@ -608,7 +608,7 @@ const BnBDetailPage = () => {
                 {reviewStats && Number(reviewStats.average_rating) > 0 && (
                   <div className="flex items-center space-x-2">
                     <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />
-                    <span className="text-xl font-bold text-ink-primary">
+                    <span className="text-xl font-bold text-gray-900">
                       {Number(reviewStats.average_rating).toFixed(1)}
                     </span>
                   </div>
@@ -621,7 +621,7 @@ const BnBDetailPage = () => {
                   <div className="h-4 bg-gray-200 rounded w-2/3" />
                 </div>
               ) : reviews.length === 0 ? (
-                <p className="text-ink-muted py-4">
+                <p className="text-gray-500 py-4">
                   No reviews yet. Be the first to review this property!
                 </p>
               ) : (
@@ -630,7 +630,7 @@ const BnBDetailPage = () => {
                     <div key={review.id} className="border-b border-hairline pb-6 last:border-0 last:pb-0">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h3 className="font-semibold text-ink-primary">{review.traveler_name || 'Anonymous'}</h3>
+                          <h3 className="font-semibold text-gray-900">{review.traveler_name || 'Anonymous'}</h3>
                           <div className="flex items-center space-x-1 mt-1">
                             {[1, 2, 3, 4, 5].map((star) => (
                               <StarIcon
@@ -642,17 +642,17 @@ const BnBDetailPage = () => {
                                 }`}
                               />
                             ))}
-                            <span className="ml-2 text-sm text-ink-muted">
+                            <span className="ml-2 text-sm text-gray-500">
                               {new Date(review.created_at).toLocaleDateString()}
                             </span>
                           </div>
                         </div>
                       </div>
                       {review.title && (
-                        <h4 className="font-medium text-ink-primary mb-2">{review.title}</h4>
+                        <h4 className="font-medium text-gray-900 mb-2">{review.title}</h4>
                       )}
                       {review.comment && (
-                        <p className="text-ink-primary leading-relaxed">{review.comment}</p>
+                        <p className="text-gray-900 leading-relaxed">{review.comment}</p>
                       )}
                     </div>
                   ))}
@@ -689,15 +689,15 @@ const BnBDetailPage = () => {
 
               <div className="p-6">
                 <div className="flex items-baseline gap-1.5 mb-5">
-                  <span className="text-2xl font-semibold text-ink-primary">{formatCurrency(nightlyPrice)}</span>
-                  <span className="text-sm text-ink-muted">night</span>
+                  <span className="text-2xl font-semibold text-gray-900">{formatCurrency(nightlyPrice)}</span>
+                  <span className="text-sm text-gray-500">night</span>
                 </div>
 
                 {/* Single stay control — dates + guests */}
                 <div className="rounded-xl border border-gray-300 overflow-hidden">
                   <div className="grid grid-cols-2 divide-x divide-gray-300">
                     <label className="block px-3 py-2.5 cursor-pointer hover:bg-gray-50">
-                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink-primary">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-900">
                         Check-in
                       </span>
                       <input
@@ -709,11 +709,11 @@ const BnBDetailPage = () => {
                         }}
                         min={new Date().toISOString().split('T')[0]}
                         data-testid="bnb-booking-checkin"
-                        className="mt-0.5 w-full border-0 bg-transparent p-0 text-sm text-ink-primary focus:ring-0"
+                        className="mt-0.5 w-full border-0 bg-transparent p-0 text-sm text-gray-900 focus:ring-0"
                       />
                     </label>
                     <label className="block px-3 py-2.5 cursor-pointer hover:bg-gray-50">
-                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink-primary">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-900">
                         Check-out
                       </span>
                       <input
@@ -725,12 +725,12 @@ const BnBDetailPage = () => {
                         }}
                         min={checkIn || new Date().toISOString().split('T')[0]}
                         data-testid="bnb-booking-checkout"
-                        className="mt-0.5 w-full border-0 bg-transparent p-0 text-sm text-ink-primary focus:ring-0"
+                        className="mt-0.5 w-full border-0 bg-transparent p-0 text-sm text-gray-900 focus:ring-0"
                       />
                     </label>
                   </div>
                   <label className="block border-t border-gray-300 px-3 py-2.5 cursor-pointer hover:bg-gray-50">
-                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink-primary">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-900">
                       Guests
                     </span>
                     <input
@@ -742,7 +742,7 @@ const BnBDetailPage = () => {
                       }}
                       min="1"
                       max={maxGuests || undefined}
-                      className="mt-0.5 w-full border-0 bg-transparent p-0 text-sm text-ink-primary focus:ring-0"
+                      className="mt-0.5 w-full border-0 bg-transparent p-0 text-sm text-gray-900 focus:ring-0"
                     />
                   </label>
                 </div>
@@ -759,34 +759,34 @@ const BnBDetailPage = () => {
                 {isDateRangeValid && (
                   <div className="mt-5 space-y-2 text-sm">
                     <div className="flex justify-between gap-3">
-                      <span className="text-ink-muted underline decoration-ink-muted/30 underline-offset-2">
+                      <span className="text-gray-500 underline decoration-ink-muted/30 underline-offset-2">
                         {formatCurrency(nightlyPrice)} × {nights} night{nights === 1 ? '' : 's'}
                       </span>
-                      <span className="text-ink-primary">{formatCurrency(accommodationTotal)}</span>
+                      <span className="text-gray-900">{formatCurrency(accommodationTotal)}</span>
                     </div>
                     {cleaningFee > 0 && (
                       <div className="flex justify-between gap-3">
-                        <span className="text-ink-muted underline decoration-ink-muted/30 underline-offset-2">
+                        <span className="text-gray-500 underline decoration-ink-muted/30 underline-offset-2">
                           Cleaning fee
                         </span>
-                        <span className="text-ink-primary">{formatCurrency(cleaningFee)}</span>
+                        <span className="text-gray-900">{formatCurrency(cleaningFee)}</span>
                       </div>
                     )}
                     {serviceFee > 0 && (
                       <div className="flex justify-between gap-3">
-                        <span className="text-ink-muted underline decoration-ink-muted/30 underline-offset-2">
+                        <span className="text-gray-500 underline decoration-ink-muted/30 underline-offset-2">
                           Service fee
                         </span>
-                        <span className="text-ink-primary">{formatCurrency(serviceFee)}</span>
+                        <span className="text-gray-900">{formatCurrency(serviceFee)}</span>
                       </div>
                     )}
                     {securityDeposit > 0 && (
-                      <div className="flex justify-between gap-3 text-xs text-ink-muted">
+                      <div className="flex justify-between gap-3 text-xs text-gray-500">
                         <span>Refundable security deposit</span>
                         <span>{formatCurrency(securityDeposit)}</span>
                       </div>
                     )}
-                    <div className="pt-3 mt-1 border-t border-gray-200 flex justify-between font-semibold text-ink-primary">
+                    <div className="pt-3 mt-1 border-t border-gray-200 flex justify-between font-semibold text-gray-900">
                       <span>Total</span>
                       <span>{formatCurrency(estimatedTotal)}</span>
                     </div>
@@ -802,7 +802,7 @@ const BnBDetailPage = () => {
                 >
                   {isBooking ? 'Processing...' : 'Reserve'}
                 </button>
-                <p className="mt-3 text-xs text-ink-muted text-center">
+                <p className="mt-3 text-xs text-gray-500 text-center">
                   {isAuthenticated
                     ? 'You won’t be charged yet'
                     : 'You’ll log in to complete this reservation · You won’t be charged yet'}

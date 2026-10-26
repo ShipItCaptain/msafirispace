@@ -9,7 +9,7 @@ const Layout = ({ children, title, description }) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
-      className="min-h-screen bg-white"
+      className="min-h-screen bg-white pb-16 lg:pb-0"
     >
       <SEO title={title} description={description} />
       <main className="flex-1">

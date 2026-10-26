@@ -178,7 +178,7 @@ const BnBListingDetailPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-20">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-14 lg:pt-20">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600" />
       </div>
     );
@@ -186,7 +186,7 @@ const BnBListingDetailPage = () => {
 
   if (!listing) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-20">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-14 lg:pt-20">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Listing Not Found</h1>
           <p className="text-gray-600 mb-6">The listing you're looking for doesn't exist.</p>
@@ -244,8 +244,8 @@ const BnBListingDetailPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20 pb-16">
-      <div className="bg-white border-b border-gray-200 sticky top-16 lg:top-20 z-30">
+    <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20 pb-16">
+      <div className="bg-white border-b border-gray-200 sticky top-14 lg:top-20 z-30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3 min-w-0">
@@ -259,7 +259,7 @@ const BnBListingDetailPage = () => {
               </button>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl font-bold text-gray-900 truncate">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 truncate">
                     {listing.title || 'Untitled listing'}
                   </h1>
                   <span className={`px-2.5 py-0.5 text-xs font-semibold ${BNB_STATUS_STYLES[status]}`}>

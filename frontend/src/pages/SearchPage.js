@@ -1,16 +1,9 @@
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 
-const SearchPage = () => {
-  return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Search Properties</h1>
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-gray-600">Search functionality will be implemented here.</p>
-        </div>
-      </div>
-    </div>
-  );
-};
+// No standalone search experience exists -- Hotels and BnBs each have their
+// own real search/filter UI. Redirect rather than leave the old placeholder
+// stub reachable (it was linked from Dashboard's empty states).
+const SearchPage = () => <Navigate to="/" replace />;
 
 export default SearchPage;

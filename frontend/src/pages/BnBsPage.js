@@ -173,7 +173,10 @@ const BnBsPage = () => {
   const sheetFilterCount =
     (filters.property_type ? 1 : 0) +
     (filters.min_price || filters.max_price ? 1 : 0) +
-    filters.amenities.length;
+    filters.amenities.length +
+    (filters.city ? 1 : 0) +
+    (filters.check_in || filters.check_out ? 1 : 0) +
+    (filters.guests ? 1 : 0);
 
   const barActive =
     Boolean(where.trim() || filters.city || filters.check_in || filters.check_out || filters.guests) ||
@@ -209,7 +212,7 @@ const BnBsPage = () => {
   const placeLabel = filters.city || (where.trim() ? `“${where.trim()}”` : null);
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20">
+    <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20">
       <DiscoveryStickyBar
         where={where}
         onWhereChange={setWhere}
@@ -261,7 +264,7 @@ const BnBsPage = () => {
         />
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8" aria-busy="true">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8" aria-busy="true">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
               <div key={n} className="animate-pulse">
                 <div className="aspect-[4/3] bg-gray-200" />
@@ -285,7 +288,7 @@ const BnBsPage = () => {
             onClear={barActive ? clearFilters : undefined}
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8">
             {visibleListings.map((listing) => (
               <BnBCard
                 key={listing.id}
@@ -311,7 +314,10 @@ const BnBsPage = () => {
             min_price: '',
             max_price: '',
             amenities: [],
-            city: prev.city,
+            city: '',
+            check_in: '',
+            check_out: '',
+            guests: '',
           }))
         }
       >
@@ -322,6 +328,37 @@ const BnBsPage = () => {
             value={filters.city}
             onChange={(e) => setFilter('city', e.target.value)}
             placeholder="e.g. Nairobi"
+            className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+          />
+        </div>
+        <div className="lg:hidden grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-2">Check-in</label>
+            <input
+              type="date"
+              value={filters.check_in}
+              onChange={(e) => setFilter('check_in', e.target.value)}
+              className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-2">Check-out</label>
+            <input
+              type="date"
+              value={filters.check_out}
+              onChange={(e) => setFilter('check_out', e.target.value)}
+              className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+            />
+          </div>
+        </div>
+        <div className="lg:hidden">
+          <label className="block text-sm font-medium text-gray-800 mb-2">Guests</label>
+          <input
+            type="number"
+            min="1"
+            value={filters.guests}
+            onChange={(e) => setFilter('guests', e.target.value)}
+            placeholder="Any"
             className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
           />
         </div>

@@ -128,7 +128,7 @@ const DashboardPage = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 text-center max-w-lg">
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Redirecting to Host Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-2">Redirecting to Host Dashboard</h1>
           <p className="text-sm text-gray-600 mb-4">
             Host accounts use dedicated dashboards. If you are not redirected automatically, use the button below.
           </p>
@@ -191,7 +191,7 @@ const DashboardPage = () => {
         ) : combinedFavorites.length === 0 ? (
           <div className="text-center p-8">
             <p className="text-gray-700 mb-4">You have no favorites yet.</p>
-            <Link to="/search" className="px-4 py-2 bg-red-600 text-white rounded-lg">Find places to stay</Link>
+            <Link to="/" className="px-4 py-2 bg-red-600 text-white rounded-lg">Find places to stay</Link>
           </div>
         ) : (
           <div>
@@ -680,7 +680,7 @@ const DashboardPage = () => {
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900">My Bookings</h2>
             <Link
-              to="/search"
+              to="/"
               className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               <PlusIcon className="w-5 h-5 mr-2" />
@@ -741,7 +741,7 @@ const DashboardPage = () => {
                     : `You don't have any ${bookingFilter.replace('_', ' ')} bookings.`}
                 </p>
                 <Link
-                  to="/search"
+                  to="/"
                   className="inline-flex items-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 >
                   <PlusIcon className="w-5 h-5 mr-2" />
@@ -1408,7 +1408,7 @@ const DashboardPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
             {isGuest ? 'Guest Dashboard' : (isBnBHost ? 'BnB Host Dashboard' : 
              isHotelRestaurantHost ? 'Hotel/Restaurant Dashboard' : 
              'Provider Dashboard')}

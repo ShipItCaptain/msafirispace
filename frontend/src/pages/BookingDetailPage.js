@@ -344,7 +344,7 @@ const BookingDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-20">
+      <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20">
         <div className="max-w-5xl mx-auto px-4 py-8 animate-pulse space-y-4" aria-busy="true">
           <div className="h-8 w-48 bg-gray-200" />
           <div className="h-40 bg-white border border-gray-200" />
@@ -365,9 +365,9 @@ const BookingDetailPage = () => {
           ? 'No access'
           : 'Trip not found';
     return (
-      <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20 flex items-center justify-center px-4">
         <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">{title}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-3">{title}</h1>
           <p className="text-gray-600 mb-6">
             {error || 'The trip you are looking for does not exist.'}
           </p>
@@ -518,7 +518,7 @@ const BookingDetailPage = () => {
   })();
 
   return (
-    <div className={`min-h-screen bg-gray-50 pt-20 ${showStickyCta ? 'pb-24 lg:pb-10' : 'pb-10'}`}>
+    <div className={`min-h-screen bg-gray-50 pt-14 lg:pt-20 ${showStickyCta ? 'pb-24 lg:pb-10' : 'pb-10'}`}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Phase 1 shell */}
         <div className="flex items-center justify-between gap-3 mb-6">
@@ -583,7 +583,7 @@ const BookingDetailPage = () => {
             {(hero.tone === 'rose') && <XCircleIcon className="w-6 h-6 text-rose-600 flex-shrink-0 mt-0.5" />}
             {hero.tone === 'red' && <ShieldCheckIcon className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />}
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold">{hero.title}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{hero.title}</h1>
               <p className="mt-1 text-sm opacity-90">
                 {stayTitle}
                 {stayPlace ? ` · ${stayPlace}` : ''} · {dateLine}
@@ -1004,7 +1004,7 @@ const BookingDetailPage = () => {
 
       {/* Phase 4 sticky mobile CTA */}
       {(canPayOnline || canCompleteReservation) && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-gray-200 bg-white p-3">
+        <div className="lg:hidden fixed bottom-16 inset-x-0 z-30 border-t border-gray-200 bg-white p-3">
           <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
             <div>
               <p className="text-xs text-gray-500">Total</p>

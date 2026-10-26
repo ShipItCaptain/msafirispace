@@ -115,9 +115,8 @@ const HotelsPage = () => {
     toast.success(result.isFavorite ? 'Added to favorites' : 'Removed from favorites');
   };
 
-  const sheetFilterCount = [filters.property_type, filters.min_stars].filter(Boolean).length;
-  const activeCount =
-    sheetFilterCount + (filters.city ? 1 : 0) + (where.trim() ? 1 : 0);
+  const sheetFilterCount = [filters.property_type, filters.min_stars, filters.city].filter(Boolean).length;
+  const activeCount = sheetFilterCount + (where.trim() ? 1 : 0);
 
   const clearFilters = () => {
     setFilters({ city: '', property_type: '', min_stars: '' });
@@ -149,7 +148,7 @@ const HotelsPage = () => {
   const placeLabel = filters.city || (debouncedWhere ? `“${debouncedWhere}”` : null);
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20">
+    <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20">
       <DiscoveryStickyBar
         where={where}
         onWhereChange={setWhere}
@@ -184,7 +183,7 @@ const HotelsPage = () => {
         />
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8" aria-busy="true">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8" aria-busy="true">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
               <div key={n} className="animate-pulse">
                 <div className="aspect-[4/3] bg-gray-200" />
@@ -208,7 +207,7 @@ const HotelsPage = () => {
             onClear={activeCount > 0 ? clearFilters : undefined}
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-8">
             {sortedHotels.map((hotel) => (
               <HotelCard
                 key={hotel.id}
@@ -227,8 +226,18 @@ const HotelsPage = () => {
         onClose={() => setFiltersOpen(false)}
         title="Hotel filters"
         activeCount={sheetFilterCount}
-        onClear={() => setFilters((prev) => ({ ...prev, property_type: '', min_stars: '' }))}
+        onClear={() => setFilters((prev) => ({ ...prev, property_type: '', min_stars: '', city: '' }))}
       >
+        <div className="lg:hidden">
+          <label className="block text-sm font-medium text-gray-800 mb-2">City</label>
+          <input
+            type="text"
+            value={filters.city}
+            onChange={(e) => setFilters((prev) => ({ ...prev, city: e.target.value }))}
+            placeholder="Any city"
+            className="w-full border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-red-500"
+          />
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-800 mb-2">Property type</label>
           <select

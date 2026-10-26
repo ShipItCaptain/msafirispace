@@ -1,12 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import FeaturedHotels from '../components/hotel/FeaturedHotels';
 import FeaturedBnBs from '../components/bnb/FeaturedBnBs';
 import DealsSection from '../components/promotions/DealsSection';
-
-const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=2400&q=80';
 
 const DESTINATIONS = [
   {
@@ -68,120 +66,112 @@ const HomePage = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Full-bleed hero */}
-      <section className="relative min-h-[78vh] lg:min-h-[88vh] flex flex-col">
-        <div className="absolute inset-0">
-          <img
-            src={HERO_IMAGE}
-            alt=""
-            className="w-full h-full object-cover"
-            fetchPriority="high"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/35 to-black/50" />
-        </div>
-
-        <div className="relative z-10 flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-16">
-          <div className="max-w-4xl mx-auto w-full text-center">
-            <motion.p
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45 }}
-              className="font-serif text-5xl sm:text-6xl lg:text-7xl tracking-tight text-white"
-            >
-              Msafiri <span className="text-red-400">Space</span>
-            </motion.p>
-            <motion.p
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: 0.08 }}
-              className="mt-3 text-base sm:text-lg text-white/85"
-            >
-              Stays across East Africa
-            </motion.p>
-
-            <motion.form
-              onSubmit={handleSearch}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: 0.16 }}
-              className="mt-8 sm:mt-10 mx-auto w-full max-w-3xl"
-            >
-              <div className="inline-flex mb-3 border border-white/30 bg-black/25 p-0.5 backdrop-blur-sm" role="group" aria-label="Search type">
-                {[
-                  { id: 'stays', label: 'Stays' },
-                  { id: 'hotels', label: 'Hotels' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setMode(item.id)}
-                    aria-pressed={mode === item.id}
-                    className={`px-4 py-1.5 text-sm font-medium ${
-                      mode === item.id ? 'bg-white text-gray-900' : 'text-white/90 hover:text-white'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="bg-white border border-white/20 shadow-lg">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_0.7fr_auto]">
-                  <label className="px-4 py-3 text-left border-b sm:border-b lg:border-b-0 sm:border-r border-gray-200">
-                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Where</span>
-                    <input
-                      type="search"
-                      value={where}
-                      onChange={(e) => setWhere(e.target.value)}
-                      placeholder="Search destinations"
-                      className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0"
-                      aria-label="Where"
-                    />
-                  </label>
-                  <label className="px-4 py-3 text-left border-b lg:border-b-0 lg:border-r border-gray-200">
-                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Check-in</span>
-                    <input
-                      type="date"
-                      min={today}
-                      value={checkIn}
-                      onChange={(e) => setCheckIn(e.target.value)}
-                      className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
-                      aria-label="Check-in"
-                    />
-                  </label>
-                  <label className="px-4 py-3 text-left border-b sm:border-b-0 lg:border-r border-gray-200">
-                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Check-out</span>
-                    <input
-                      type="date"
-                      min={checkIn || today}
-                      value={checkOut}
-                      onChange={(e) => setCheckOut(e.target.value)}
-                      className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
-                      aria-label="Check-out"
-                    />
-                  </label>
-                  <label className="px-4 py-3 text-left border-b sm:border-b-0 sm:border-r lg:border-r border-gray-200">
-                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Guests</span>
-                    <input
-                      type="number"
-                      min="1"
-                      value={guests}
-                      onChange={(e) => setGuests(e.target.value)}
-                      placeholder="Any"
-                      className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
-                      aria-label="Guests"
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    className="px-6 py-3.5 bg-red-600 text-white text-sm font-semibold hover:bg-red-700 sm:col-span-2 lg:col-span-1"
-                  >
-                    Search
-                  </button>
-                </div>
-              </div>
-            </motion.form>
+      {/* Search-first hero: no image, thin on every breakpoint */}
+      <section className="border-b border-gray-100 px-4 sm:px-6 lg:px-8 pt-20 pb-8 sm:pb-10">
+        <div className="max-w-4xl mx-auto w-full">
+          <div className="inline-flex mb-3 border border-gray-200 bg-gray-50 p-0.5 rounded-full" role="group" aria-label="Search type">
+            {[
+              { id: 'stays', label: 'Stays' },
+              { id: 'hotels', label: 'Hotels' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setMode(item.id)}
+                aria-pressed={mode === item.id}
+                className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                  mode === item.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
+
+          <motion.form
+            onSubmit={handleSearch}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Mobile: single thin pill, quick search only. Refine dates/guests on results. */}
+            <label className="sm:hidden flex items-center gap-2 w-full rounded-full border border-gray-300 shadow-sm px-4 py-3">
+              <MagnifyingGlassIcon className="w-5 h-5 text-gray-500 shrink-0" />
+              <input
+                type="search"
+                value={where}
+                onChange={(e) => setWhere(e.target.value)}
+                placeholder="Where are you going?"
+                className="w-full border-0 p-0 text-sm text-gray-900 placeholder:text-gray-500 focus:ring-0"
+                aria-label="Where"
+              />
+              <button
+                type="submit"
+                className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-red-600 text-white"
+                aria-label="Search"
+              >
+                <MagnifyingGlassIcon className="w-4 h-4" />
+              </button>
+            </label>
+
+            {/* Desktop/tablet: full Airbnb-style grouped pill */}
+            <div className="hidden sm:flex items-stretch w-full max-w-3xl rounded-full border border-gray-300 shadow-sm divide-x divide-gray-200 overflow-hidden">
+              <label className="flex-[1.3] px-5 py-2.5 text-left">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Where</span>
+                <input
+                  type="search"
+                  value={where}
+                  onChange={(e) => setWhere(e.target.value)}
+                  placeholder="Search destinations"
+                  className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                  aria-label="Where"
+                />
+              </label>
+              <label className="flex-1 px-5 py-2.5 text-left">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Check-in</span>
+                <input
+                  type="date"
+                  min={today}
+                  value={checkIn}
+                  onChange={(e) => setCheckIn(e.target.value)}
+                  className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
+                  aria-label="Check-in"
+                />
+              </label>
+              <label className="flex-1 px-5 py-2.5 text-left">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Check-out</span>
+                <input
+                  type="date"
+                  min={checkIn || today}
+                  value={checkOut}
+                  onChange={(e) => setCheckOut(e.target.value)}
+                  className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
+                  aria-label="Check-out"
+                />
+              </label>
+              <label className="flex-[0.7] px-5 py-2.5 text-left">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Guests</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={guests}
+                  onChange={(e) => setGuests(e.target.value)}
+                  placeholder="Any"
+                  className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 focus:ring-0"
+                  aria-label="Guests"
+                />
+              </label>
+              <div className="flex items-center pr-2">
+                <button
+                  type="submit"
+                  className="w-11 h-11 flex items-center justify-center rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                  aria-label="Search"
+                >
+                  <MagnifyingGlassIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </motion.form>
         </div>
       </section>
 

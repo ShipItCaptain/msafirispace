@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
 import {
-  Bars3Icon,
-  XMarkIcon,
   UserIcon,
   HomeIcon,
   BuildingOfficeIcon,
   HomeModernIcon
 } from '@heroicons/react/24/outline';
 import NotificationBell from '../notifications/NotificationBell';
+import MobileBottomNav from './MobileBottomNav';
 
 const NAVIGATION = [
   { name: 'Home Page', href: '/', icon: HomeIcon },
@@ -19,21 +18,9 @@ const NAVIGATION = [
 ];
 
 const Header = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   const location = useLocation();
-
-  // Handle scroll effect
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Handle click outside to close user menu
   useEffect(() => {
@@ -47,11 +34,6 @@ const Header = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isUserMenuOpen]);
 
-  // Close mobile menu when route changes
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-  }, [location.pathname]);
-
   // Close user menu when route changes
   useEffect(() => {
     setIsUserMenuOpen(false);
@@ -62,13 +44,6 @@ const Header = () => {
   };
 
   const navigation = NAVIGATION;
-
-  // Transparent-with-white-text only makes sense over the home page's dark
-  // hero banner before it's scrolled past -- every other route has a plain
-  // light background right under the header, so white text there is
-  // unreadable. Everywhere else, render the header as if already scrolled.
-  const isHomePage = location.pathname === '/';
-  const isHeaderSolid = isScrolled || !isHomePage;
 
   const hasBnBRole = Boolean(user?.roles?.includes('bnb_host'));
   const hasHotelRole = Boolean(user?.roles?.includes('hotel_host'));
@@ -89,27 +64,20 @@ const Header = () => {
 
   return (
     <>
-      
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isHeaderSolid
-          ? 'bg-white/95 backdrop-blur-md shadow-medium border-b border-secondary-100'
-          : 'bg-transparent'
-      }`}>
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md shadow-medium border-b border-secondary-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16 lg:h-20">
-          {/* Logo */}
+        <div className="flex justify-between items-center h-14 lg:h-20">
+          {/* Logo: icon mark only on mobile to keep the top bar thin, full wordmark from lg up */}
           <Link to="/" className="flex items-center space-x-2">
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="flex items-center space-x-2"
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">M</span>
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg lg:text-xl">M</span>
               </div>
-              <span className={`text-2xl font-bold ${
-                isHeaderSolid ? 'text-gray-900' : 'text-white'
-              }`}>
+              <span className="hidden lg:inline text-2xl font-bold text-gray-900">
                 Msafiri <span className="text-red-600">Space</span>
               </span>
             </motion.div>
@@ -123,25 +91,15 @@ const Header = () => {
               <Link
                 key={item.name}
                 to={item.href}
-                className={`relative group p-3 rounded-lg transition-all duration-200 ${
-                  isHeaderSolid
-                    ? 'text-gray-600 hover:text-red-600 hover:bg-gray-100'
-                    : 'text-white hover:text-gray-200 hover:bg-white/10'
-                }`}
+                className="relative group p-3 rounded-lg transition-all duration-200 text-gray-600 hover:text-red-600 hover:bg-gray-100"
               >
                 <IconComponent className="w-6 h-6" />
-                
+
                 {/* Tooltip */}
-                <div className={`absolute -bottom-12 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none ${
-                  isHeaderSolid
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-white text-gray-900'
-                }`}>
+                <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none bg-gray-900 text-white">
                   {item.name}
                   {/* Tooltip arrow */}
-                  <div className={`absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 rotate-45 ${
-                    isHeaderSolid ? 'bg-gray-900' : 'bg-white'
-                  }`}></div>
+                  <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 rotate-45 bg-gray-900"></div>
                 </div>
               </Link>
             );
@@ -149,12 +107,12 @@ const Header = () => {
         </nav>
 
           {/* Right side - Auth, etc. */}
-          <div className="flex items-center space-x-4">
-            {/* Become a Host Button */}
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            {/* Become a Host Button: desktop only, mobile users find it via the profile menu */}
             {!hasHostRoles && (
               <Link
                 to="/become-host"
-                className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200 shadow-soft hover:shadow-medium"
+                className="hidden lg:inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200 shadow-soft hover:shadow-medium"
               >
                 Become a Host
               </Link>
@@ -162,9 +120,9 @@ const Header = () => {
 
             {/* Authenticated User Menu */}
             {isAuthenticated ? (
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-1 sm:space-x-3">
 
-                <NotificationBell isScrolled={isHeaderSolid} />
+                <NotificationBell isScrolled />
 
                 {/* User Menu */}
                 <div className="relative user-menu-container">
@@ -193,6 +151,14 @@ const Header = () => {
                   {/* Dropdown Menu */}
                   {isUserMenuOpen && (
                     <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-large border border-secondary-100 py-2 z-50">
+                    {!hasHostRoles && (
+                      <Link
+                        to="/become-host"
+                        className="lg:hidden block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 transition-colors duration-200"
+                      >
+                        Become a Host
+                      </Link>
+                    )}
                     <Link
                       to={dashboardHref}
                       className="block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 transition-colors duration-200"
@@ -232,107 +198,11 @@ const Header = () => {
                 </Link>
               </div>
             )}
-
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 rounded-lg text-secondary-600 hover:text-primary-500 hover:bg-secondary-100 transition-colors duration-200"
-            >
-              {isMobileMenuOpen ? (
-                <XMarkIcon className="w-6 h-6" />
-              ) : (
-                <Bars3Icon className="w-6 h-6" />
-              )}
-            </button>
           </div>
         </div>
       </div>
-
-      {/* Mobile Navigation Menu */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="lg:hidden bg-white border-t border-secondary-100"
-          >
-            <div className="px-4 py-6 space-y-4">
-              {navigation.map((item) => {
-                const IconComponent = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className="flex items-center space-x-3 text-lg font-semibold text-gray-900 hover:text-red-600 transition-colors duration-200 py-2 px-3 rounded-lg hover:bg-gray-50"
-                  >
-                    <IconComponent className="w-5 h-5" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
-              
-              {/* Become a Host Button - Mobile */}
-              {!hasHostRoles && (
-                <Link
-                  to="/become-host"
-                  className="block w-full text-center px-4 py-3 text-lg font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200"
-                >
-                  Become a Host
-                </Link>
-              )}
-              
-              {isAuthenticated ? (
-                <div className="space-y-4 pt-4 border-t border-secondary-100">
-                  {/* Notifications */}
-                  <div className="flex items-center justify-between px-4 py-2">
-                    <span className="text-lg font-medium text-secondary-700">
-                      Notifications
-                    </span>
-                    <NotificationBell isScrolled />
-                  </div>
-
-                  <Link
-                    to={dashboardHref}
-                    className="block text-lg font-medium text-secondary-700 hover:text-primary-500 transition-colors duration-200"
-                  >
-                    {dashboardLabel}
-                  </Link>
-                  <Link
-                    to="/profile"
-                    className="block text-lg font-medium text-secondary-700 hover:text-primary-500 transition-colors duration-200"
-                  >
-                    Profile
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="block w-full text-left text-lg font-medium text-error-600 hover:text-error-700 transition-colors duration-200"
-                  >
-                    Logout
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4 pt-4 border-t border-secondary-100">
-                  <Link
-                    to="/login"
-                    className="block text-lg font-medium text-secondary-700 hover:text-primary-500 transition-colors duration-200"
-                  >
-                    Sign In
-                  </Link>
-                  <Link
-                    to="/register"
-                    className="block w-full text-center px-4 py-3 text-lg font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200"
-                  >
-                    Get Started
-                  </Link>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </header>
+    <MobileBottomNav />
     </>
   );
 };

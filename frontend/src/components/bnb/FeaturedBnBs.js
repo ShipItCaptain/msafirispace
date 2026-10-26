@@ -38,7 +38,7 @@ const FeaturedBnBs = () => {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-8" aria-busy="true">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-8" aria-busy="true">
             {[1, 2, 3, 4].map((n) => (
               <div key={n} className="animate-pulse">
                 <div className="aspect-[4/3] bg-gray-200" />
@@ -53,7 +53,7 @@ const FeaturedBnBs = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.35 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-8"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-8"
           >
             {listings.slice(0, 4).map((listing) => (
               <BnBCard key={listing.id} listing={listing} />

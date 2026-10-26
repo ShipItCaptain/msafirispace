@@ -16,7 +16,7 @@ const CookieConsentBanner = () => {
   };
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-50 bg-gray-900 text-white px-4 py-4 sm:px-6">
+    <div className="fixed bottom-16 lg:bottom-0 inset-x-0 z-50 bg-gray-900 text-white px-4 py-4 sm:px-6">
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <p className="text-sm text-gray-200 flex-1">
           We use essential cookies to run this site and optional analytics cookies to

@@ -377,7 +377,7 @@ const RoomTypesBookingTable = ({ hotelId, roomTypes, isAuthenticated, user, navi
 
       {/* Phase 4 — sticky mobile CTA */}
       {selectedRows.length > 0 && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-gray-200 bg-white p-3">
+        <div className="lg:hidden fixed bottom-16 inset-x-0 z-30 border-t border-gray-200 bg-white p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs text-gray-500">

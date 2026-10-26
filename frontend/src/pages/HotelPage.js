@@ -113,7 +113,7 @@ const HotelPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-20">
+      <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20">
         <div className="max-w-6xl mx-auto px-4 py-8 animate-pulse space-y-4" aria-busy="true">
           <div className="h-64 sm:h-96 bg-gray-200" />
           <div className="h-8 w-64 bg-gray-200" />
@@ -125,7 +125,7 @@ const HotelPage = () => {
 
   if (error || !hotel) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20 flex items-center justify-center px-4">
         <div className="text-center max-w-md">
           <HomeIcon className="w-10 h-10 text-gray-300 mx-auto mb-3" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Hotel not found</h2>
@@ -152,7 +152,7 @@ const HotelPage = () => {
   const highlights = [getPropertyTypeDisplay(hotel.property_type)].filter(Boolean);
 
   return (
-    <div className="min-h-screen bg-white pb-24 lg:pb-10 pt-20">
+    <div className="min-h-screen bg-white pb-24 lg:pb-10 pt-14 lg:pt-20">
       <SEO title={hotel.name} description={aboutText || placeLine} />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center justify-between gap-3 mb-4">
@@ -250,7 +250,7 @@ const HotelPage = () => {
 
         {/* Phase 1 — place-first identity */}
         <header className="mb-8 max-w-3xl">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{hotel.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">{hotel.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600">
             {hotel.star_rating > 0 && (
               <span className="inline-flex items-center gap-1 font-medium text-gray-900">

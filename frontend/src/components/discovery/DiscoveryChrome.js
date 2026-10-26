@@ -11,13 +11,13 @@ export const DiscoveryStickyBar = ({
   onClear,
   showClear = false,
 }) => (
-  <div className="sticky top-16 lg:top-20 z-30 bg-white/95 backdrop-blur border-b border-gray-200">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-0 lg:divide-x lg:divide-gray-200 border border-gray-300 bg-white">
-        <label className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5">
+  <div className="sticky top-14 lg:top-20 z-30 bg-white/95 backdrop-blur border-b border-gray-200">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 lg:py-3">
+      <div className="flex items-center gap-2 lg:gap-0 lg:divide-x lg:divide-gray-200 border border-gray-300 bg-white rounded-full lg:rounded-none">
+        <label className="flex-1 min-w-0 flex items-center gap-2 px-3.5 py-2 lg:py-2.5">
           <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 flex-shrink-0" aria-hidden />
           <div className="min-w-0 flex-1">
-            <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Where</span>
+            <span className="hidden lg:block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Where</span>
             <input
               type="search"
               value={where}
@@ -29,13 +29,14 @@ export const DiscoveryStickyBar = ({
           </div>
         </label>
 
-        {children}
+        {/* Secondary fields (city/dates/guests): inline on desktop, tucked into the Filters sheet on mobile to keep the bar thin */}
+        <div className="hidden lg:contents">{children}</div>
 
-        <div className="flex items-center gap-2 px-3 py-2 lg:py-0">
+        <div className="flex items-center gap-1.5 lg:gap-2 pr-1.5 lg:pr-3 lg:px-3 lg:py-0">
           <button
             type="button"
             onClick={onOpenFilters}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 lg:py-2 text-sm font-medium border rounded-full lg:rounded-none ${
               filterCount > 0
                 ? 'border-red-600 bg-red-50 text-red-700'
                 : 'border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -150,7 +151,7 @@ export const FiltersSheet = ({ open, onClose, title = 'Filters', activeCount = 0
 export const DiscoveryResultsHeader = ({ countLabel, placeLabel, sortBy, onSortChange, sortOptions }) => (
   <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
     <div>
-      <h1 className="text-lg sm:text-xl font-semibold text-gray-900">{countLabel}</h1>
+      <h1 className="text-lg sm:text-xl font-bold tracking-tight text-gray-900">{countLabel}</h1>
       {placeLabel && <p className="text-sm text-gray-500 mt-0.5">{placeLabel}</p>}
     </div>
     <label className="inline-flex items-center gap-2 text-sm text-gray-600">
