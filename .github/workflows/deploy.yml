@@ -28,15 +28,22 @@ jobs:
           npm ci --legacy-peer-deps
           npm run build
 
+      # SSH_PRIVATE_KEY is base64 of the whole key (one line) rather than the
+      # raw multi-line PEM -- pasting a multi-line private key into GitHub's
+      # secret field is prone to silently losing its exact line breaks
+      # (e.g. terminal soft-wrap getting flattened on copy), which corrupts
+      # it in a way that only shows up as a cryptic "error in libcrypto" at
+      # deploy time. Base64 is a single line and immune to that.
       - name: Set up SSH
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          echo "$SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -lf ~/.ssh/deploy_key
           ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Sync backend code
