@@ -98,7 +98,7 @@ jobs:
           # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
           PassengerAppRoot "/home/$SSH_USER/msafiri_backend"
           PassengerBaseURI "/"
-          PassengerPython "/home/$SSH_USER/virtualenv/msafiri_backend/3.10/bin/python"
+          PassengerPython "/home/$SSH_USER/virtualenv/msafiri_backend/3.11/bin/python"
           # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
           # DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
           <IfModule Litespeed>
@@ -117,10 +117,31 @@ jobs:
           SetEnv DATABASE_URL postgresql://msafbuat_msafiri_user:$DB_PASSWORD_ENCODED@localhost:5432/msafbuat_msafiri_space
           </IfModule>
           # DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION END
+
+          # Static/media bypass -- served directly, not routed through Passenger/Django
+          RewriteEngine On
+          RewriteCond %{REQUEST_URI} ^/static/ [OR]
+          RewriteCond %{REQUEST_URI} ^/media/
+          RewriteRule ^ - [L]
           EOF
           scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o StrictHostKeyChecking=no \
             /tmp/api.htaccess "$SSH_USER@$SSH_HOST:api.msafirispace.com/.htaccess"
           rm -f /tmp/api.htaccess
+
+      # Passenger only ever sees requests for the Django app itself -- static
+      # and media files need to resolve as real files in the subdomain's own
+      # document root (where the .htaccess bypass above takes effect), which
+      # is a different directory from PassengerAppRoot.
+      - name: Symlink static/media into the subdomain document root
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" '
+            ln -sfn ~/msafiri_backend/staticfiles ~/api.msafirispace.com/static
+            ln -sfn ~/msafiri_backend/media ~/api.msafirispace.com/media
+          '
 
       - name: Install deps, migrate, collectstatic, restart
         env:
@@ -130,7 +151,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" '
             set -e
-            source ~/virtualenv/msafiri_backend/3.10/bin/activate
+            source ~/virtualenv/msafiri_backend/3.11/bin/activate
             cd ~/msafiri_backend
             pip install -r requirements.txt
             python manage.py migrate --noinput
@@ -155,7 +176,20 @@ jobs:
         run: |
           sleep 8
           echo "--- API ---"
-          curl -sSf https://api.msafirispace.com/api/v1/listings/hotels/ -H "Accept: application/json" | head -c 300
+          curl -sSf https://api.msafirispace.com/api/v1/listings/hotels/ -H "Accept: application/json" | tee /tmp/hotels.json | head -c 300
           echo
           echo "--- Frontend ---"
           curl -sSf https://msafirispace.com/ | head -c 300
+          echo
+          echo "--- Media (bypasses Passenger -- catches static/media routing regressions) ---"
+          IMAGE_PATH=$(python3 -c "
+          import json
+          data = json.load(open('/tmp/hotels.json'))
+          results = data.get('results', [])
+          print(results[0]['primary_image'] if results and results[0].get('primary_image') else '')
+          ")
+          if [ -n "$IMAGE_PATH" ]; then
+            curl -sSfI "$IMAGE_PATH" | head -5
+          else
+            echo "No listings with images yet to check -- skipping media check."
+          fi
