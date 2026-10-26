@@ -404,7 +404,7 @@ const RoomTypeEditPage = () => {
             <ArrowLeftIcon className="h-5 w-5 mr-2" />
             Back to Dashboard
           </button>
-          <h1 className="text-3xl font-bold text-gray-900">Edit Room Type</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Edit Room Type</h1>
           {roomType.hotel_name && (
             <p className="text-gray-600 mt-2">Hotel: {roomType.hotel_name}</p>
           )}

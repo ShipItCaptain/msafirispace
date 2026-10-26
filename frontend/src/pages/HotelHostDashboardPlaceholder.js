@@ -1500,7 +1500,7 @@ const [expandedRoomMode, setExpandedRoomMode] = useState('view'); // 'view' or '
       <div className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">{activeTab === 'bookings' ? 'Reservations' : 'Your hotels'}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">{activeTab === 'bookings' ? 'Reservations' : 'Your hotels'}</h1>
             <p className="mt-1 text-sm text-gray-500">{activeTab === 'bookings' ? 'Guests staying at your properties' : 'Manage rooms, photos, availability, and guest reviews'}</p>
           </div>
           {activeTab !== 'bookings' && (

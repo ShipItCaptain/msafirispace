@@ -108,7 +108,7 @@ const HotelHostManagementPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-20">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-14 lg:pt-20">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600" />
       </div>
     );
@@ -116,9 +116,9 @@ const HotelHostManagementPage = () => {
 
   if (!hotel) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 pt-20 text-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 pt-14 lg:pt-20 text-center">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">No hotel yet</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-2">No hotel yet</h1>
           <p className="text-gray-500 mb-6">You haven't created a hotel listing on this account.</p>
           <Link to="/become-host" className="inline-block px-6 py-3 bg-red-600 text-white font-medium">
             Become a host
@@ -131,10 +131,10 @@ const HotelHostManagementPage = () => {
   const activeAmenityIds = new Set(hotel.amenity_mappings.map((m) => m.amenity.id));
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20 pb-16 px-4">
+    <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20 pb-16 px-4">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900">{hotel.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">{hotel.name}</h1>
           <p className="mt-1 text-sm text-gray-500 flex items-center gap-3">
             <span className="flex items-center gap-1"><MapPinIcon className="w-4 h-4" />{hotel.city}, {hotel.country}</span>
             <span className="flex items-center gap-1"><StarIcon className="w-4 h-4 text-yellow-500" />{hotel.star_rating}</span>

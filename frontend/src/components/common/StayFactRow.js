@@ -7,7 +7,7 @@ import React from 'react';
 const StayFactRow = ({ icon: Icon, quantity, label }) => (
   <div className="flex items-center gap-2">
     <Icon size={22} stroke={1.5} className="text-gray-700" />
-    <span className="text-sm text-ink-primary">
+    <span className="text-sm text-gray-900">
       {quantity ?? '—'} {label}{quantity === 1 ? '' : 's'}
     </span>
   </div>

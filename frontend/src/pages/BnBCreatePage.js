@@ -90,7 +90,7 @@ const BnBCreatePage = () => {
         <div className="bg-white rounded-none shadow-lg border border-gray-100 p-8">
           <div className="flex items-start justify-between mb-1">
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">List your property</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">List your property</h1>
               <p className="text-sm text-gray-500 mb-4">
                 A couple quick details to get started -- you'll add location, pricing, photos and
                 more from your dashboard next.

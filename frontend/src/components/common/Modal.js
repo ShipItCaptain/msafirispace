@@ -45,7 +45,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-hairline flex-shrink-0">
-          <h2 id="modal-title" className="text-lg font-semibold text-ink-primary">
+          <h2 id="modal-title" className="text-lg font-semibold text-gray-900">
             {title}
           </h2>
           <button
@@ -53,7 +53,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1.5 rounded-full text-ink-muted hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            className="p-1.5 rounded-full text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
           >
             <XMarkIcon className="w-5 h-5" />
           </button>

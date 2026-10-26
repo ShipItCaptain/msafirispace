@@ -7,8 +7,8 @@ import React from 'react';
  */
 const InfoCard = ({ label, value }) => (
   <div>
-    <p className="text-xs text-ink-muted">{label}</p>
-    <p className="text-sm font-medium text-ink-primary">{value}</p>
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="text-sm font-medium text-gray-900">{value}</p>
   </div>
 );
 

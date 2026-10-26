@@ -8,7 +8,7 @@ const AmenityRow = ({ amenity }) => {
   return (
     <div className="flex items-center gap-1.5 min-w-[130px]">
       <Icon size={17} stroke={1.75} className="text-red-600 flex-shrink-0" />
-      <span className="text-sm text-ink-primary">{amenity}</span>
+      <span className="text-sm text-gray-900">{amenity}</span>
     </div>
   );
 };
@@ -29,7 +29,7 @@ const AmenityList = ({ amenities = [], previewCount = 10 }) => {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-ink-primary mb-3 uppercase tracking-wide">
+      <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
         Amenities
       </h3>
       <div className="flex flex-wrap gap-x-5 gap-y-2.5">
@@ -41,7 +41,7 @@ const AmenityList = ({ amenities = [], previewCount = 10 }) => {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="mt-4 rounded-lg border border-gray-900 px-4 py-2 text-sm font-semibold text-ink-primary hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="mt-4 rounded-lg border border-gray-900 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           Show all {amenities.length} amenities
         </button>
@@ -55,7 +55,7 @@ const AmenityList = ({ amenities = [], previewCount = 10 }) => {
         <div className="space-y-6">
           {categorized.map(({ category, items }) => (
             <div key={category}>
-              <h4 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2.5">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2.5">
                 {category}
               </h4>
               <div className="space-y-2.5">

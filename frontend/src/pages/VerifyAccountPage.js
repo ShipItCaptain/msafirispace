@@ -114,10 +114,10 @@ const VerifyAccountPage = () => {
         className="sm:mx-auto sm:w-full sm:max-w-md"
       >
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 bg-red-600 rounded-full flex items-center justify-center">
+          <div className="mx-auto h-12 w-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-xl">M</span>
           </div>
-          <h2 className="mt-6 text-2xl font-bold text-gray-900">Verify your account</h2>
+          <h2 className="mt-6 text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Verify your account</h2>
           <p className="mt-2 text-sm text-gray-600">
             {verificationMethod === 'phone' ? (
               <>Enter the code we sent via WhatsApp.</>

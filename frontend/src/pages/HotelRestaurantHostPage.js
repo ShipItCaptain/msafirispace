@@ -549,7 +549,7 @@ const HotelRestaurantHostPage = () => {
               <BuildingOfficeIcon className="w-6 h-6 text-primary-600" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Hotel/Restaurant Host Setup</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Hotel/Restaurant Host Setup</h1>
               <p className="text-gray-600">Complete your profile to start hosting</p>
             </div>
           </div>

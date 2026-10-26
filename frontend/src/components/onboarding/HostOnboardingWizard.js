@@ -446,7 +446,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md bg-white rounded-none shadow-lg border border-gray-100 p-8">
+      <div className="w-full max-w-md bg-white rounded-none shadow-lg border border-gray-100 p-6 sm:p-8">
         <div className="flex items-center gap-1.5 mb-6">
           {Array.from({ length: totalDots }).map((_, i) => (
             <span

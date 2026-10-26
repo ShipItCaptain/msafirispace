@@ -21,7 +21,7 @@ const TruncatedText = ({ text, lines = 4, title = 'Description' }) => {
   return (
     <>
       <p
-        className="text-ink-primary leading-relaxed text-sm sm:text-base whitespace-pre-line break-words"
+        className="text-gray-900 leading-relaxed text-sm sm:text-base whitespace-pre-line break-words"
         style={likelyTruncated ? {
           display: '-webkit-box',
           WebkitLineClamp: lines,
@@ -35,14 +35,14 @@ const TruncatedText = ({ text, lines = 4, title = 'Description' }) => {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="mt-2 text-sm font-semibold text-ink-primary underline hover:text-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 rounded"
+          className="mt-2 text-sm font-semibold text-gray-900 underline hover:text-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 rounded"
         >
           Show more
         </button>
       )}
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={title}>
-        <p className="text-ink-primary leading-relaxed text-sm sm:text-base whitespace-pre-line break-words">
+        <p className="text-gray-900 leading-relaxed text-sm sm:text-base whitespace-pre-line break-words">
           {text}
         </p>
       </Modal>

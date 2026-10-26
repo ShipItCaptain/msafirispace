@@ -159,7 +159,7 @@ const HostDashboardModals = ({
             <div className="px-8 py-6 border-b border-gray-100 flex-shrink-0">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900">Add New Hotel</h3>
+                  <h3 className="text-xl font-semibold text-gray-900">Add New Hotel</h3>
                   <p className="text-sm text-gray-500 mt-1">
                     Step {currentStep} of 5: {hotelFormSteps.find((step) => step.number === currentStep)?.label}
                   </p>
@@ -1237,7 +1237,7 @@ const HostDashboardModals = ({
             >
               <div className="p-6 border-b border-gray-200">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xl font-bold text-gray-900">Edit Room Type</h3>
+                  <h3 className="text-xl font-semibold text-gray-900">Edit Room Type</h3>
                   <button
                     onClick={() => setShowEditRoomModal(false)}
                     className="text-gray-400 hover:text-gray-600 transition-colors"
