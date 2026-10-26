@@ -1,10 +1,13 @@
 name: Deploy
 
-# Manual trigger only for now -- this is a shared host that another Claude
-# session is also actively working against, and the team is still mid-way
-# through several things (see commit history around 2026-10-26). Switch to
-# `on: push: branches: [main]` once deploys have proven stable.
+# Auto-deploys on every push to main. Proven stable via one real
+# failure-and-recovery cycle (2026-10-26: a corrupted SSH key secret broke
+# the first automated run, fixed and re-verified end-to-end -- see
+# "fix(deploy): base64-encode SSH_PRIVATE_KEY secret"). workflow_dispatch
+# kept as a manual escape hatch for re-running without a new commit.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
