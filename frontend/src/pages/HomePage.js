@@ -68,7 +68,7 @@ const HomePage = () => {
     <div className="min-h-screen bg-white">
       {/* Search-first hero: no image, thin on every breakpoint */}
       <section className="border-b border-gray-100 px-4 sm:px-6 lg:px-8 pt-20 pb-8 sm:pb-10">
-        <div className="max-w-4xl mx-auto w-full">
+        <div className="max-w-4xl mx-auto w-full flex flex-col items-center">
           <div className="inline-flex mb-3 border border-gray-200 bg-gray-50 p-0.5 rounded-full" role="group" aria-label="Search type">
             {[
               { id: 'stays', label: 'Stays' },
