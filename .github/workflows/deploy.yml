@@ -172,6 +172,41 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT -o StrictHostKeyChecking=no" \
             frontend/build/ "$SSH_USER@$SSH_HOST:public_html/"
 
+      # Regenerated each deploy (not just preserved via the rsync --exclude
+      # above) so a from-scratch server setup gets this right automatically
+      # instead of relying on someone re-copying it from the deploy doc.
+      - name: Write public_html/.htaccess
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          cat > /tmp/public_html.htaccess <<'EOF'
+          <IfModule mod_rewrite.c>
+            RewriteEngine On
+            RewriteBase /
+            RewriteRule ^index\.html$ - [L]
+            RewriteCond %{REQUEST_FILENAME} !-f
+            RewriteCond %{REQUEST_FILENAME} !-d
+            RewriteRule . /index.html [L]
+          </IfModule>
+
+          # index.html has no content-hash in its filename and references the
+          # hashed JS/CSS bundle by name -- it must always be revalidated so
+          # visitors never get stuck on a stale build after a deploy (mobile
+          # browsers cache this particularly aggressively). The hashed
+          # /static/ assets are still safe to cache long-term since a new
+          # build gets new filenames.
+          <IfModule mod_headers.c>
+            <FilesMatch "^index\.html$">
+              Header set Cache-Control "no-cache, no-store, must-revalidate"
+            </FilesMatch>
+          </IfModule>
+          EOF
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o StrictHostKeyChecking=no \
+            /tmp/public_html.htaccess "$SSH_USER@$SSH_HOST:public_html/.htaccess"
+          rm -f /tmp/public_html.htaccess
+
       - name: Smoke test
         run: |
           sleep 8
@@ -180,6 +215,9 @@ jobs:
           echo
           echo "--- Frontend ---"
           curl -sSf https://msafirispace.com/ | head -c 300
+          echo
+          echo "--- index.html cache header (catches stale-mobile-cache regressions) ---"
+          curl -sSfI https://msafirispace.com/ | grep -i cache-control || echo "MISSING Cache-Control header on index.html!"
           echo
           echo "--- Media (bypasses Passenger -- catches static/media routing regressions) ---"
           IMAGE_PATH=$(python3 -c "
