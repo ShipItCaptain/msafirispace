@@ -85,6 +85,13 @@ python-decouple reads it from the project root):
 
 ```bash
 SECRET_KEY=<generate with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())">
+
+# Encrypts uploaded KYC documents (ID scans, permits, certificates) at rest.
+# Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Back this up separately from SECRET_KEY -- losing it makes already-uploaded
+# documents permanently undecryptable.
+FILE_ENCRYPTION_KEY=<generated Fernet key>
+
 DEBUG=False
 ALLOWED_HOSTS=api.msafirispace.com
 CORS_ALLOWED_ORIGINS=https://msafirispace.com,https://www.msafirispace.com
