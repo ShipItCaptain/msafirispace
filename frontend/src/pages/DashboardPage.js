@@ -26,7 +26,7 @@ const DashboardPage = () => {
 
   if (isHost) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-14 lg:pt-20 px-4">
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 text-center max-w-lg">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-2">Redirecting to Host Dashboard</h1>
           <p className="text-sm text-gray-600 mb-4">

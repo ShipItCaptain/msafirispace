@@ -65,7 +65,7 @@ const HostHomePage = () => {
 
   if (isLoading || loadingCheck) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-14 lg:pt-20">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
@@ -76,7 +76,7 @@ const HostHomePage = () => {
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-14 lg:pt-20">
         <div className="text-center">
           <p className="text-gray-600 mb-4">Please log in to access your host dashboard</p>
           <button
@@ -122,8 +122,8 @@ const HostHomePage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      
+    <div className="min-h-screen bg-gray-50 pt-14 lg:pt-20">
+
       {/* Status banner -- compact, not a landing-page hero. A returning,
           logged-in host checking their dashboard doesn't need a full-bleed
           marketing screen every time. */}
