@@ -1,0 +1,161 @@
+name: Deploy
+
+# Manual trigger only for now -- this is a shared host that another Claude
+# session is also actively working against, and the team is still mid-way
+# through several things (see commit history around 2026-10-26). Switch to
+# `on: push: branches: [main]` once deploys have proven stable.
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          CI: false
+          REACT_APP_API_URL: https://api.msafirispace.com/api/v1
+        run: |
+          npm ci --legacy-peer-deps
+          npm run build
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync backend code
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude='media/' \
+            --exclude='staticfiles/' \
+            --exclude='tmp/' \
+            --exclude='logs/' \
+            --exclude='public/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            --exclude='.env' \
+            --exclude='passenger_wsgi.py' \
+            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT -o StrictHostKeyChecking=no" \
+            backend/ "$SSH_USER@$SSH_HOST:msafiri_backend/"
+
+      - name: Write passenger_wsgi.py
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          cat > /tmp/passenger_wsgi.py <<'EOF'
+          import sys
+          import os
+
+          sys.path.insert(0, os.path.dirname(__file__))
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'msafiri.settings')
+
+          from msafiri.wsgi import application
+          EOF
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o StrictHostKeyChecking=no \
+            /tmp/passenger_wsgi.py "$SSH_USER@$SSH_HOST:msafiri_backend/passenger_wsgi.py"
+          rm -f /tmp/passenger_wsgi.py
+
+      # The host is CloudLinux/LiteSpeed Passenger -- config is delivered via
+      # SetEnv directives in the api subdomain's .htaccess (cPanel's native
+      # mechanism for this hosting type), not a .env file. Regenerated whole
+      # each deploy rather than edited in place, so it's always consistent
+      # with these secrets and never drifts.
+      - name: Write api.msafirispace.com/.htaccess
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          FILE_ENCRYPTION_KEY: ${{ secrets.FILE_ENCRYPTION_KEY }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+          EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+        run: |
+          DB_PASSWORD_ENCODED=$(python3 -c "import urllib.parse, os; print(urllib.parse.quote(os.environ['DB_PASSWORD'], safe=''))")
+          cat > /tmp/api.htaccess <<EOF
+          # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+          PassengerAppRoot "/home/$SSH_USER/msafiri_backend"
+          PassengerBaseURI "/"
+          PassengerPython "/home/$SSH_USER/virtualenv/msafiri_backend/3.10/bin/python"
+          # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+          # DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
+          <IfModule Litespeed>
+          SetEnv  CACHE_BACKEND database
+          SetEnv  SECRET_KEY $SECRET_KEY
+          SetEnv  FILE_ENCRYPTION_KEY $FILE_ENCRYPTION_KEY
+          SetEnv  SITE_URL https://msafirispace.com
+          SetEnv ALLOWED_HOSTS  api.msafirispace.com
+          SetEnv CORS_ALLOWED_ORIGINS https://msafirispace.com,https://www.msafirispace.com
+          SetEnv DEBUG False
+          SetEnv EMAIL_BACKEND django.core.mail.backends.smtp.EmailBackend
+          SetEnv EMAIL_HOST smtp.gmail.com
+          SetEnv EMAIL_HOST_PASSWORD $EMAIL_HOST_PASSWORD
+          SetEnv EMAIL_HOST_USER $EMAIL_HOST_USER
+          SetEnv USE_CLOUDINARY_STORAGE False
+          SetEnv DATABASE_URL postgresql://msafbuat_msafiri_user:$DB_PASSWORD_ENCODED@localhost:5432/msafbuat_msafiri_space
+          </IfModule>
+          # DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION END
+          EOF
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o StrictHostKeyChecking=no \
+            /tmp/api.htaccess "$SSH_USER@$SSH_HOST:api.msafirispace.com/.htaccess"
+          rm -f /tmp/api.htaccess
+
+      - name: Install deps, migrate, collectstatic, restart
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" '
+            set -e
+            source ~/virtualenv/msafiri_backend/3.10/bin/activate
+            cd ~/msafiri_backend
+            pip install -r requirements.txt
+            python manage.py migrate --noinput
+            python manage.py createcachetable
+            python manage.py collectstatic --noinput
+            mkdir -p tmp
+            touch tmp/restart.txt
+          '
+
+      - name: Deploy frontend
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude='.htaccess' \
+            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT -o StrictHostKeyChecking=no" \
+            frontend/build/ "$SSH_USER@$SSH_HOST:public_html/"
+
+      - name: Smoke test
+        run: |
+          sleep 8
+          echo "--- API ---"
+          curl -sSf https://api.msafirispace.com/api/v1/listings/hotels/ -H "Accept: application/json" | head -c 300
+          echo
+          echo "--- Frontend ---"
+          curl -sSf https://msafirispace.com/ | head -c 300
