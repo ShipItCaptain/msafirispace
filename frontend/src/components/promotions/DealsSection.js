@@ -125,7 +125,7 @@ const DealsSection = () => {
                     <span className="text-lg font-bold text-red-600">
                       {deal.currency} {Number(deal.discounted_price).toLocaleString()}
                     </span>
-                    <span className="text-sm text-gray-400 line-through">
+                    <span className="text-sm text-gray-500 line-through">
                       {Number(deal.original_price).toLocaleString()}
                     </span>
                   </div>

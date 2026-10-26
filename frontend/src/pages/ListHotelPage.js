@@ -41,7 +41,7 @@ const AMENITY_OPTIONS = [
 ];
 
 const inputClass =
-  'w-full border border-gray-300 px-3.5 py-3 text-base text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
+  'w-full border border-gray-300 px-3.5 py-3 text-base text-gray-900 placeholder:text-gray-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500';
 
 const ListHotelPage = () => {
   const navigate = useNavigate();
@@ -342,9 +342,9 @@ const ListHotelPage = () => {
                   <div className="flex items-baseline justify-between gap-2">
                     <h2 className="text-lg font-semibold text-gray-900">
                       Short description{' '}
-                      <span className="font-normal text-gray-400">(optional)</span>
+                      <span className="font-normal text-gray-500">(optional)</span>
                     </h2>
-                    <span className="text-xs text-gray-400">{form.description.length}/500</span>
+                    <span className="text-xs text-gray-500">{form.description.length}/500</span>
                   </div>
                   <textarea
                     value={form.description}

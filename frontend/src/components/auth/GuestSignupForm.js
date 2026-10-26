@@ -245,7 +245,7 @@ const GuestSignupForm = ({ formData, setFormData, errors, handleInputChange, onS
             <button
               type="button"
               onClick={handleWhatsAppDisabledClick}
-              className="flex items-center justify-center px-3 py-2 border rounded-md shadow-sm text-sm border-gray-300 text-gray-400 cursor-not-allowed"
+              className="flex items-center justify-center px-3 py-2 border rounded-md shadow-sm text-sm border-gray-300 text-gray-500 cursor-not-allowed"
             >
               Phone (WhatsApp)
             </button>
@@ -329,9 +329,9 @@ const GuestSignupForm = ({ formData, setFormData, errors, handleInputChange, onS
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? (
-                <EyeSlashIcon className="h-4 w-4 text-gray-400" />
+                <EyeSlashIcon className="h-4 w-4 text-gray-500" />
               ) : (
-                <EyeIcon className="h-4 w-4 text-gray-400" />
+                <EyeIcon className="h-4 w-4 text-gray-500" />
               )}
             </button>
           </div>
@@ -366,9 +366,9 @@ const GuestSignupForm = ({ formData, setFormData, errors, handleInputChange, onS
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
             >
               {showConfirmPassword ? (
-                <EyeSlashIcon className="h-4 w-4 text-gray-400" />
+                <EyeSlashIcon className="h-4 w-4 text-gray-500" />
               ) : (
-                <EyeIcon className="h-4 w-4 text-gray-400" />
+                <EyeIcon className="h-4 w-4 text-gray-500" />
               )}
             </button>
           </div>

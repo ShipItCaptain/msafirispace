@@ -35,7 +35,7 @@ const AmenitiesSection = ({ listing, onUpdated }) => {
     >
       {Object.entries(amenityCategories).map(([category, amenities]) => (
         <div key={category} className="mb-6 last:mb-0">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{category}</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{category}</h3>
           <div className="flex flex-wrap gap-2">
             {amenities.map((amenity) => (
               <ToggleChip

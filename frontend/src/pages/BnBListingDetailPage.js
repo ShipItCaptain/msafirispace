@@ -346,7 +346,7 @@ const BnBListingDetailPage = () => {
                       : 'border-gray-200 bg-white text-gray-600'
                   }`}
                 >
-                  <span className="text-[10px] text-gray-400">{index + 1}</span>
+                  <span className="text-[10px] text-gray-500">{index + 1}</span>
                   {done && <CheckCircleIcon className="w-3.5 h-3.5 text-green-600" aria-hidden />}
                   {section.label}
                 </button>
@@ -358,7 +358,7 @@ const BnBListingDetailPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6">
           <aside className="hidden lg:block">
             <nav className="sticky top-40 bg-white border border-gray-200 p-3" aria-label="Edit listing sections">
-              <p className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              <p className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                 Edit listing
               </p>
               <ul className="space-y-0.5">
@@ -395,7 +395,7 @@ const BnBListingDetailPage = () => {
               </ul>
               {locationLabel && (
                 <div className="mt-4 pt-3 border-t border-gray-100 px-2">
-                  <p className="text-[11px] text-gray-400 mb-1">Location</p>
+                  <p className="text-[11px] text-gray-500 mb-1">Location</p>
                   <a
                     href={
                       listing.latitude && listing.longitude

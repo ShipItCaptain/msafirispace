@@ -112,7 +112,7 @@ const Header = () => {
             {!hasHostRoles && (
               <Link
                 to="/become-host"
-                className="hidden lg:inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200 shadow-soft hover:shadow-medium"
+                className="hidden lg:inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors duration-200 shadow-soft hover:shadow-medium"
               >
                 Become a Host
               </Link>
@@ -192,7 +192,7 @@ const Header = () => {
                 </Link>
                 <Link
                   to="/register"
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors duration-200 shadow-soft hover:shadow-medium"
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors duration-200 shadow-soft hover:shadow-medium"
                 >
                   Get Started
                 </Link>

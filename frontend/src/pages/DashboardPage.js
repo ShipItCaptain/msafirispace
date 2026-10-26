@@ -39,7 +39,11 @@ const DashboardPage = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const activeRole = user?.active_role || null;
   const isGuest = activeRole === 'guest';
-  const isHostActiveRole = Boolean(activeRole && activeRole !== 'guest');
+  // Any account with a host role gets sent to its real, data-backed dashboard
+  // -- this page only has a genuine guest view. (Not gated on active_role:
+  // a host account that hasn't explicitly switched roles yet would otherwise
+  // fall through to this page with no real host content to show it.)
+  const isHostActiveRole = Boolean(isBnBHost || isHotelRestaurantHost);
   const hostDashboardPath = isHotelRestaurantHost
     ? '/host-dashboard'
     : isBnBHost
@@ -733,7 +737,7 @@ const DashboardPage = () => {
               </div>
             ) : displayBookings.length === 0 ? (
               <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                <CalendarDaysIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <CalendarDaysIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No bookings found</h3>
                 <p className="text-gray-600 mb-6">
                   {bookingFilter === 'all' 
@@ -1025,7 +1029,7 @@ const DashboardPage = () => {
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center space-x-6 mb-6">
           <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center">
-            <UserIcon className="w-10 h-10 text-gray-400" />
+            <UserIcon className="w-10 h-10 text-gray-500" />
           </div>
           <div>
             <h3 className="text-xl font-semibold text-gray-900">{user?.first_name} {user?.last_name}</h3>
@@ -1170,7 +1174,7 @@ const DashboardPage = () => {
           <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center">
               <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                <UserIcon className="w-5 h-5 text-gray-400" />
+                <UserIcon className="w-5 h-5 text-gray-500" />
               </div>
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-900">John Manager</p>
@@ -1264,7 +1268,7 @@ const DashboardPage = () => {
         <div className="space-y-4">
           <div className="flex items-start space-x-4 p-4 border border-gray-200 rounded-lg">
             <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-              <UserIcon className="w-5 h-5 text-gray-400" />
+              <UserIcon className="w-5 h-5 text-gray-500" />
             </div>
             <div className="flex-1">
               <div className="flex items-center space-x-2 mb-2">

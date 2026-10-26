@@ -283,7 +283,7 @@ const BnBHostManagementPage = () => {
               <div className="bg-white border border-gray-200 p-4 mb-6">
                 <div className="flex flex-col lg:flex-row lg:items-center gap-3">
                   <div className="relative flex-1">
-                    <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden />
+                    <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden />
                     <input
                       type="search"
                       placeholder="Search by title or city…"
@@ -318,7 +318,7 @@ const BnBHostManagementPage = () => {
                     <button
                       type="button"
                       onClick={() => setViewMode('grid')}
-                      className={`p-2 ${viewMode === 'grid' ? 'bg-red-50 text-red-600' : 'text-gray-400 hover:text-gray-700'}`}
+                      className={`p-2 ${viewMode === 'grid' ? 'bg-red-50 text-red-600' : 'text-gray-500 hover:text-gray-700'}`}
                       aria-pressed={viewMode === 'grid'}
                       aria-label="Grid view"
                     >
@@ -327,7 +327,7 @@ const BnBHostManagementPage = () => {
                     <button
                       type="button"
                       onClick={() => setViewMode('list')}
-                      className={`p-2 ${viewMode === 'list' ? 'bg-red-50 text-red-600' : 'text-gray-400 hover:text-gray-700'}`}
+                      className={`p-2 ${viewMode === 'list' ? 'bg-red-50 text-red-600' : 'text-gray-500 hover:text-gray-700'}`}
                       aria-pressed={viewMode === 'list'}
                       aria-label="List view"
                     >
@@ -399,7 +399,7 @@ const BnBHostManagementPage = () => {
                         </div>
 
                         <div className="mt-3 flex items-start gap-1.5 text-xs text-gray-600">
-                          <ClockIcon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" aria-hidden />
+                          <ClockIcon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-500" aria-hidden />
                           {status === 'draft' ? (
                             <span className="text-amber-700">Draft · finish setup to go live</span>
                           ) : nextBooking ? (
@@ -410,7 +410,7 @@ const BnBHostManagementPage = () => {
                                 : ''}
                             </span>
                           ) : (
-                            <span className="text-gray-400">No upcoming guests</span>
+                            <span className="text-gray-500">No upcoming guests</span>
                           )}
                         </div>
 

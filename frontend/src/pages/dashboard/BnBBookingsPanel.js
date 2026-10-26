@@ -620,7 +620,7 @@ const BnBBookingsPanel = ({ onOpenAvailability, onOpenHouseGuide }) => {
                     >
                       {option.label}
                       {counts[option.id] > 0 ? (
-                        <span className="text-gray-400 font-normal"> · {counts[option.id]}</span>
+                        <span className="text-gray-500 font-normal"> · {counts[option.id]}</span>
                       ) : null}
                     </button>
                   ))}
@@ -643,7 +643,7 @@ const BnBBookingsPanel = ({ onOpenAvailability, onOpenHouseGuide }) => {
 
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden />
+              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden />
               <input
                 type="search"
                 value={bookingSearchQuery}
@@ -737,7 +737,7 @@ const BnBBookingsPanel = ({ onOpenAvailability, onOpenHouseGuide }) => {
                     aria-pressed={isSelected}
                     aria-label={`${day.iso}${day.bookings.length ? `, ${day.bookings.length} stays` : ''}`}
                     className={`h-16 sm:h-20 p-1.5 sm:p-2 border-b border-r border-gray-100 text-left ${
-                      day.inCurrentMonth ? 'bg-white' : 'bg-gray-50 text-gray-400'
+                      day.inCurrentMonth ? 'bg-white' : 'bg-gray-50 text-gray-500'
                     } ${isSelected ? 'ring-2 ring-red-500 ring-inset bg-red-50' : 'hover:bg-gray-50'}`}
                   >
                     <p className="text-xs font-medium">{day.dayNumber}</p>

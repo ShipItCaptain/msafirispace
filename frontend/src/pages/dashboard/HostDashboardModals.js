@@ -170,7 +170,7 @@ const HostDashboardModals = ({
                     releaseHotelImagePreviews();
                     resetForm();
                   }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                  className="text-gray-500 hover:text-gray-600 transition-colors p-1"
                 >
                   <XMarkIcon className="h-6 w-6" />
                 </button>
@@ -210,12 +210,12 @@ const HostDashboardModals = ({
                         {stepComplete ? <CheckCircleIcon className="h-4 w-4" /> : step.number}
                       </span>
                       <span className={`mt-2 text-[11px] font-medium ${
-                        isVisitedStep ? 'text-gray-700' : 'text-gray-400'
+                        isVisitedStep ? 'text-gray-700' : 'text-gray-500'
                       }`}>
                         {step.label}
                       </span>
                       <span className={`mt-1 text-[10px] ${
-                        stepComplete ? 'text-emerald-600 font-medium' : 'text-gray-400'
+                        stepComplete ? 'text-emerald-600 font-medium' : 'text-gray-500'
                       }`}>
                         {stepComplete ? 'Saved' : 'In progress'}
                       </span>
@@ -286,7 +286,7 @@ const HostDashboardModals = ({
                           className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center ${
                             star <= newHotelData.star_rating
                               ? 'border-yellow-400 bg-yellow-50 text-yellow-600'
-                              : 'border-gray-300 text-gray-400'
+                              : 'border-gray-300 text-gray-500'
                           }`}
                         >
                           <StarIcon className="h-5 w-5" />
@@ -1066,7 +1066,7 @@ const HostDashboardModals = ({
                   setShowEditHotelModal(false);
                   setSelectedHotel(null);
                 }}
-                className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+                className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
                 aria-label="Close"
               >
                 <XMarkIcon className="h-5 w-5" />
@@ -1089,7 +1089,7 @@ const HostDashboardModals = ({
                     type="text"
                     value={selectedHotel.name || ''}
                     onChange={(e) => setSelectedHotel({ ...selectedHotel, name: e.target.value })}
-                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                     placeholder="e.g. Acacia Resort"
                   />
                 </div>
@@ -1099,7 +1099,7 @@ const HostDashboardModals = ({
                     <label htmlFor="edit-hotel-description" className="block text-sm font-medium text-gray-900">
                       Description
                     </label>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-500">
                       {(selectedHotel.description || '').length}/500
                     </span>
                   </div>
@@ -1113,7 +1113,7 @@ const HostDashboardModals = ({
                       })
                     }
                     rows={4}
-                    className="w-full resize-y border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full resize-y border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                     placeholder="What makes this stay special?"
                   />
                 </div>
@@ -1134,7 +1134,7 @@ const HostDashboardModals = ({
                               : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                           }`}
                         >
-                          <StarIcon className={`h-4 w-4 ${selected ? 'text-red-600' : 'text-gray-400'}`} />
+                          <StarIcon className={`h-4 w-4 ${selected ? 'text-red-600' : 'text-gray-500'}`} />
                           {stars}
                         </button>
                       );
@@ -1158,7 +1158,7 @@ const HostDashboardModals = ({
                     type="text"
                     value={selectedHotel.city || ''}
                     onChange={(e) => setSelectedHotel({ ...selectedHotel, city: e.target.value })}
-                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                     placeholder="City"
                   />
                 </div>
@@ -1172,7 +1172,7 @@ const HostDashboardModals = ({
                     type="text"
                     value={selectedHotel.address || ''}
                     onChange={(e) => setSelectedHotel({ ...selectedHotel, address: e.target.value })}
-                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                     placeholder="Street, ward, or landmark"
                   />
                 </div>
@@ -1240,7 +1240,7 @@ const HostDashboardModals = ({
                   <h3 className="text-xl font-semibold text-gray-900">Edit Room Type</h3>
                   <button
                     onClick={() => setShowEditRoomModal(false)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                    className="text-gray-500 hover:text-gray-600 transition-colors"
                   >
                     <XMarkIcon className="h-6 w-6" />
                   </button>

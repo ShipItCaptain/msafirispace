@@ -53,7 +53,7 @@ const MobileBottomNav = () => {
               to={item.href}
               className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium"
             >
-              <Icon className={`w-6 h-6 ${active ? 'text-red-600' : 'text-gray-400'}`} />
+              <Icon className={`w-6 h-6 ${active ? 'text-red-600' : 'text-gray-500'}`} />
               <span className={active ? 'text-red-600' : 'text-gray-500'}>{item.name}</span>
             </Link>
           );

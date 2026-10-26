@@ -62,7 +62,7 @@ const PropertyDetailsSection = ({ listing, onUpdated }) => {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Square footage <span className="font-normal text-gray-400">(optional)</span>
+          Square footage <span className="font-normal text-gray-500">(optional)</span>
         </label>
         <input
           type="number"

@@ -471,7 +471,7 @@ const BnBDetailPage = () => {
           </div>
         ) : (
           <div className="w-full h-64 rounded-xl bg-gray-100 flex items-center justify-center mb-8">
-            <HomeIcon className="w-16 h-16 text-gray-400" />
+            <HomeIcon className="w-16 h-16 text-gray-500" />
           </div>
         )}
 
@@ -678,7 +678,7 @@ const BnBDetailPage = () => {
                     <button
                       type="button"
                       onClick={() => setBookingNotice(null)}
-                      className="p-0.5 text-gray-400 hover:text-gray-600"
+                      className="p-0.5 text-gray-500 hover:text-gray-600"
                       aria-label="Dismiss"
                     >
                       <XMarkIcon className="w-3.5 h-3.5" />

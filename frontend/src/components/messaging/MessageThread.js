@@ -87,7 +87,7 @@ const MessageThread = ({ bookingId }) => {
                     <p className="text-xs font-semibold mb-0.5 text-gray-600">{message.sender_name}</p>
                   )}
                   <p className="text-sm whitespace-pre-wrap break-words">{message.body}</p>
-                  <p className={`text-[10px] mt-1 ${isMine ? 'text-red-100' : 'text-gray-400'}`}>
+                  <p className={`text-[10px] mt-1 ${isMine ? 'text-red-100' : 'text-gray-500'}`}>
                     {formatTimestamp(message.created_at)}
                   </p>
                 </div>

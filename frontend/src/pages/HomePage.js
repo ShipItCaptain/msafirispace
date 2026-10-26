@@ -123,7 +123,7 @@ const HomePage = () => {
                   value={where}
                   onChange={(e) => setWhere(e.target.value)}
                   placeholder="Search destinations"
-                  className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0"
+                  className="mt-0.5 w-full border-0 p-0 text-sm text-gray-900 placeholder:text-gray-500 focus:ring-0"
                   aria-label="Where"
                 />
               </label>

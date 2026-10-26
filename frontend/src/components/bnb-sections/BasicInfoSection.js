@@ -38,7 +38,7 @@ const BasicInfoSection = ({ listing, onUpdated }) => {
         <div>
           <div className="flex items-baseline justify-between gap-2 mb-2">
             <label className="block text-sm font-medium text-gray-700">Listing title *</label>
-            <span className={`text-xs ${titleLen > TITLE_SOFT_MAX ? 'text-amber-600' : 'text-gray-400'}`}>
+            <span className={`text-xs ${titleLen > TITLE_SOFT_MAX ? 'text-amber-600' : 'text-gray-500'}`}>
               {titleLen}/{TITLE_SOFT_MAX}
             </span>
           </div>
@@ -71,7 +71,7 @@ const BasicInfoSection = ({ listing, onUpdated }) => {
         <div>
           <div className="flex items-baseline justify-between gap-2 mb-2">
             <label className="block text-sm font-medium text-gray-700">Description</label>
-            <span className={`text-xs ${descLen > DESC_SOFT_MAX ? 'text-amber-600' : 'text-gray-400'}`}>
+            <span className={`text-xs ${descLen > DESC_SOFT_MAX ? 'text-amber-600' : 'text-gray-500'}`}>
               {descLen}/{DESC_SOFT_MAX}
             </span>
           </div>

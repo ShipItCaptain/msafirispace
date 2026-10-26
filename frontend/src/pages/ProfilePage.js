@@ -56,7 +56,7 @@ const FieldRow = ({ label, value, hint, onEdit, editing, children }) => (
         {!editing && (
           <>
             <p className="mt-1 text-sm text-gray-700 break-words">
-              {value || <span className="text-gray-400">Not provided</span>}
+              {value || <span className="text-gray-500">Not provided</span>}
             </p>
             {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
           </>
@@ -388,7 +388,7 @@ const ProfilePage = () => {
           onChange={(e) => setPersonalForm((f) => ({ ...f, bio: e.target.value }))}
           placeholder="A short intro for hosts"
         />
-        <p className="mt-1 text-xs text-gray-400">{personalForm.bio.length}/500</p>
+        <p className="mt-1 text-xs text-gray-500">{personalForm.bio.length}/500</p>
         <EditActions
           saving={saving}
           onCancel={() => {

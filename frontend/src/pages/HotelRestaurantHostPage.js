@@ -414,7 +414,7 @@ const HotelRestaurantHostPage = () => {
                   Health Certificate
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <DocumentIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <DocumentIcon className="w-12 h-12 text-gray-500 mx-auto mb-2" />
                   <input
                     type="file"
                     onChange={(e) => handleFileUpload('healthCertificate', e.target.files[0])}
@@ -433,7 +433,7 @@ const HotelRestaurantHostPage = () => {
                   Food Handling Certificate
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <DocumentIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <DocumentIcon className="w-12 h-12 text-gray-500 mx-auto mb-2" />
                   <input
                     type="file"
                     onChange={(e) => handleFileUpload('foodHandlingCertificate', e.target.files[0])}
@@ -562,7 +562,7 @@ const HotelRestaurantHostPage = () => {
               <div key={step.number} className="flex items-center">
                 <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
                   currentStep >= step.number
-                    ? 'bg-primary-500 border-primary-500 text-white'
+                    ? 'bg-primary-600 border-primary-600 text-white'
                     : 'border-gray-300 text-gray-500'
                 }`}>
                   {currentStep > step.number ? (
@@ -612,7 +612,7 @@ const HotelRestaurantHostPage = () => {
             disabled={currentStep === 1}
             className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
               currentStep === 1
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
@@ -622,14 +622,14 @@ const HotelRestaurantHostPage = () => {
           {currentStep < steps.length ? (
             <button
               onClick={nextStep}
-              className="px-6 py-3 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600 transition-colors duration-200"
+              className="px-6 py-3 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors duration-200"
             >
               Next Step
             </button>
           ) : (
             <button
               onClick={handleSubmit}
-              className="px-6 py-3 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600 transition-colors duration-200"
+              className="px-6 py-3 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors duration-200"
             >
               Complete Setup
             </button>

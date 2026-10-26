@@ -184,7 +184,7 @@ const RoomTypesBookingTable = ({ hotelId, roomTypes, isAuthenticated, user, navi
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Adults</label>
             <div className="relative">
-              <UsersIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <UsersIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="number"
                 value={numAdults}

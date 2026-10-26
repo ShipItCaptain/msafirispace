@@ -18,7 +18,7 @@ const ChecklistItem = ({ done, label }) => (
     ) : (
       <XCircleIcon className="w-5 h-5 text-gray-300" />
     )}
-    <span className={done ? 'text-gray-700' : 'text-gray-400'}>{label}</span>
+    <span className={done ? 'text-gray-700' : 'text-gray-500'}>{label}</span>
   </div>
 );
 

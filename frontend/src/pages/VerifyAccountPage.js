@@ -212,7 +212,7 @@ const VerifyAccountPage = () => {
                     type="button"
                     onClick={handleResend}
                     disabled={isResending || cooldown > 0 || !email.trim()}
-                    className="text-sm font-medium text-red-600 hover:text-red-500 disabled:text-gray-400 disabled:cursor-not-allowed"
+                    className="text-sm font-medium text-red-600 hover:text-red-500 disabled:text-gray-500 disabled:cursor-not-allowed"
                   >
                     {cooldown > 0
                       ? `Resend code in ${cooldown}s`

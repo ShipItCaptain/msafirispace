@@ -15,7 +15,7 @@ export const DiscoveryStickyBar = ({
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 lg:py-3">
       <div className="flex items-center gap-2 lg:gap-0 lg:divide-x lg:divide-gray-200 border border-gray-300 bg-white rounded-full lg:rounded-none">
         <label className="flex-1 min-w-0 flex items-center gap-2 px-3.5 py-2 lg:py-2.5">
-          <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 flex-shrink-0" aria-hidden />
+          <MagnifyingGlassIcon className="w-4 h-4 text-gray-500 flex-shrink-0" aria-hidden />
           <div className="min-w-0 flex-1">
             <span className="hidden lg:block text-[10px] font-semibold uppercase tracking-wide text-gray-500">Where</span>
             <input
@@ -24,7 +24,7 @@ export const DiscoveryStickyBar = ({
               onChange={(event) => onWhereChange(event.target.value)}
               placeholder={wherePlaceholder}
               aria-label="Where"
-              className="w-full text-sm text-gray-900 placeholder:text-gray-400 border-0 p-0 focus:ring-0 bg-transparent"
+              className="w-full text-sm text-gray-900 placeholder:text-gray-500 border-0 p-0 focus:ring-0 bg-transparent"
             />
           </div>
         </label>
@@ -74,7 +74,7 @@ export const DiscoveryBarField = ({ label, className = '', children }) => (
 );
 
 export const fieldInputClass =
-  'w-full text-sm text-gray-900 placeholder:text-gray-400 border-0 p-0 focus:ring-0 bg-transparent';
+  'w-full text-sm text-gray-900 placeholder:text-gray-500 border-0 p-0 focus:ring-0 bg-transparent';
 
 export const FiltersSheet = ({ open, onClose, title = 'Filters', activeCount = 0, onClear, children }) => {
   useEffect(() => {
@@ -119,7 +119,7 @@ export const FiltersSheet = ({ open, onClose, title = 'Filters', activeCount = 0
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-700"
+            className="p-2 text-gray-500 hover:text-gray-700"
             aria-label="Close filters"
           >
             <XMarkIcon className="w-5 h-5" />

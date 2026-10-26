@@ -546,7 +546,7 @@ const HostOnboardingWizard = ({ onComplete }) => {
                     <div key={field.key}>
                       <p className="text-sm font-medium text-gray-900 mb-2">
                         {field.question}
-                        {field.optional && <span className="text-gray-400 font-normal"> (optional)</span>}
+                        {field.optional && <span className="text-gray-500 font-normal"> (optional)</span>}
                       </p>
                       {renderFieldInput(field, index)}
                     </div>

@@ -92,7 +92,7 @@ const PhotosSection = ({ listing, onUpdated }) => {
         }`}
         aria-label="Add photos"
       >
-        <PhotoIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" aria-hidden />
+        <PhotoIcon className="w-10 h-10 text-gray-500 mx-auto mb-3" aria-hidden />
         <p className="text-sm font-semibold text-gray-900">
           {isUploading ? 'Uploading…' : 'Drag photos here, or click to browse'}
         </p>

@@ -50,7 +50,7 @@ const HouseRulesSection = ({ listing, onUpdated }) => {
       </div>
 
       <div className="pt-4 border-t border-gray-200">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Policies</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Policies</h3>
         <div className="flex flex-wrap gap-2">
           {Object.entries(policyLabels).map(([key, label]) => (
             <ToggleChip

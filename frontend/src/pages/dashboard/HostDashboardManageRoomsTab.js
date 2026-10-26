@@ -588,7 +588,7 @@ const HostDashboardManageRoomsTab = ({
                                 Configure Now
                               </button>
                             )}
-                            <ChevronDownIcon className={`h-5 w-5 text-gray-400 transition-transform ${isExpanded ? 'transform rotate-180' : ''}`} />
+                            <ChevronDownIcon className={`h-5 w-5 text-gray-500 transition-transform ${isExpanded ? 'transform rotate-180' : ''}`} />
                           </div>
                         </div>
                       </div>
@@ -1000,7 +1000,7 @@ const HostDashboardManageRoomsTab = ({
                                         }}
                                         className="text-center w-full h-full flex flex-col items-center justify-center"
                                       >
-                                        <PlusIcon className="h-6 w-6 mx-auto text-gray-400 mb-1" />
+                                        <PlusIcon className="h-6 w-6 mx-auto text-gray-500 mb-1" />
                                         <span className="text-xs text-gray-600">Add Image</span>
                                       </button>
                                       <input
@@ -1208,7 +1208,7 @@ const HostDashboardManageRoomsTab = ({
                       <span className="block font-medium text-gray-900">{hotel.name}</span>
                       <span className="block text-xs text-gray-500">{hotel.city}, {hotel.country}</span>
                     </span>
-                    <BuildingOfficeIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                    <BuildingOfficeIcon className="h-5 w-5 text-gray-500 flex-shrink-0" />
                   </button>
                 ))}
               </div>

@@ -279,7 +279,7 @@ const PromotionsPage = () => {
                       <span className="text-lg font-semibold text-green-600">
                         KES {promotion.discounted_price}
                       </span>
-                      <span className="text-sm text-gray-400 line-through ml-2">
+                      <span className="text-sm text-gray-500 line-through ml-2">
                         KES {promotion.original_price}
                       </span>
                     </div>
@@ -293,7 +293,7 @@ const PromotionsPage = () => {
                 </div>
                 
                 <div className="mt-4 pt-3 border-t flex justify-between items-center">
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-500">
                     {promotion.views_count} views • {promotion.clicks_count} clicks
                   </div>
                   <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
@@ -308,7 +308,7 @@ const PromotionsPage = () => {
         {promotions.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">No {selectedType.replace('_', ' ')} promotions found</p>
-            <p className="text-gray-400 mt-2">Create a promotion to get started</p>
+            <p className="text-gray-500 mt-2">Create a promotion to get started</p>
           </div>
         )}
       </div>

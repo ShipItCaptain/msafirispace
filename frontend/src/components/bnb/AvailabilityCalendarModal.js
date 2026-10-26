@@ -335,7 +335,7 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="p-2 text-gray-500 hover:text-gray-600 rounded-lg hover:bg-gray-100"
             aria-label="Close"
           >
             <XMarkIcon className="w-5 h-5" />
@@ -433,7 +433,7 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
                 <button
                   type="button"
                   onClick={closeDayPanel}
-                  className="p-0.5 text-gray-400 hover:text-gray-600"
+                  className="p-0.5 text-gray-500 hover:text-gray-600"
                   aria-label="Close"
                 >
                   <XMarkIcon className="w-4 h-4" />
@@ -444,15 +444,15 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
                 <div className="space-y-3">
                   <div className="space-y-1 text-xs text-gray-600 leading-relaxed">
                     <p>
-                      <span className="text-gray-400">Guest · </span>
+                      <span className="text-gray-500">Guest · </span>
                       {selectedBooking.guest_full_name || selectedBooking.traveler_name || 'Guest'}
                     </p>
                     <p>
-                      <span className="text-gray-400">Dates · </span>
+                      <span className="text-gray-500">Dates · </span>
                       {selectedBooking.check_in} → {selectedBooking.check_out}
                     </p>
                     <p>
-                      <span className="text-gray-400">Status · </span>
+                      <span className="text-gray-500">Status · </span>
                       {paymentLabel(selectedBooking)}
                     </p>
                   </div>
@@ -479,7 +479,7 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
                       onChange={(e) => setNights(e.target.value)}
                       className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs"
                     />
-                    <p className="mt-1 text-[11px] text-gray-400">
+                    <p className="mt-1 text-[11px] text-gray-500">
                       {nightCount} night{nightCount > 1 ? 's' : ''} · checkout {checkoutDate}
                     </p>
                   </div>
@@ -536,17 +536,17 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
                 <div className="space-y-3">
                   <div className="space-y-1 text-xs text-gray-600 leading-relaxed">
                     <p>
-                      <span className="text-gray-400">Guest · </span>
+                      <span className="text-gray-500">Guest · </span>
                       {walkInStayRange?.guest || selectedEntry.walk_in_guest_name?.trim() || 'Walk-in guest'}
                     </p>
                     <p>
-                      <span className="text-gray-400">Dates · </span>
+                      <span className="text-gray-500">Dates · </span>
                       {walkInStayRange
                         ? `${walkInStayRange.start} → ${walkInStayRange.checkout} (${walkInStayRange.totalNights} night${walkInStayRange.totalNights > 1 ? 's' : ''})`
                         : selectedDate}
                     </p>
                     <p>
-                      <span className="text-gray-400">Status · </span>
+                      <span className="text-gray-500">Status · </span>
                       {selectedEntry.walk_in_paid ? 'Paid' : 'Reserved (not paid)'}
                     </p>
                   </div>
