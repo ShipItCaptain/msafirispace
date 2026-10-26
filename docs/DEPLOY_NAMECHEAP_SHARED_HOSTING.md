@@ -196,6 +196,17 @@ Add `.htaccess` in `public_html` so React Router's client-side routes don't
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
 </IfModule>
+
+# index.html has no content-hash in its filename and references the hashed
+# JS/CSS bundle by name -- it must always be revalidated so visitors don't
+# get stuck on a stale build after a deploy (mobile browsers cache this
+# particularly aggressively). The hashed /static/ assets are still safe to
+# cache long-term since a new build gets new filenames.
+<IfModule mod_headers.c>
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>
 ```
 
 ## 10. Enable SSL
