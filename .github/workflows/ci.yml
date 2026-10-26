@@ -47,9 +47,9 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python manage.py migrate --noinput
       - run: pytest
-      - run: pip install pip-audit && pip-audit -r requirements.txt
-        # ponytail: non-blocking until we've triaged the current baseline, make it required once clean
-        continue-on-error: true
+      - run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --format json | python scripts/check_pip_audit.py
 
   frontend-test:
     runs-on: ubuntu-latest
@@ -65,7 +65,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --legacy-peer-deps
       - run: npm audit --audit-level=high
-        # ponytail: non-blocking until we've triaged the current baseline, make it required once clean
+        # ponytail: non-blocking permanently, not pending triage -- CRA's react-scripts
+        # is itself a prod dependency, so npm classifies its entire build-tooling
+        # subtree (webpack-dev-server, jest, etc.) as "production" even though none
+        # of it ships in `npm run build`'s output. Known false-positive, not fixable
+        # short of migrating off CRA (e.g. to Vite).
         continue-on-error: true
       - run: npm test -- --watchAll=false
       - run: npm run build
