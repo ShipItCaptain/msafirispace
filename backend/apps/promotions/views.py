@@ -2,6 +2,7 @@
 Views for promotions app
 """
 from django.utils import timezone
+from django.views.decorators.cache import cache_page
 from rest_framework import generics, permissions, filters
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -61,6 +62,7 @@ class PromotionDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
+@cache_page(90)  # matches apps.listings.views.LISTING_CACHE_SECONDS for this same homepage load
 def active_promotions(request, promotion_type):
     """
     Get active promotions by type (trending, last_minute, local_favorites)
