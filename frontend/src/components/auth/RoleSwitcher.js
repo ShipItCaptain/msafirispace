@@ -230,7 +230,7 @@ const RoleSwitcher = () => {
 
           {/* Available Roles */}
           <div className="py-2">
-            <div className="px-4 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide">
+            <div className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Switch Role
             </div>
             {userRoles.map((role) => {
@@ -259,7 +259,7 @@ const RoleSwitcher = () => {
           {userRoles.length < availableRoles.length && (
             <>
               <div className="border-t border-gray-100 py-2">
-                <div className="px-4 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                <div className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Add Role
                 </div>
                 {availableRoles
@@ -290,7 +290,7 @@ const RoleSwitcher = () => {
           {/* Remove Role */}
           {userRoles.length > 1 && (
             <div className="border-t border-gray-100 py-2">
-              <div className="px-4 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <div className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Remove Role
               </div>
               {userRoles

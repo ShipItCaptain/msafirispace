@@ -322,7 +322,7 @@ const BnBsPage = () => {
         }
       >
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-2">City</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
           <input
             type="text"
             value={filters.city}
@@ -333,7 +333,7 @@ const BnBsPage = () => {
         </div>
         <div className="lg:hidden grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-2">Check-in</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Check-in</label>
             <input
               type="date"
               value={filters.check_in}
@@ -342,7 +342,7 @@ const BnBsPage = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-2">Check-out</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Check-out</label>
             <input
               type="date"
               value={filters.check_out}
@@ -352,7 +352,7 @@ const BnBsPage = () => {
           </div>
         </div>
         <div className="lg:hidden">
-          <label className="block text-sm font-medium text-gray-800 mb-2">Guests</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Guests</label>
           <input
             type="number"
             min="1"
@@ -363,7 +363,7 @@ const BnBsPage = () => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-2">Property type</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Property type</label>
           <select
             value={filters.property_type}
             onChange={(e) => setFilter('property_type', e.target.value)}
@@ -378,7 +378,7 @@ const BnBsPage = () => {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-2">Min price</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Min price</label>
             <input
               type="number"
               min="0"
@@ -389,7 +389,7 @@ const BnBsPage = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-2">Max price</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Max price</label>
             <input
               type="number"
               min="0"
@@ -401,7 +401,7 @@ const BnBsPage = () => {
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-2">Amenities</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Amenities</label>
           <div className="flex flex-wrap gap-2">
             {AMENITY_OPTIONS.map((amenity) => (
               <button

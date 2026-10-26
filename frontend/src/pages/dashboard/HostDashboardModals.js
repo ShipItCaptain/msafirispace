@@ -491,7 +491,7 @@ const HostDashboardModals = ({
                               <button
                                 type="button"
                                 onClick={() => removeHotelImage(index)}
-                                className="text-xs px-2 py-1 bg-red-600 text-white rounded"
+                                className="text-xs font-medium px-2 py-1 bg-red-600 text-white rounded"
                               >
                                 Remove
                               </button>
@@ -1013,7 +1013,7 @@ const HostDashboardModals = ({
                   <button
                     onClick={nextStep}
                     data-testid="host-hotel-continue-button"
-                    className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    className="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
                   >
                     Continue
                   </button>

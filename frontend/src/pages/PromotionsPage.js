@@ -125,7 +125,7 @@ const PromotionsPage = () => {
               <h2 className="text-xl font-bold mb-4">Create Promotion</h2>
               <form onSubmit={handleCreatePromotion} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Promotion Type</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Promotion Type</label>
                   <select
                     value={newPromotion.promotion_type}
                     onChange={(e) => setNewPromotion({...newPromotion, promotion_type: e.target.value})}
@@ -139,7 +139,7 @@ const PromotionsPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Hotel ID</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hotel ID</label>
                   <input
                     type="number"
                     value={newPromotion.hotel_id}
@@ -150,7 +150,7 @@ const PromotionsPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Title</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                   <input
                     type="text"
                     value={newPromotion.title}
@@ -161,7 +161,7 @@ const PromotionsPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Description</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                   <textarea
                     value={newPromotion.description}
                     onChange={(e) => setNewPromotion({...newPromotion, description: e.target.value})}
@@ -172,7 +172,7 @@ const PromotionsPage = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Original Price (KES)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Original Price (KES)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -183,7 +183,7 @@ const PromotionsPage = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Discounted Price (KES)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Discounted Price (KES)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -197,7 +197,7 @@ const PromotionsPage = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Start Date</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                     <input
                       type="datetime-local"
                       value={newPromotion.start_date}
@@ -207,7 +207,7 @@ const PromotionsPage = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">End Date</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                     <input
                       type="datetime-local"
                       value={newPromotion.end_date}

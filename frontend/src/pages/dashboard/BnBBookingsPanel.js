@@ -515,7 +515,7 @@ const BnBBookingsPanel = ({ onOpenAvailability, onOpenHouseGuide }) => {
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
-              className="p-2 border border-gray-300 text-gray-600 hover:bg-gray-50"
+              className="p-2 border border-gray-300 text-gray-700 hover:bg-gray-50"
               aria-label="More actions"
               aria-expanded={menuOpen}
               aria-haspopup="menu"

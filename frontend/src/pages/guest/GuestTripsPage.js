@@ -411,7 +411,7 @@ const GuestTripsPage = () => {
           <button
             type="button"
             onClick={refreshFavorites}
-            className="px-4 py-2 bg-red-600 text-white hover:bg-red-700"
+            className="px-4 py-2 bg-red-600 text-white font-semibold hover:bg-red-700"
           >
             Retry
           </button>

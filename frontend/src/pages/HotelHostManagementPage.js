@@ -120,7 +120,7 @@ const HotelHostManagementPage = () => {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mb-2">No hotel yet</h1>
           <p className="text-gray-500 mb-6">You haven't created a hotel listing on this account.</p>
-          <Link to="/become-host" className="inline-block px-6 py-3 bg-red-600 text-white font-medium">
+          <Link to="/become-host" className="inline-block px-6 py-3 bg-red-600 text-white font-semibold">
             Become a host
           </Link>
         </div>

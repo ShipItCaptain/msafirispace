@@ -365,7 +365,7 @@ const ListHotelPage = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="hotel-city" className="mb-1.5 block text-sm font-medium text-gray-900">
+                  <label htmlFor="hotel-city" className="mb-1.5 block text-sm font-medium text-gray-700">
                     City
                   </label>
                   <input
@@ -381,7 +381,7 @@ const ListHotelPage = () => {
                 <div>
                   <label
                     htmlFor="hotel-address"
-                    className="mb-1.5 block text-sm font-medium text-gray-900"
+                    className="mb-1.5 block text-sm font-medium text-gray-700"
                   >
                     Address
                   </label>
@@ -398,7 +398,7 @@ const ListHotelPage = () => {
                 <div>
                   <label
                     htmlFor="hotel-country"
-                    className="mb-1.5 block text-sm font-medium text-gray-900"
+                    className="mb-1.5 block text-sm font-medium text-gray-700"
                   >
                     Country
                   </label>

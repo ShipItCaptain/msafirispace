@@ -118,7 +118,7 @@ const BookingDetailModal = ({
             )}
 
             <div className="border-t border-gray-200 pt-4">
-              <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Status Actions</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Status Actions</p>
               <HostBookingActionButtons
                 booking={selectedBooking}
                 bookingActionLoadingId={bookingActionLoadingId}

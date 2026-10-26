@@ -29,7 +29,7 @@ const AmenityList = ({ amenities = [], previewCount = 10 }) => {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wide">
+      <h3 className="text-xl font-bold text-gray-900 mb-4">
         Amenities
       </h3>
       <div className="flex flex-wrap gap-x-5 gap-y-2.5">

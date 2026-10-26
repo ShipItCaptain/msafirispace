@@ -1098,7 +1098,7 @@ const HostDashboardManageRoomsTab = ({
                                 <label className="block text-sm font-medium text-gray-700 mb-3">Room Availability</label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Total Rooms Available</label>
+                                    <label className="block text-xs text-gray-500 mb-1">Total Rooms Available</label>
                                     <input
                                       type="number"
                                       min="1"
@@ -1109,7 +1109,7 @@ const HostDashboardManageRoomsTab = ({
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-xs text-gray-600 mb-1">Maximum Nights</label>
+                                    <label className="block text-xs text-gray-500 mb-1">Maximum Nights</label>
                                     <input
                                       type="number"
                                       min="1"

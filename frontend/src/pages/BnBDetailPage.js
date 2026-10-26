@@ -255,7 +255,7 @@ const BnBDetailPage = () => {
           <p className="text-gray-600 mb-6">{error || 'The BnB listing you are looking for does not exist.'}</p>
           <Link
             to="/bnbs"
-            className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            className="inline-flex items-center px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700"
           >
             <ArrowLeftIcon className="w-5 h-5 mr-2" />
             Back to BnBs
@@ -697,7 +697,7 @@ const BnBDetailPage = () => {
                 <div className="rounded-xl border border-gray-300 overflow-hidden">
                   <div className="grid grid-cols-2 divide-x divide-gray-300">
                     <label className="block px-3 py-2.5 cursor-pointer hover:bg-gray-50">
-                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-900">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                         Check-in
                       </span>
                       <input
@@ -713,7 +713,7 @@ const BnBDetailPage = () => {
                       />
                     </label>
                     <label className="block px-3 py-2.5 cursor-pointer hover:bg-gray-50">
-                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-900">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                         Check-out
                       </span>
                       <input
@@ -730,7 +730,7 @@ const BnBDetailPage = () => {
                     </label>
                   </div>
                   <label className="block border-t border-gray-300 px-3 py-2.5 cursor-pointer hover:bg-gray-50">
-                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-900">
+                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                       Guests
                     </span>
                     <input

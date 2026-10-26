@@ -292,7 +292,7 @@ const RoomTypesBookingTable = ({ hotelId, roomTypes, isAuthenticated, user, navi
                     {hasDates ? `per night · ${nights} night${nights === 1 ? '' : 's'}` : 'per night'}
                   </p>
                   {hasDates && quantity > 0 && (
-                    <p className="text-sm font-medium text-gray-800 mt-0.5">
+                    <p className="text-sm font-medium text-gray-900 mt-0.5">
                       KSh {lineTotal.toLocaleString()} trip
                     </p>
                   )}

@@ -196,13 +196,13 @@ const HostHomePage = () => {
               <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
                 <button
                   onClick={() => handleChooseListingType('bnb')}
-                  className="px-5 py-2.5 border border-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   List a BnB
                 </button>
                 <button
                   onClick={() => handleChooseListingType('hotel')}
-                  className="px-5 py-2.5 border border-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-5 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   List a Hotel
                 </button>

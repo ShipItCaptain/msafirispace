@@ -459,7 +459,7 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
                   <button
                     type="button"
                     onClick={closeDayPanel}
-                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     Close
                   </button>
@@ -527,7 +527,7 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
                     type="button"
                     onClick={handleBlock}
                     disabled={saving}
-                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                   >
                     Block {nightCount} night{nightCount > 1 ? 's' : ''}
                   </button>
@@ -565,7 +565,7 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
                   <button
                     type="button"
                     onClick={closeDayPanel}
-                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
                   </button>
@@ -586,7 +586,7 @@ const AvailabilityCalendarModal = ({ bnbId, listingTitle, basePrice, currency = 
                   <button
                     type="button"
                     onClick={closeDayPanel}
-                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
                   </button>

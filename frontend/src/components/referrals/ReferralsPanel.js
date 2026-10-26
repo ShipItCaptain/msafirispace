@@ -70,7 +70,7 @@ const ReferralsPanel = () => {
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold whitespace-nowrap"
           >
             <ClipboardDocumentIcon className="w-4 h-4" />
             {copied ? 'Copied!' : 'Copy'}

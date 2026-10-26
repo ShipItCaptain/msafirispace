@@ -229,7 +229,7 @@ const HotelsPage = () => {
         onClear={() => setFilters((prev) => ({ ...prev, property_type: '', min_stars: '', city: '' }))}
       >
         <div className="lg:hidden">
-          <label className="block text-sm font-medium text-gray-800 mb-2">City</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
           <input
             type="text"
             value={filters.city}
@@ -239,7 +239,7 @@ const HotelsPage = () => {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-2">Property type</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Property type</label>
           <select
             value={filters.property_type}
             onChange={(e) => setFilters((prev) => ({ ...prev, property_type: e.target.value }))}
@@ -253,7 +253,7 @@ const HotelsPage = () => {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-800 mb-2">Star rating</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Star rating</label>
           <div className="flex flex-wrap gap-2">
             {STAR_OPTIONS.map((option) => (
               <button

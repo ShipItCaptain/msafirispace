@@ -384,7 +384,7 @@ const BookingDetailPage = () => {
             <button
               type="button"
               onClick={() => navigate('/dashboard', { state: { initialTab: 'bookings' } })}
-              className="px-4 py-2.5 border border-gray-300 text-gray-800 font-medium hover:bg-gray-50"
+              className="px-4 py-2.5 border border-gray-300 text-gray-700 font-medium hover:bg-gray-50"
             >
               Back to Trips
             </button>
@@ -975,7 +975,7 @@ const BookingDetailPage = () => {
               <button
                 type="button"
                 onClick={() => setShowCancelModal(true)}
-                className="w-full border border-gray-300 text-gray-800 py-2.5 px-4 font-medium hover:bg-gray-50"
+                className="w-full border border-gray-300 text-gray-700 py-2.5 px-4 font-medium hover:bg-gray-50"
               >
                 Cancel request
               </button>

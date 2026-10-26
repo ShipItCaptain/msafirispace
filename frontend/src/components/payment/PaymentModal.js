@@ -116,7 +116,7 @@ const PaymentModal = ({ isOpen, onClose, booking, onPaymentSuccess }) => {
         )}
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Payment Method</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
           <div className="space-y-2">
             <label className="flex items-center">
               <input
@@ -143,7 +143,7 @@ const PaymentModal = ({ isOpen, onClose, booking, onPaymentSuccess }) => {
 
         {selectedGateway === 'mpesa' && (
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">M-Pesa Phone Number</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">M-Pesa Phone Number</label>
             <input
               type="tel"
               value={mpesaPhone}

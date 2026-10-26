@@ -264,7 +264,7 @@ const BnBReservationDrawer = ({
           )}
 
           <div>
-            <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Actions</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Actions</p>
             <HostBookingActionButtons
               booking={booking}
               bookingActionLoadingId={bookingActionLoadingId}
