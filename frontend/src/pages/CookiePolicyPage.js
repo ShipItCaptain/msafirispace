@@ -32,7 +32,7 @@ const CookiePolicyPage = () => {
           </p>
 
           <h2>Contact</h2>
-          <p>Questions? Reach us at privacy@msafirispace.com.</p>
+          <p>Questions? Reach us at support@msafirispace.com.</p>
         </div>
       </div>
     </div>
