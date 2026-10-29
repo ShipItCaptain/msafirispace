@@ -87,12 +87,43 @@ jobs:
             /tmp/passenger_wsgi.py "$SSH_USER@$SSH_HOST:msafiri_backend/passenger_wsgi.py"
           rm -f /tmp/passenger_wsgi.py
 
-      # The host is CloudLinux/LiteSpeed Passenger -- config is delivered via
-      # SetEnv directives in the api subdomain's .htaccess (cPanel's native
-      # mechanism for this hosting type), not a .env file. Regenerated whole
-      # each deploy rather than edited in place, so it's always consistent
-      # with these secrets and never drifts.
-      - name: Write api.msafirispace.com/.htaccess
+      # Ensure the static/media bypass rule exists in .htaccess. Idempotent
+      # and kept separate from the env-vars step below: cloudlinux-selector
+      # (next step) only ever touches its own two marker-delimited blocks
+      # (Passenger config + env vars) and leaves everything else in the file
+      # alone -- confirmed by direct testing -- so this rule survives every
+      # future env-var update without being re-written each time.
+      - name: Ensure static/media bypass rule in api.msafirispace.com/.htaccess
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" '
+            touch ~/api.msafirispace.com/.htaccess
+            if ! grep -q "Static/media bypass" ~/api.msafirispace.com/.htaccess; then
+              cat >> ~/api.msafirispace.com/.htaccess <<'"'"'EOF'"'"'
+
+          # Static/media bypass -- served directly, not routed through Passenger/Django
+          RewriteEngine On
+          RewriteCond %{REQUEST_URI} ^/static/ [OR]
+          RewriteCond %{REQUEST_URI} ^/media/
+          RewriteRule ^ - [L]
+          EOF
+            fi
+          '
+
+      # The host is CloudLinux/LiteSpeed Passenger -- CRITICAL: the actual
+      # source of truth the running app reads is
+      # ~/.cl.selector/python-selector.json, NOT .htaccess directly.
+      # .htaccess's SetEnv block is only ever a generated reflection of that
+      # JSON. A past version of this workflow wrote .htaccess directly via
+      # scp, which looked correct (and even passed manual verification) but
+      # never touched the real JSON store -- so the live app kept reading
+      # stale values (an old Gmail account for EMAIL_HOST_USER) despite
+      # .htaccess showing the new ones. Must go through cloudlinux-selector
+      # so both the JSON store and the generated .htaccess stay consistent.
+      - name: Set environment variables (cloudlinux-selector)
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
@@ -103,40 +134,50 @@ jobs:
           EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
           EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
         run: |
-          DB_PASSWORD_ENCODED=$(python3 -c "import urllib.parse, os; print(urllib.parse.quote(os.environ['DB_PASSWORD'], safe=''))")
-          cat > /tmp/api.htaccess <<EOF
-          # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
-          PassengerAppRoot "/home/$SSH_USER/msafiri_backend"
-          PassengerBaseURI "/"
-          PassengerPython "/home/$SSH_USER/virtualenv/msafiri_backend/3.11/bin/python"
-          # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
-          # DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
-          <IfModule Litespeed>
-          SetEnv  CACHE_BACKEND database
-          SetEnv  SECRET_KEY $SECRET_KEY
-          SetEnv  FILE_ENCRYPTION_KEY $FILE_ENCRYPTION_KEY
-          SetEnv  SITE_URL https://msafirispace.com
-          SetEnv ALLOWED_HOSTS  api.msafirispace.com
-          SetEnv CORS_ALLOWED_ORIGINS https://msafirispace.com,https://www.msafirispace.com
-          SetEnv DEBUG False
-          SetEnv EMAIL_BACKEND django.core.mail.backends.smtp.EmailBackend
-          SetEnv EMAIL_HOST localhost
-          SetEnv EMAIL_HOST_PASSWORD $EMAIL_HOST_PASSWORD
-          SetEnv EMAIL_HOST_USER $EMAIL_HOST_USER
-          SetEnv USE_CLOUDINARY_STORAGE False
-          SetEnv DATABASE_URL postgresql://msafbuat_msafiri_user:$DB_PASSWORD_ENCODED@localhost:5432/msafbuat_msafiri_space
-          </IfModule>
-          # DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION END
+          cat > /tmp/set_env_vars.py <<'PYEOF'
+          import json
+          import os
+          import subprocess
+          import urllib.parse
 
-          # Static/media bypass -- served directly, not routed through Passenger/Django
-          RewriteEngine On
-          RewriteCond %{REQUEST_URI} ^/static/ [OR]
-          RewriteCond %{REQUEST_URI} ^/media/
-          RewriteRule ^ - [L]
-          EOF
+          db_password_encoded = urllib.parse.quote(os.environ['DB_PASSWORD'], safe='')
+
+          env_vars = {
+              "CACHE_BACKEND": "database",
+              "SECRET_KEY": os.environ['SECRET_KEY'],
+              "FILE_ENCRYPTION_KEY": os.environ['FILE_ENCRYPTION_KEY'],
+              "SITE_URL": "https://msafirispace.com",
+              "ALLOWED_HOSTS": "api.msafirispace.com",
+              "CORS_ALLOWED_ORIGINS": "https://msafirispace.com,https://www.msafirispace.com",
+              "DEBUG": "False",
+              "EMAIL_BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+              "EMAIL_HOST": "localhost",
+              "EMAIL_HOST_PASSWORD": os.environ['EMAIL_HOST_PASSWORD'],
+              "EMAIL_HOST_USER": os.environ['EMAIL_HOST_USER'],
+              "USE_CLOUDINARY_STORAGE": "False",
+              "DATABASE_URL": f"postgresql://msafbuat_msafiri_user:{db_password_encoded}@localhost:5432/msafbuat_msafiri_space",
+          }
+
+          result = subprocess.run(
+              [
+                  "cloudlinux-selector", "set", "--json",
+                  "--interpreter", "python",
+                  "--user", "msafbuat",
+                  "--app-root", "msafiri_backend",
+                  "--env-vars", json.dumps(env_vars),
+              ],
+              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+          )
+          print("stdout:", result.stdout.decode())
+          print("stderr:", result.stderr.decode())
+          if result.returncode != 0 or b'"result": "success"' not in result.stdout:
+              raise SystemExit("cloudlinux-selector set --env-vars failed")
+          PYEOF
           scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o StrictHostKeyChecking=no \
-            /tmp/api.htaccess "$SSH_USER@$SSH_HOST:api.msafirispace.com/.htaccess"
-          rm -f /tmp/api.htaccess
+            /tmp/set_env_vars.py "$SSH_USER@$SSH_HOST:/tmp/set_env_vars.py"
+          rm -f /tmp/set_env_vars.py
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" \
+            "python3 /tmp/set_env_vars.py && rm -f /tmp/set_env_vars.py"
 
       # Passenger only ever sees requests for the Django app itself -- static
       # and media files need to resolve as real files in the subdomain's own
