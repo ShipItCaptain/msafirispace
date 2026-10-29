@@ -120,7 +120,7 @@ jobs:
           SetEnv CORS_ALLOWED_ORIGINS https://msafirispace.com,https://www.msafirispace.com
           SetEnv DEBUG False
           SetEnv EMAIL_BACKEND django.core.mail.backends.smtp.EmailBackend
-          SetEnv EMAIL_HOST smtp.gmail.com
+          SetEnv EMAIL_HOST localhost
           SetEnv EMAIL_HOST_PASSWORD $EMAIL_HOST_PASSWORD
           SetEnv EMAIL_HOST_USER $EMAIL_HOST_USER
           SetEnv USE_CLOUDINARY_STORAGE False
