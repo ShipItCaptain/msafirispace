@@ -134,50 +134,64 @@ jobs:
           EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
           EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
         run: |
-          cat > /tmp/set_env_vars.py <<'PYEOF'
-          import json
-          import os
-          import subprocess
-          import urllib.parse
-
+          # Build the finished JSON *here on the runner*, where the secrets
+          # above actually exist as env vars -- a previous version of this
+          # step shipped Python code that called os.environ[...] on the
+          # *remote* side via a separate `ssh ... python3 script.py`, but
+          # that's a new process on the server with no idea these secrets
+          # exist, so it failed with KeyError. Ship the already-filled-in
+          # data (plain JSON), not code that expects secrets to be lying
+          # around remotely.
+          python3 -c "
+          import json, os, urllib.parse
           db_password_encoded = urllib.parse.quote(os.environ['DB_PASSWORD'], safe='')
-
           env_vars = {
-              "CACHE_BACKEND": "database",
-              "SECRET_KEY": os.environ['SECRET_KEY'],
-              "FILE_ENCRYPTION_KEY": os.environ['FILE_ENCRYPTION_KEY'],
-              "SITE_URL": "https://msafirispace.com",
-              "ALLOWED_HOSTS": "api.msafirispace.com",
-              "CORS_ALLOWED_ORIGINS": "https://msafirispace.com,https://www.msafirispace.com",
-              "DEBUG": "False",
-              "EMAIL_BACKEND": "django.core.mail.backends.smtp.EmailBackend",
-              "EMAIL_HOST": "localhost",
-              "EMAIL_HOST_PASSWORD": os.environ['EMAIL_HOST_PASSWORD'],
-              "EMAIL_HOST_USER": os.environ['EMAIL_HOST_USER'],
-              "USE_CLOUDINARY_STORAGE": "False",
-              "DATABASE_URL": f"postgresql://msafbuat_msafiri_user:{db_password_encoded}@localhost:5432/msafbuat_msafiri_space",
+              'CACHE_BACKEND': 'database',
+              'SECRET_KEY': os.environ['SECRET_KEY'],
+              'FILE_ENCRYPTION_KEY': os.environ['FILE_ENCRYPTION_KEY'],
+              'SITE_URL': 'https://msafirispace.com',
+              'ALLOWED_HOSTS': 'api.msafirispace.com',
+              'CORS_ALLOWED_ORIGINS': 'https://msafirispace.com,https://www.msafirispace.com',
+              'DEBUG': 'False',
+              'EMAIL_BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+              'EMAIL_HOST': 'localhost',
+              'EMAIL_HOST_PASSWORD': os.environ['EMAIL_HOST_PASSWORD'],
+              'EMAIL_HOST_USER': os.environ['EMAIL_HOST_USER'],
+              'USE_CLOUDINARY_STORAGE': 'False',
+              'DATABASE_URL': 'postgresql://msafbuat_msafiri_user:' + db_password_encoded + '@localhost:5432/msafbuat_msafiri_space',
           }
+          with open('/tmp/env_vars.json', 'w') as f:
+              json.dump(env_vars, f)
+          "
+          # This script only ever reads the JSON file above -- no secrets of
+          # its own, so no quoting hazard shipping it to the remote shell.
+          cat > /tmp/apply_env_vars.py <<'PYEOF'
+          import json
+          import subprocess
+
+          with open('/tmp/env_vars.json') as f:
+              env_vars = json.load(f)
 
           result = subprocess.run(
               [
-                  "cloudlinux-selector", "set", "--json",
-                  "--interpreter", "python",
-                  "--user", "msafbuat",
-                  "--app-root", "msafiri_backend",
-                  "--env-vars", json.dumps(env_vars),
+                  'cloudlinux-selector', 'set', '--json',
+                  '--interpreter', 'python',
+                  '--user', 'msafbuat',
+                  '--app-root', 'msafiri_backend',
+                  '--env-vars', json.dumps(env_vars),
               ],
               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
           )
-          print("stdout:", result.stdout.decode())
-          print("stderr:", result.stderr.decode())
+          print('stdout:', result.stdout.decode())
+          print('stderr:', result.stderr.decode())
           if result.returncode != 0 or b'"result": "success"' not in result.stdout:
-              raise SystemExit("cloudlinux-selector set --env-vars failed")
+              raise SystemExit('cloudlinux-selector set --env-vars failed')
           PYEOF
           scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o StrictHostKeyChecking=no \
-            /tmp/set_env_vars.py "$SSH_USER@$SSH_HOST:/tmp/set_env_vars.py"
-          rm -f /tmp/set_env_vars.py
+            /tmp/env_vars.json /tmp/apply_env_vars.py "$SSH_USER@$SSH_HOST:/tmp/"
+          rm -f /tmp/env_vars.json /tmp/apply_env_vars.py
           ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" \
-            "python3 /tmp/set_env_vars.py && rm -f /tmp/set_env_vars.py"
+            "python3 /tmp/apply_env_vars.py && rm -f /tmp/apply_env_vars.py /tmp/env_vars.json"
 
       # Passenger only ever sees requests for the Django app itself -- static
       # and media files need to resolve as real files in the subdomain's own
