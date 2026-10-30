@@ -154,9 +154,19 @@ jobs:
               'CORS_ALLOWED_ORIGINS': 'https://msafirispace.com,https://www.msafirispace.com',
               'DEBUG': 'False',
               'EMAIL_BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
-              'EMAIL_HOST': 'localhost',
+              'EMAIL_HOST': '127.0.0.1',
               'EMAIL_HOST_PASSWORD': os.environ['EMAIL_HOST_PASSWORD'],
               'EMAIL_HOST_USER': os.environ['EMAIL_HOST_USER'],
+              # otp.py sends with from_email=settings.DEFAULT_FROM_EMAIL,
+              # which defaults to a bogus dev@msafirispace.local when unset
+              # -- Exim correctly rejects that as spoofing (that domain
+              # isn't hosted here). Real bug, found via a live user's
+              # registration actually failing silently (the registration
+              # view swallows OTP-send exceptions so account creation isn't
+              # blocked by a mail hiccup -- but that also means a broken
+              # From address produces no visible error to anyone except
+              # this log file).
+              'DEFAULT_FROM_EMAIL': os.environ['EMAIL_HOST_USER'],
               'USE_CLOUDINARY_STORAGE': 'False',
               'DATABASE_URL': 'postgresql://msafbuat_msafiri_user:' + db_password_encoded + '@localhost:5432/msafbuat_msafiri_space',
           }
