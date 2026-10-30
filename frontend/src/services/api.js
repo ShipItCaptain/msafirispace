@@ -257,6 +257,10 @@ export const authAPI = {
   // which only happens if the header is left for it to fill in.
   onboardHostFormData: async (formData) => {
     const config = {
+      // KYC documents + possible Passenger cold-start on shared hosting can
+      // easily exceed the default 10s timeout -- match the other upload
+      // endpoints' 60s budget instead of failing on a warm/cold race.
+      timeout: 60000,
       transformRequest: [(data, headers) => {
         delete headers['Content-Type'];
         return data;
