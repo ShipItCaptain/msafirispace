@@ -95,7 +95,10 @@ class Hotel(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Hotel'
         verbose_name_plural = 'Hotels'
-    
+        indexes = [
+            models.Index(fields=['is_active', 'is_verified']),
+        ]
+
     def __str__(self):
         return f"{self.name} - {self.city}, {self.country}"
     

@@ -11,6 +11,8 @@ import {
   selectIsProfileLoading,
   selectProfileError,
   loginUser,
+  adminLoginStep1,
+  adminLoginVerify,
   registerUser,
   verifyAccountCode,
   resendAccountCode,
@@ -69,6 +71,31 @@ export const useAuth = () => {
       return result;
     } catch (error) {
       const errorMessage = extractErrorMessage(error) || 'Login failed';
+      toast.error(errorMessage);
+      throw error;
+    }
+  };
+
+  // Step 1 of admin login: email+password -> emails an OTP. No toast here,
+  // the admin login page shows its own "check your email" state.
+  const adminLogin = async (credentials) => {
+    try {
+      return await dispatch(adminLoginStep1(credentials)).unwrap();
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error) || 'Login failed';
+      toast.error(errorMessage);
+      throw error;
+    }
+  };
+
+  // Step 2: email+OTP -> real tokens, same auth state as a regular login.
+  const verifyAdminLogin = async ({ email, code }) => {
+    try {
+      const result = await dispatch(adminLoginVerify({ email, code })).unwrap();
+      toast.success('Login successful!');
+      return result;
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error) || 'Verification failed';
       toast.error(errorMessage);
       throw error;
     }
@@ -221,6 +248,14 @@ export const useAuth = () => {
   // Check if user is premium
   const isPremium = user?.is_premium;
 
+  // Super admin dashboard tier -- based on admin_tier, the same field
+  // AdminRoleGuard checks, not active_role (which the host flags above use
+  // and which doesn't apply to admin accounts).
+  const isSystemAdmin = user?.admin_tier === 'system';
+  const isManagerialAdmin = user?.admin_tier === 'managerial';
+  const isSupportAdmin = user?.admin_tier === 'support';
+  const isAnyAdmin = Boolean(user?.admin_tier);
+
   return {
     // State
     auth,
@@ -231,9 +266,11 @@ export const useAuth = () => {
     tokens,
     isProfileLoading,
     profileError,
-    
+
     // Actions
     login,
+    adminLogin,
+    verifyAdminLogin,
     register,
     verifyCode,
     resendCode,
@@ -254,5 +291,9 @@ export const useAuth = () => {
     isHotelRestaurantHost,
     isVerified,
     isPremium,
+    isSystemAdmin,
+    isManagerialAdmin,
+    isSupportAdmin,
+    isAnyAdmin,
   };
 };

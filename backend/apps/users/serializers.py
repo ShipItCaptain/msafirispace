@@ -205,7 +205,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'first_name', 'last_name', 'phone_number',
             'date_of_birth', 'gender', 'profile_picture', 'bio', 'location', 'city',
-            'country', 'user_type', 'host_type', 'roles', 'active_role', 'is_verified', 'is_premium', 'company_name',
+            'country', 'user_type', 'host_type', 'roles', 'active_role', 'admin_tier', 'is_verified', 'is_premium', 'company_name',
             'business_license', 'tax_id', 'preferred_language', 'preferred_currency', 'notification_preferences',
             'referral_code', 'referred_by', 'profile', 'addresses', 'created_at',
             'updated_at', 'last_login', 'account_verified', 'verification_method'

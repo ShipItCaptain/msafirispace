@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { authAPI } from '../../services/api';
+import { authAPI, adminAPI } from '../../services/api';
 
 // Async thunks
 export const loginUser = createAsyncThunk(
@@ -13,6 +13,36 @@ export const loginUser = createAsyncThunk(
       return response;
     } catch (error) {
       return rejectWithValue(error.response?.data || 'Login failed');
+    }
+  }
+);
+
+// Step 1 of admin login: email+password -> emails an OTP, no tokens yet,
+// so no auth state changes here -- only adminLoginVerify below does.
+export const adminLoginStep1 = createAsyncThunk(
+  'auth/adminLoginStep1',
+  async (credentials, { rejectWithValue }) => {
+    try {
+      return await adminAPI.loginStep1(credentials);
+    } catch (error) {
+      return rejectWithValue(error.response?.data || 'Login failed');
+    }
+  }
+);
+
+// Step 2: email+OTP code -> real tokens, populates the same auth state as
+// loginUser so the rest of the app (axios interceptor, RoleGuard, etc.)
+// doesn't need to know admin vs. regular login happened.
+export const adminLoginVerify = createAsyncThunk(
+  'auth/adminLoginVerify',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await adminAPI.loginStep2(payload);
+      localStorage.setItem('accessToken', response.tokens.access);
+      localStorage.setItem('refreshToken', response.tokens.refresh);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || 'Verification failed');
     }
   }
 );
@@ -237,11 +267,46 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = typeof action.payload === 'string' 
-          ? action.payload 
+        state.error = typeof action.payload === 'string'
+          ? action.payload
           : action.payload?.detail || action.payload?.message || 'Login failed';
       })
-      
+
+      // Admin login step 1 (email+password -> OTP emailed, no tokens yet)
+      .addCase(adminLoginStep1.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(adminLoginStep1.fulfilled, (state) => {
+        state.isLoading = false;
+        state.error = null;
+      })
+      .addCase(adminLoginStep1.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.error || 'Login failed';
+      })
+
+      // Admin login step 2 (email+OTP -> real tokens, same auth state shape as loginUser)
+      .addCase(adminLoginVerify.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(adminLoginVerify.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isAuthenticated = true;
+        state.user = action.payload.user;
+        state.tokens = action.payload.tokens;
+        state.error = null;
+      })
+      .addCase(adminLoginVerify.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.error || 'Verification failed';
+      })
+
       // Register
       .addCase(registerUser.pending, (state) => {
         state.isLoading = true;

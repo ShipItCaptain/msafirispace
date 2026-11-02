@@ -34,6 +34,11 @@ class User(AbstractUser):
         GUEST = 'guest', _('Guest')
         BNB_HOST = 'bnb_host', _('BnB Host')
         HOTEL_HOST = 'hotel_host', _('Hotel Accommodation Host')
+
+    class AdminTier(models.TextChoices):
+        SYSTEM = 'system', _('System')
+        MANAGERIAL = 'managerial', _('Managerial')
+        SUPPORT = 'support', _('Support')
     
     class Gender(models.TextChoices):
         MALE = 'male', _('Male')
@@ -79,6 +84,26 @@ class User(AbstractUser):
         blank=True,
         null=True,
         help_text="Specific type of host (only for hosts)"
+    )
+    # Super-admin dashboard tier. Deliberately a separate field from `roles` --
+    # `roles` is self-service (POST /auth/roles/add/ lets a user add to their
+    # own array), so it must never carry a privileged value. admin_tier is
+    # only ever set by the bootstrap_admin management command (first System
+    # admin) or the System-tier-only admin-management endpoint.
+    admin_tier = models.CharField(
+        max_length=20,
+        choices=AdminTier.choices,
+        blank=True,
+        null=True,
+        help_text="Admin dashboard tier. Null for regular users. Never settable via self-service endpoints."
+    )
+    admin_tier_granted_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        help_text="Which System-tier admin granted this user's admin_tier."
     )
     is_verified = models.BooleanField(default=False)
     is_premium = models.BooleanField(default=False)
@@ -219,6 +244,10 @@ class User(AbstractUser):
     @property
     def is_hotel_host(self):
         return self.Role.HOTEL_HOST in (self.roles or [])
+
+    @property
+    def is_any_admin_tier(self):
+        return bool(self.admin_tier)
 
     # Role management helpers
     def has_role(self, role: str) -> bool:

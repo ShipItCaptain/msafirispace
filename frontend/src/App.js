@@ -33,6 +33,8 @@ import CookiePolicyPage from './pages/CookiePolicyPage';
 // Protected Route Component
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import RoleGuard from './components/auth/RoleGuard';
+import AdminRoleGuard from './components/auth/AdminRoleGuard';
+import AdminLayout from './components/layout/AdminLayout';
 
 // Context and Hooks
 import { useAuth } from './hooks/useAuth';
@@ -52,6 +54,18 @@ const BnBHostManagementPage = React.lazy(() => import('./pages/BnBHostManagement
 const BnBListingDetailPage = React.lazy(() => import('./pages/BnBListingDetailPage'));
 const HostHomePage = React.lazy(() => import('./pages/HostHomePage'));
 const RoomTypeEditPage = React.lazy(() => import('./pages/RoomTypeEditPage'));
+
+// Super admin dashboard pages (lazy-loaded — only admins ever need this code)
+const AdminLoginPage = React.lazy(() => import('./pages/admin/AdminLoginPage'));
+const AdminHomePage = React.lazy(() => import('./pages/admin/AdminHomePage'));
+const AdminUsersPage = React.lazy(() => import('./pages/admin/AdminUsersPage'));
+const AdminBookingsPage = React.lazy(() => import('./pages/admin/AdminBookingsPage'));
+const AdminListingsPage = React.lazy(() => import('./pages/admin/AdminListingsPage'));
+const AdminPromotionsPage = React.lazy(() => import('./pages/admin/AdminPromotionsPage'));
+const AdminReviewsPage = React.lazy(() => import('./pages/admin/AdminReviewsPage'));
+const AdminPaymentsPage = React.lazy(() => import('./pages/admin/AdminPaymentsPage'));
+const AdminManageAdminsPage = React.lazy(() => import('./pages/admin/AdminManageAdminsPage'));
+const AdminAuditLogPage = React.lazy(() => import('./pages/admin/AdminAuditLogPage'));
 
 // App Content Component
 function AppContent() {
@@ -554,6 +568,72 @@ function AppContent() {
               </motion.div>
               <Footer />
             </Layout>
+          } />
+
+          {/* Super admin dashboard -- own layout (no public Header/Footer), own login/MFA flow */}
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin" element={
+            <AdminRoleGuard allowedTiers={['system', 'managerial', 'support']}>
+              <AdminLayout>
+                <AdminHomePage />
+              </AdminLayout>
+            </AdminRoleGuard>
+          } />
+          <Route path="/admin/users" element={
+            <AdminRoleGuard allowedTiers={['system', 'managerial', 'support']}>
+              <AdminLayout>
+                <AdminUsersPage />
+              </AdminLayout>
+            </AdminRoleGuard>
+          } />
+          <Route path="/admin/bookings" element={
+            <AdminRoleGuard allowedTiers={['system', 'managerial', 'support']}>
+              <AdminLayout>
+                <AdminBookingsPage />
+              </AdminLayout>
+            </AdminRoleGuard>
+          } />
+          <Route path="/admin/listings" element={
+            <AdminRoleGuard allowedTiers={['system', 'managerial']}>
+              <AdminLayout>
+                <AdminListingsPage />
+              </AdminLayout>
+            </AdminRoleGuard>
+          } />
+          <Route path="/admin/promotions" element={
+            <AdminRoleGuard allowedTiers={['system', 'managerial']}>
+              <AdminLayout>
+                <AdminPromotionsPage />
+              </AdminLayout>
+            </AdminRoleGuard>
+          } />
+          <Route path="/admin/reviews" element={
+            <AdminRoleGuard allowedTiers={['system', 'managerial']}>
+              <AdminLayout>
+                <AdminReviewsPage />
+              </AdminLayout>
+            </AdminRoleGuard>
+          } />
+          <Route path="/admin/payments" element={
+            <AdminRoleGuard allowedTiers={['system', 'managerial']}>
+              <AdminLayout>
+                <AdminPaymentsPage />
+              </AdminLayout>
+            </AdminRoleGuard>
+          } />
+          <Route path="/admin/manage-admins" element={
+            <AdminRoleGuard allowedTiers={['system']}>
+              <AdminLayout>
+                <AdminManageAdminsPage />
+              </AdminLayout>
+            </AdminRoleGuard>
+          } />
+          <Route path="/admin/audit-log" element={
+            <AdminRoleGuard allowedTiers={['system']}>
+              <AdminLayout>
+                <AdminAuditLogPage />
+              </AdminLayout>
+            </AdminRoleGuard>
           } />
 
           {/* 404 Route */}

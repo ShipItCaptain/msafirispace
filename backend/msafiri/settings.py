@@ -59,6 +59,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     'apps.users',
+    'apps.adminpanel',
     'apps.listings',
     'apps.bookings',
     'apps.payments',
@@ -178,7 +179,8 @@ REST_FRAMEWORK = {
         'anon': '100/hour',
         'user': '1000/hour',
         'otp_resend': '5/hour',
-        'login': '10/hour'
+        'login': '10/hour',
+        'admin_login': '10/hour'
     }
 }
 
@@ -323,6 +325,13 @@ WHATSAPP_SERVICE_TOKEN = config('WHATSAPP_SERVICE_TOKEN', default='')
 # the upgrade path.
 BOOKING_HOLD_MINUTES = config('BOOKING_HOLD_MINUTES', default=30, cast=int)
 BOOKING_HOST_RESPONSE_SLA_HOURS = config('BOOKING_HOST_RESPONSE_SLA_HOURS', default=2, cast=int)
+
+# Separate hold for the payment window, once the host has already approved
+# (BOOKING_HOLD_MINUTES/BOOKING_HOST_RESPONSE_SLA_HOURS cover the earlier
+# wait for host approval and no longer apply once that happens). Same lazy
+# expiry mechanism, reusing Booking.hold_expires_at -- see
+# CreatePaymentIntentView and _exclude_expired_holds.
+PAYMENT_HOLD_MINUTES = config('PAYMENT_HOLD_MINUTES', default=20, cast=int)
 
 # Celery Configuration (disabled for development)
 # CELERY_BROKER_URL = REDIS_URL

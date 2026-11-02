@@ -41,7 +41,10 @@ urlpatterns = [
     path('api/v1/', include([
         # Authentication
         path('auth/', include('apps.users.urls')),
-        
+
+        # Super admin dashboard
+        path('admin/', include('apps.adminpanel.urls')),
+
         # Core Features
         path('listings/', include('apps.listings.urls')),
         path('bookings/', include('apps.bookings.urls')),

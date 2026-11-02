@@ -854,4 +854,47 @@ export const notificationsAPI = {
   },
 };
 
+// Super admin dashboard API
+export const adminAPI = {
+  // Longer timeout than the instance default (10s) -- this call waits on a
+  // real SMTP send for the OTP email, which has been observed taking
+  // ~10-15s, right at the edge of the default and causing a false "Login
+  // failed" even though the backend succeeded.
+  loginStep1: async (credentials) => (await api.post('/admin/auth/login/', credentials, { timeout: 25000 })).data,
+  loginStep2: async (payload) => (await api.post('/admin/auth/login/verify/', payload)).data,
+  getMe: async () => (await api.get('/admin/me/')).data,
+
+  getUsers: async (params = {}) => (await api.get('/admin/users/', { params })).data,
+  getUser: async (id) => (await api.get(`/admin/users/${id}/`)).data,
+  suspendUser: async (id) => (await api.post(`/admin/users/${id}/suspend/`)).data,
+  activateUser: async (id) => (await api.post(`/admin/users/${id}/activate/`)).data,
+
+  getBookings: async (params = {}) => (await api.get('/admin/bookings/', { params })).data,
+  getBooking: async (id) => (await api.get(`/admin/bookings/${id}/`)).data,
+  messageGuest: async (id, message) => (await api.post(`/admin/bookings/${id}/message-guest/`, { message })).data,
+
+  getNeedsAttention: async () => (await api.get('/admin/dashboard/needs-attention/')).data,
+
+  getHotels: async (params = {}) => (await api.get('/admin/listings/hotels/', { params })).data,
+  moderateHotel: async (id, field, value) => (await api.post(`/admin/listings/hotels/${id}/moderate/`, { field, value })).data,
+  getBnBs: async (params = {}) => (await api.get('/admin/listings/bnbs/', { params })).data,
+  moderateBnB: async (id, field, value) => (await api.post(`/admin/listings/bnbs/${id}/moderate/`, { field, value })).data,
+
+  getPromotions: async (params = {}) => (await api.get('/admin/promotions/', { params })).data,
+  setPromotionStatus: async (id, status) => (await api.post(`/admin/promotions/${id}/status/`, { status })).data,
+
+  getReviews: async (params = {}) => (await api.get('/admin/reviews/', { params })).data,
+  setReviewVisibility: async (id, isPublic) => (await api.post(`/admin/reviews/${id}/visibility/`, { is_public: isPublic })).data,
+
+  getPayments: async (params = {}) => (await api.get('/admin/payments/', { params })).data,
+  getPaymentIntents: async (params = {}) => (await api.get('/admin/payments/intents/', { params })).data,
+  getPaymentWebhookEvents: async (params = {}) => (await api.get('/admin/payments/webhook-events/', { params })).data,
+
+  getAdmins: async (params = {}) => (await api.get('/admin/admins/', { params })).data,
+  grantAdmin: async (email, tier) => (await api.post('/admin/admins/grant/', { email, tier })).data,
+  revokeAdmin: async (id) => (await api.post(`/admin/admins/${id}/revoke/`)).data,
+
+  getAuditLog: async (params = {}) => (await api.get('/admin/audit-log/', { params })).data,
+};
+
 export default api;

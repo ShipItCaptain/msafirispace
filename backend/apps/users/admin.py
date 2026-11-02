@@ -40,11 +40,11 @@ class UserAdmin(BaseUserAdmin):
     Custom User admin interface
     """
     list_display = [
-        'email', 'username', 'get_full_name', 'user_type', 'is_verified',
+        'email', 'username', 'get_full_name', 'user_type', 'admin_tier', 'is_verified',
         'is_premium', 'is_active', 'date_joined', 'last_login'
     ]
     list_filter = [
-        'user_type', 'is_verified', 'is_premium', 'is_active', 'is_staff',
+        'user_type', 'admin_tier', 'is_verified', 'is_premium', 'is_active', 'is_staff',
         'is_superuser', 'date_joined', 'last_login'
     ]
     search_fields = ['email', 'username', 'first_name', 'last_name', 'company_name']
@@ -62,6 +62,10 @@ class UserAdmin(BaseUserAdmin):
         }),
         ('Account Type', {
             'fields': ('user_type', 'is_verified', 'is_premium')
+        }),
+        ('Admin Dashboard Tier', {
+            'fields': ('admin_tier', 'admin_tier_granted_by'),
+            'description': 'Grants access to the super admin dashboard at /admin/*. Set with extreme care.',
         }),
         ('Business Information', {
             'fields': ('company_name', 'business_license', 'tax_id'),

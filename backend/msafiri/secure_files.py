@@ -27,10 +27,9 @@ DOCUMENT_FIELDS = {
 
 class SecureDocumentView(APIView):
     """
-    Streams a decrypted, owner-or-staff-only copy of a KYC document encrypted
-    at rest via encrypt_field_file. Not linked from any serializer yet since
-    nothing currently reads these documents back -- add that wiring when a
-    host-verification review UI needs it.
+    Streams a decrypted, owner-or-admin-only copy of a KYC document
+    encrypted at rest via encrypt_field_file. Used by the super admin
+    dashboard's host-verification review screens (System/Managerial tier).
     """
 
     permission_classes = [IsAuthenticated]
@@ -47,7 +46,10 @@ class SecureDocumentView(APIView):
         obj = get_object_or_404(model, pk=pk)
 
         owner = getattr(obj, owner_field, None)
-        if owner != request.user and not request.user.is_staff:
+        # is_staff is kept for Django admin/superuser access; admin_tier is
+        # this project's actual app-level admin check everywhere else.
+        is_admin_dashboard_user = bool(getattr(request.user, 'admin_tier', None))
+        if owner != request.user and not request.user.is_staff and not is_admin_dashboard_user:
             raise Http404
 
         field_file = getattr(obj, field_name)
