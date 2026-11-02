@@ -5,12 +5,14 @@ import json
 import hashlib
 import hmac
 import logging
+from datetime import timedelta
 from decimal import Decimal
 from django.conf import settings
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from django.db.models import Sum
+from django.db.models import Q, Sum
 
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
@@ -51,7 +53,14 @@ class CreatePaymentIntentView(APIView):
         if booking.payment_method != Booking.PaymentMethod.ONLINE:
             booking.payment_method = Booking.PaymentMethod.ONLINE
         booking.payment_status = Booking.PaymentStatus.PENDING
-        booking.save(update_fields=['payment_method', 'payment_status', 'updated_at'])
+        # The host-approval hold (if any) is already cleared by the time a
+        # booking reaches APPROVED -- this is a fresh hold for the payment
+        # window itself, reusing the same field/lazy-expiry mechanism
+        # (_exclude_expired_holds) so a guest who never pays stops blocking
+        # the dates without needing a background job. Reset on every call so
+        # a genuine retry gets a full fresh window.
+        booking.hold_expires_at = timezone.now() + timedelta(minutes=settings.PAYMENT_HOLD_MINUTES)
+        booking.save(update_fields=['payment_method', 'payment_status', 'hold_expires_at', 'updated_at'])
 
         if gateway == PaymentIntent.Gateway.PAYSTACK and not is_debug:
             if not (getattr(settings, 'PAYSTACK_PUBLIC_KEY', '') and getattr(settings, 'PAYSTACK_SECRET_KEY', '')):
@@ -340,6 +349,43 @@ def _is_valid_paystack_signature(request, payload_bytes: bytes) -> bool:
     return hmac.compare_digest(computed, signature)
 
 
+def _booking_has_conflict(booking: Booking) -> bool:
+    """
+    True if some *other* booking now occupies this one's dates on the same
+    listing -- used only when this booking's own hold has already lapsed
+    by the time payment lands, to avoid silently auto-confirming into a
+    double-booking. Deliberately conservative: it flags on any overlapping
+    booking that still holds a real claim (confirmed, paid/partially paid,
+    or within its own unexpired hold), without accounting for a listing's
+    quantity/room-type capacity the way booking creation does -- so it can
+    over-flag on a listing with multiple units. That's the right tradeoff
+    for a safety net that routes to a human rather than deciding by itself:
+    a false positive costs someone a review; a false negative is an actual
+    double-booking.
+    """
+    now = timezone.now()
+    qs = Booking.objects.filter(
+        check_in__lt=booking.check_out, check_out__gt=booking.check_in,
+    ).exclude(pk=booking.pk).exclude(status=Booking.BookingStatus.CANCELLED)
+
+    if booking.hotel_id:
+        qs = qs.filter(hotel_id=booking.hotel_id)
+    elif booking.bnb_listing_id:
+        qs = qs.filter(bnb_listing_id=booking.bnb_listing_id)
+    else:
+        return False
+
+    qs = qs.filter(
+        Q(status=Booking.BookingStatus.CONFIRMED)
+        | Q(payment_status__in=[Booking.PaymentStatus.PAID, Booking.PaymentStatus.PARTIALLY_PAID])
+        | Q(
+            host_approval_status__in=[Booking.HostApprovalStatus.PENDING, Booking.HostApprovalStatus.APPROVED],
+            hold_expires_at__gte=now,
+        )
+    )
+    return qs.exists()
+
+
 def _update_booking_payment_state(booking: Booking):
     total_paid = (
         booking.payments.filter(status=Payment.Status.SUCCESS)
@@ -351,7 +397,21 @@ def _update_booking_payment_state(booking: Booking):
     if total_paid >= booking.total_amount:
         booking.payment_status = Booking.PaymentStatus.PAID
         if booking.status == Booking.BookingStatus.PENDING:
-            booking.status = Booking.BookingStatus.CONFIRMED
+            hold_lapsed = booking.hold_expires_at and booking.hold_expires_at < timezone.now()
+            if hold_lapsed and _booking_has_conflict(booking):
+                # Payment succeeded, but only after this booking's own hold
+                # had already lapsed, and someone else now has a real claim
+                # on the same dates -- don't auto-confirm into that
+                # conflict. Leave status as PENDING (payment_status is
+                # still recorded as PAID below) so it's visibly anomalous
+                # in the admin bookings list and routes to a human instead
+                # of silently double-booking the listing.
+                logger.warning(
+                    'Booking #%s paid after its hold lapsed, with a conflicting booking on the same '
+                    'dates -- left as PENDING for manual review instead of auto-confirming.', booking.pk,
+                )
+            else:
+                booking.status = Booking.BookingStatus.CONFIRMED
     elif total_paid > 0:
         booking.payment_status = Booking.PaymentStatus.PARTIALLY_PAID
     else:

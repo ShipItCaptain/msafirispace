@@ -16,16 +16,28 @@ from apps.listings.models import Hotel, RoomType, BnBListing, BnBAvailability, R
 
 def _exclude_expired_holds(queryset, path=''):
     """
-    A pending booking whose hold has lapsed no longer reserves its dates --
-    checked here, lazily, rather than by a background job flipping its
-    status (see BOOKING_HOLD_MINUTES in settings.py). `path` lets this
-    filter a queryset of a related model (e.g. BookingItem) by its
-    `booking__` relation instead of the fields directly.
+    A booking whose hold has lapsed no longer reserves its dates -- checked
+    here, lazily, rather than by a background job flipping its status (see
+    BOOKING_HOLD_MINUTES / PAYMENT_HOLD_MINUTES in settings.py). Two holds
+    share this one field at different stages of the same booking: the
+    pre-approval hold (host_approval_status=PENDING, set at booking
+    creation) and the payment-window hold (host_approval_status=APPROVED,
+    set in CreatePaymentIntentView once the host has approved). A booking
+    with a real partial payment already in progress is left alone even past
+    its hold window -- that's active commitment, not an abandoned request.
+    `path` lets this filter a queryset of a related model (e.g. BookingItem)
+    by its `booking__` relation instead of the fields directly.
     """
-    return queryset.exclude(
+    lapsed_pre_approval = (
         Q(**{f'{path}host_approval_status': Booking.HostApprovalStatus.PENDING})
         & Q(**{f'{path}hold_expires_at__lt': timezone.now()})
     )
+    lapsed_payment_window = (
+        Q(**{f'{path}host_approval_status': Booking.HostApprovalStatus.APPROVED})
+        & Q(**{f'{path}hold_expires_at__lt': timezone.now()})
+        & Q(**{f'{path}payment_status__in': [Booking.PaymentStatus.PENDING, Booking.PaymentStatus.UNPAID]})
+    )
+    return queryset.exclude(lapsed_pre_approval | lapsed_payment_window)
 
 
 class BookingItemSerializer(serializers.ModelSerializer):
