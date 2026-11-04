@@ -10,6 +10,7 @@ import {
 import { adminAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import PageHeader from '../../components/common/PageHeader';
+import InitialsAvatar from '../../components/common/InitialsAvatar';
 
 const timeAgo = (iso) => {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -25,20 +26,32 @@ const timeAgo = (iso) => {
 
 const TYPE_ICON = { booking: CalendarDaysIcon, hotel: BuildingOfficeIcon, bnb: HomeModernIcon };
 
+// Three tiers instead of a flat "urgent/not" -- something waiting a year
+// (a stale unverified listing) and something expiring in 4 hours (a hold)
+// both need to visually outrank ordinary rows, but at different intensity.
+const URGENCY_CLASSES = {
+  critical: { border: 'border-red-400', bg: 'bg-red-50/40', text: 'text-red-700' },
+  warning: { border: 'border-amber-400', bg: 'bg-amber-50/30', text: 'text-amber-700' },
+  normal: { border: 'border-transparent', bg: '', text: 'text-gray-400' },
+};
+
 const QueueRow = ({ item, onQuickVerify, verifying }) => {
   const Icon = TYPE_ICON[item.type] || CalendarDaysIcon;
   const isVerifying = verifying === `${item.type}-${item.id}`;
+  const tone = URGENCY_CLASSES[item.urgency] || URGENCY_CLASSES.normal;
 
   return (
     <div
-      className={`group flex items-center gap-4 pl-4 pr-2 py-3.5 border-l-2 transition-colors hover:bg-gray-50/60 ${
-        item.urgent ? 'border-amber-400 bg-amber-50/30' : 'border-transparent'
-      }`}
+      className={`group flex items-center gap-4 pl-4 pr-2 py-3.5 border-l-2 transition-colors hover:bg-gray-50/60 ${tone.border} ${tone.bg}`}
     >
-      <Icon className="w-4 h-4 text-gray-400 shrink-0" />
+      {item.type === 'booking' ? (
+        <InitialsAvatar name={item.guest_name} />
+      ) : (
+        <Icon className="w-4 h-4 text-gray-400 shrink-0" />
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-sm text-gray-900 truncate">{item.title}</p>
-        <p className={`text-xs truncate ${item.urgent ? 'text-amber-700' : 'text-gray-400'}`}>{item.subtitle}</p>
+        <p className={`text-xs truncate ${tone.text}`}>{item.subtitle}</p>
       </div>
       <span className="text-xs text-gray-400 shrink-0 tabular-nums">{timeAgo(item.waiting_since)}</span>
       <div className="w-16 shrink-0 text-right">
@@ -64,16 +77,45 @@ const QueueRow = ({ item, onQuickVerify, verifying }) => {
   );
 };
 
+// Plain numbers with hairline dividers, not cards -- gives an at-a-glance
+// read before the list without reintroducing the stat-card grid this admin
+// explicitly moved away from.
+const SummaryStrip = ({ counts }) => (
+  <div className="flex items-center gap-6 pb-5 mb-1 border-b border-gray-100">
+    <div>
+      <span className="text-2xl font-semibold text-gray-900 tabular-nums">{counts.bookings}</span>
+      <span className="ml-1.5 text-sm text-gray-500">pending bookings</span>
+    </div>
+    <div className="w-px h-8 bg-gray-200" />
+    <div>
+      <span className="text-2xl font-semibold text-gray-900 tabular-nums">{counts.listings}</span>
+      <span className="ml-1.5 text-sm text-gray-500">unverified listings</span>
+    </div>
+    <div className="w-px h-8 bg-gray-200" />
+    <div>
+      <span className={`text-2xl font-semibold tabular-nums ${counts.critical > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+        {counts.critical}
+      </span>
+      <span className="ml-1.5 text-sm text-gray-500">critical</span>
+    </div>
+  </div>
+);
+
 const AdminHomePage = () => {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [counts, setCounts] = useState({ bookings: 0, listings: 0, critical: 0 });
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(null);
 
   const load = useCallback(() => {
     adminAPI.getNeedsAttention()
-      .then((data) => { setItems(data.items || []); setTotalCount(data.total_count || 0); })
+      .then((data) => {
+        setItems(data.items || []);
+        setTotalCount(data.total_count || 0);
+        setCounts(data.counts || { bookings: 0, listings: 0, critical: 0 });
+      })
       .catch(() => toast.error('Failed to load queue.'))
       .finally(() => setLoading(false));
   }, []);
@@ -97,6 +139,8 @@ const AdminHomePage = () => {
   return (
     <div>
       <PageHeader title="Overview" description={`Signed in as ${user?.email} · ${user?.admin_tier} tier`} />
+
+      {!loading && <SummaryStrip counts={counts} />}
 
       {loading ? (
         <div className="border-t border-gray-100 max-w-3xl">

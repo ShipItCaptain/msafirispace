@@ -136,7 +136,7 @@ const AdminDataTable = ({
                 <tr
                   key={getRowKey(row)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={`border-b border-gray-50 last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-gray-50/80' : 'hover:bg-gray-50/50'} transition-colors`}
+                  className={`group border-b border-gray-50 last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-gray-50/80' : 'hover:bg-gray-50/50'} transition-colors`}
                 >
                   {columns.map((col) => (
                     <td

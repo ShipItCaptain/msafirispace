@@ -4,6 +4,7 @@ import { adminAPI } from '../../services/api';
 import AdminDataTable from '../../components/common/AdminDataTable';
 import StatusBadge from '../../components/common/StatusBadge';
 import PageHeader from '../../components/common/PageHeader';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All' },
@@ -84,14 +85,15 @@ const AdminPromotionsPage = () => {
       label: '',
       render: (row) => (
         NEXT_STATUS[row.status] ? (
-          <button
-            type="button"
-            disabled={actingOnId === row.id}
-            onClick={(e) => { e.stopPropagation(); toggleStatus(row); }}
-            className="text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-1 -mx-2 rounded-md transition-colors disabled:opacity-50 capitalize"
-          >
-            {NEXT_STATUS[row.status] === 'active' ? 'Activate' : 'Pause'}
-          </button>
+          <RowActionsMenu
+            actions={[
+              {
+                label: NEXT_STATUS[row.status] === 'active' ? 'Activate' : 'Pause',
+                onClick: () => toggleStatus(row),
+                disabled: actingOnId === row.id,
+              },
+            ]}
+          />
         ) : null
       ),
     },

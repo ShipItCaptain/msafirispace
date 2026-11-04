@@ -4,6 +4,7 @@ import { adminAPI } from '../../services/api';
 import AdminDataTable from '../../components/common/AdminDataTable';
 import StatusBadge from '../../components/common/StatusBadge';
 import PageHeader from '../../components/common/PageHeader';
+import InitialsAvatar from '../../components/common/InitialsAvatar';
 
 const TABS = [
   { id: 'payments', label: 'Payments' },
@@ -20,7 +21,16 @@ const PAGE_SIZE = 20;
 
 const PAYMENT_COLUMNS = [
   { key: 'reference', label: 'Reference', render: (row) => <span className="font-mono text-xs">{row.reference}</span> },
-  { key: 'traveler', label: 'Traveler', render: (row) => row.traveler_email },
+  {
+    key: 'traveler',
+    label: 'Traveler',
+    render: (row) => (
+      <div className="flex items-center gap-2.5">
+        <InitialsAvatar name={row.traveler_email} />
+        <span>{row.traveler_email}</span>
+      </div>
+    ),
+  },
   { key: 'amount', label: 'Amount', render: (row) => `${row.currency} ${row.amount}` },
   { key: 'gateway', label: 'Gateway', render: (row) => <span className="capitalize">{row.gateway}</span> },
   { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
@@ -29,7 +39,16 @@ const PAYMENT_COLUMNS = [
 
 const INTENT_COLUMNS = [
   { key: 'reference', label: 'Reference', render: (row) => <span className="font-mono text-xs">{row.reference}</span> },
-  { key: 'traveler', label: 'Traveler', render: (row) => row.traveler_email },
+  {
+    key: 'traveler',
+    label: 'Traveler',
+    render: (row) => (
+      <div className="flex items-center gap-2.5">
+        <InitialsAvatar name={row.traveler_email} />
+        <span>{row.traveler_email}</span>
+      </div>
+    ),
+  },
   { key: 'amount', label: 'Amount', render: (row) => `${row.currency} ${row.amount}` },
   { key: 'gateway', label: 'Gateway', render: (row) => <span className="capitalize">{row.gateway}</span> },
   { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },

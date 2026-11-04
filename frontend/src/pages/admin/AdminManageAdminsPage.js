@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import AdminDataTable from '../../components/common/AdminDataTable';
 import StatusBadge from '../../components/common/StatusBadge';
 import PageHeader from '../../components/common/PageHeader';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
 
 const TIERS = [
   { value: 'system', label: 'System' },
@@ -88,14 +89,16 @@ const AdminManageAdminsPage = () => {
       label: '',
       render: (row) => (
         row.id === user?.id ? null : (
-          <button
-            type="button"
-            disabled={actingOnId === row.id}
-            onClick={(e) => { e.stopPropagation(); revoke(row); }}
-            className="text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 -mx-2 rounded-md transition-colors disabled:opacity-50"
-          >
-            Revoke
-          </button>
+          <RowActionsMenu
+            actions={[
+              {
+                label: 'Revoke',
+                onClick: () => revoke(row),
+                disabled: actingOnId === row.id,
+                tone: 'danger',
+              },
+            ]}
+          />
         )
       ),
     },

@@ -5,6 +5,8 @@ import { useAuth } from '../../hooks/useAuth';
 import AdminDataTable from '../../components/common/AdminDataTable';
 import StatusBadge from '../../components/common/StatusBadge';
 import PageHeader from '../../components/common/PageHeader';
+import InitialsAvatar from '../../components/common/InitialsAvatar';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All' },
@@ -75,12 +77,18 @@ const AdminUsersPage = () => {
     {
       key: 'name',
       label: 'Name',
-      render: (row) => (
-        <div>
-          <p className="font-medium text-gray-900">{row.first_name} {row.last_name}</p>
-          <p className="text-xs text-gray-500">{row.email}</p>
-        </div>
-      ),
+      render: (row) => {
+        const fullName = `${row.first_name} ${row.last_name}`.trim();
+        return (
+          <div className="flex items-center gap-2.5">
+            <InitialsAvatar name={fullName || row.email} />
+            <div>
+              <p className="font-medium text-gray-900">{fullName || '—'}</p>
+              <p className="text-xs text-gray-500">{row.email}</p>
+            </div>
+          </div>
+        );
+      },
     },
     { key: 'user_type', label: 'Type', render: (row) => <span className="capitalize">{row.user_type}</span> },
     { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.is_active ? 'active' : 'cancelled'} label={row.is_active ? 'Active' : 'Suspended'} /> },
@@ -93,16 +101,16 @@ const AdminUsersPage = () => {
       label: '',
       render: (row) => (
         row.id === currentUserId ? null : (
-          <button
-            type="button"
-            disabled={actingOnId === row.id}
-            onClick={(e) => { e.stopPropagation(); toggleActive(row); }}
-            className={`text-xs font-medium px-2 py-1 -mx-2 rounded-md transition-colors disabled:opacity-50 disabled:hover:bg-transparent ${
-              row.is_active ? 'text-red-600 hover:text-red-700 hover:bg-red-50' : 'text-green-700 hover:text-green-800 hover:bg-green-50'
-            }`}
-          >
-            {row.is_active ? 'Suspend' : 'Reactivate'}
-          </button>
+          <RowActionsMenu
+            actions={[
+              {
+                label: row.is_active ? 'Suspend' : 'Reactivate',
+                onClick: () => toggleActive(row),
+                disabled: actingOnId === row.id,
+                tone: row.is_active ? 'danger' : 'default',
+              },
+            ]}
+          />
         )
       ),
     });

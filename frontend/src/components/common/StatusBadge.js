@@ -30,6 +30,9 @@ const STATUS_TONES = {
   system: 'indigo',
   managerial: 'blue',
   support: 'slate',
+  // Composite booking lifecycle (see AdminBookingsPage) -- paid but stuck
+  // in manual review needs to visually stand apart from ordinary pending.
+  needs_review: 'purple',
 };
 
 const TONE_CLASSES = {
@@ -39,6 +42,7 @@ const TONE_CLASSES = {
   slate: 'bg-slate-100 text-slate-600 ring-slate-500/15',
   indigo: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
   blue: 'bg-blue-50 text-blue-700 ring-blue-600/20',
+  purple: 'bg-purple-50 text-purple-700 ring-purple-600/20',
 };
 
 const DOT_CLASSES = {
@@ -48,6 +52,7 @@ const DOT_CLASSES = {
   slate: 'bg-slate-400',
   indigo: 'bg-indigo-500',
   blue: 'bg-blue-500',
+  purple: 'bg-purple-500',
 };
 
 const StatusBadge = ({ status, label }) => {

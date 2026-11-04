@@ -4,6 +4,7 @@ import { adminAPI } from '../../services/api';
 import AdminDataTable from '../../components/common/AdminDataTable';
 import StatusBadge from '../../components/common/StatusBadge';
 import PageHeader from '../../components/common/PageHeader';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All' },
@@ -79,16 +80,16 @@ const AdminReviewsPage = () => {
       key: 'actions',
       label: '',
       render: (row) => (
-        <button
-          type="button"
-          disabled={actingOnId === row.id}
-          onClick={(e) => { e.stopPropagation(); toggleVisibility(row); }}
-          className={`text-xs font-medium px-2 py-1 -mx-2 rounded-md transition-colors disabled:opacity-50 ${
-            row.is_public ? 'text-red-600 hover:text-red-700 hover:bg-red-50' : 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50'
-          }`}
-        >
-          {row.is_public ? 'Hide' : 'Unhide'}
-        </button>
+        <RowActionsMenu
+          actions={[
+            {
+              label: row.is_public ? 'Hide' : 'Unhide',
+              onClick: () => toggleVisibility(row),
+              disabled: actingOnId === row.id,
+              tone: row.is_public ? 'danger' : 'default',
+            },
+          ]}
+        />
       ),
     },
   ];

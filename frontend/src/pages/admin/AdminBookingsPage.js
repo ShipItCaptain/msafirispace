@@ -5,6 +5,8 @@ import AdminDataTable from '../../components/common/AdminDataTable';
 import StatusBadge from '../../components/common/StatusBadge';
 import Modal from '../../components/common/Modal';
 import PageHeader from '../../components/common/PageHeader';
+import InitialsAvatar from '../../components/common/InitialsAvatar';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All' },
@@ -22,6 +24,43 @@ const SORT_OPTIONS = [
 ];
 
 const PAGE_SIZE = 20;
+
+// One human-readable state instead of two raw enum pills (status +
+// payment_status) -- most combinations were just saying "pending" twice.
+// Also the only place a paid-but-stuck-in-manual-review booking (status
+// still pending because its hold lapsed before payment landed, see
+// apps.payments.views._update_booking_payment_state) reads as anything
+// other than an ordinary pending row.
+const getBookingLifecycle = (row) => {
+  if (row.status === 'cancelled') return { statusKey: 'cancelled', label: 'Cancelled' };
+  if (row.status === 'completed') return { statusKey: 'completed', label: 'Completed' };
+  if (row.payment_status === 'refunded') return { statusKey: 'refunded', label: 'Refunded' };
+  if (row.status === 'pending' && row.payment_status === 'paid') {
+    return { statusKey: 'needs_review', label: 'Needs review' };
+  }
+  if (row.status === 'confirmed') return { statusKey: 'confirmed', label: 'Confirmed' };
+  if (row.host_approval_status === 'pending') return { statusKey: 'pending', label: 'Awaiting host' };
+  if (row.payment_status === 'partially_paid') return { statusKey: 'pending', label: 'Partially paid' };
+  return { statusKey: 'pending', label: 'Awaiting payment' };
+};
+
+// "2026-10-20 → 2026-10-21" is wide enough to wrap in a narrow column --
+// drop the year when it's the current one and the month when both dates
+// share it, same as how a person would say the range out loud.
+const formatDateRange = (checkIn, checkOut) => {
+  const start = new Date(checkIn);
+  const end = new Date(checkOut);
+  const sameYear = start.getFullYear() === new Date().getFullYear();
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const month = (d) => d.toLocaleDateString('en-US', { month: 'short' });
+
+  if (sameMonth) {
+    const range = `${month(start)} ${start.getDate()}–${end.getDate()}`;
+    return sameYear ? range : `${range}, ${end.getFullYear()}`;
+  }
+  const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
+  return `${fmt(start)} – ${fmt(end)}`;
+};
 
 const AdminBookingsPage = () => {
   const [rows, setRows] = useState([]);
@@ -74,9 +113,12 @@ const AdminBookingsPage = () => {
       key: 'guest',
       label: 'Guest',
       render: (row) => (
-        <div>
-          <p className="font-medium text-gray-900">{row.guest_full_name}</p>
-          <p className="text-xs text-gray-500">{row.guest_email}</p>
+        <div className="flex items-center gap-2.5">
+          <InitialsAvatar name={row.guest_full_name || row.guest_email} />
+          <div>
+            <p className="font-medium text-gray-900">{row.guest_full_name}</p>
+            <p className="text-xs text-gray-500">{row.guest_email}</p>
+          </div>
         </div>
       ),
     },
@@ -90,21 +132,25 @@ const AdminBookingsPage = () => {
         </div>
       ),
     },
-    { key: 'dates', label: 'Dates', render: (row) => `${row.check_in} → ${row.check_out}` },
+    { key: 'dates', label: 'Dates', render: (row) => formatDateRange(row.check_in, row.check_out) },
     { key: 'amount', label: 'Amount', render: (row) => `${row.currency} ${row.total_amount}` },
-    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-    { key: 'payment_status', label: 'Payment', render: (row) => <StatusBadge status={row.payment_status} /> },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row) => {
+        const lifecycle = getBookingLifecycle(row);
+        return <StatusBadge status={lifecycle.statusKey} label={lifecycle.label} />;
+      },
+    },
     {
       key: 'actions',
       label: '',
       render: (row) => (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setMessageTarget(row); }}
-          className="whitespace-nowrap text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-1 -mx-2 rounded-md transition-colors"
-        >
-          Message guest
-        </button>
+        <RowActionsMenu
+          actions={[
+            { label: 'Message guest', onClick: () => setMessageTarget(row) },
+          ]}
+        />
       ),
     },
   ];

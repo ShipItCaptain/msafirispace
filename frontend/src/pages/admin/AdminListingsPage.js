@@ -4,6 +4,7 @@ import { adminAPI } from '../../services/api';
 import AdminDataTable from '../../components/common/AdminDataTable';
 import StatusBadge from '../../components/common/StatusBadge';
 import PageHeader from '../../components/common/PageHeader';
+import RowActionsMenu from '../../components/common/RowActionsMenu';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All' },
@@ -85,32 +86,26 @@ const AdminListingsPage = () => {
       key: 'actions',
       label: '',
       render: (row) => (
-        <div className="flex gap-1">
-          <button
-            type="button"
-            disabled={actingOnId === row.id}
-            onClick={(e) => { e.stopPropagation(); toggleField(row, 'is_verified'); }}
-            className="text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors disabled:opacity-50"
-          >
-            {row.is_verified ? 'Unverify' : 'Verify'}
-          </button>
-          <button
-            type="button"
-            disabled={actingOnId === row.id}
-            onClick={(e) => { e.stopPropagation(); toggleField(row, 'is_featured'); }}
-            className="text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors disabled:opacity-50"
-          >
-            {row.is_featured ? 'Unfeature' : 'Feature'}
-          </button>
-          <button
-            type="button"
-            disabled={actingOnId === row.id}
-            onClick={(e) => { e.stopPropagation(); toggleField(row, 'is_active'); }}
-            className="text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-md transition-colors disabled:opacity-50"
-          >
-            {row.is_active ? 'Deactivate' : 'Activate'}
-          </button>
-        </div>
+        <RowActionsMenu
+          actions={[
+            {
+              label: row.is_verified ? 'Unverify' : 'Verify',
+              onClick: () => toggleField(row, 'is_verified'),
+              disabled: actingOnId === row.id,
+            },
+            {
+              label: row.is_featured ? 'Unfeature' : 'Feature',
+              onClick: () => toggleField(row, 'is_featured'),
+              disabled: actingOnId === row.id,
+            },
+            {
+              label: row.is_active ? 'Deactivate' : 'Activate',
+              onClick: () => toggleField(row, 'is_active'),
+              disabled: actingOnId === row.id,
+              tone: row.is_active ? 'danger' : 'default',
+            },
+          ]}
+        />
       ),
     },
   ];

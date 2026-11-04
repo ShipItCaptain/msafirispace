@@ -284,59 +284,89 @@ class NeedsAttentionView(APIView):
                 return booking.bnb_listing.title
             return None
 
-        urgent, normal = [], []
+        def booking_urgency(hold_expires_at):
+            # A hold about to lapse is a different, more time-pressured kind
+            # of "waiting" than a listing that's been sitting unverified --
+            # tiered by hours left, not days waited.
+            if not hold_expires_at or hold_expires_at < now:
+                return 'normal'
+            hours_left = (hold_expires_at - now).total_seconds() / 3600
+            if hours_left <= 6:
+                return 'critical'
+            if hours_left <= 24:
+                return 'warning'
+            return 'normal'
+
+        def listing_urgency(created_at):
+            days_waiting = (now - created_at).days
+            if days_waiting >= 30:
+                return 'critical'
+            if days_waiting >= 14:
+                return 'warning'
+            return 'normal'
+
+        buckets = {'critical': [], 'warning': [], 'normal': []}
 
         pending_bookings = Booking.objects.filter(
             host_approval_status=Booking.HostApprovalStatus.PENDING
         ).select_related('hotel', 'bnb_listing')
 
         for b in pending_bookings:
-            is_urgent = bool(
-                b.hold_expires_at and now <= b.hold_expires_at <= now + timezone.timedelta(hours=24)
-            )
+            urgency = booking_urgency(b.hold_expires_at)
             row = {
                 'type': 'booking',
                 'id': b.pk,
-                'urgent': is_urgent,
+                'urgency': urgency,
+                'guest_name': b.guest_full_name,
                 'title': f'{b.guest_full_name} — {property_name(b) or "a listing"}',
                 'subtitle': (
                     f'Hold expires in {max(0, round((b.hold_expires_at - now).total_seconds() / 3600))}h'
-                    if is_urgent else 'Awaiting host approval'
+                    if urgency in ('critical', 'warning') else 'Awaiting host approval'
                 ),
                 'waiting_since': b.created_at,
                 'action_label': 'View',
                 'action_to': '/admin/bookings',
             }
-            sort_key = b.hold_expires_at if is_urgent else b.created_at
-            (urgent if is_urgent else normal).append((sort_key, row))
+            sort_key = b.hold_expires_at if urgency in ('critical', 'warning') and b.hold_expires_at else b.created_at
+            buckets[urgency].append((sort_key, row))
 
         if not is_support:
-            for h in Hotel.objects.filter(is_verified=False):
-                normal.append((h.created_at, {
+            for h in Hotel.objects.filter(is_verified=False).select_related('host'):
+                urgency = listing_urgency(h.created_at)
+                buckets[urgency].append((h.created_at, {
                     'type': 'hotel',
                     'id': h.pk,
-                    'urgent': False,
+                    'urgency': urgency,
                     'title': h.name,
-                    'subtitle': f'Unverified hotel · {h.city}, {h.country}',
+                    'subtitle': f'{h.host.email} · {h.city}, {h.country}',
                     'waiting_since': h.created_at,
                     'quick_action': 'verify_hotel',
                 }))
-            for bnb in BnBListing.objects.filter(is_verified=False):
-                normal.append((bnb.created_at, {
+            for bnb in BnBListing.objects.filter(is_verified=False).select_related('host'):
+                urgency = listing_urgency(bnb.created_at)
+                buckets[urgency].append((bnb.created_at, {
                     'type': 'bnb',
                     'id': bnb.pk,
-                    'urgent': False,
+                    'urgency': urgency,
                     'title': bnb.title,
-                    'subtitle': f'Unverified BnB · {bnb.city}, {bnb.country}',
+                    'subtitle': f'{bnb.host.email} · {bnb.city}, {bnb.country}',
                     'waiting_since': bnb.created_at,
                     'quick_action': 'verify_bnb',
                 }))
 
-        urgent.sort(key=lambda pair: pair[0])
-        normal.sort(key=lambda pair: pair[0])
-        ordered = [row for _, row in urgent] + [row for _, row in normal]
+        ordered = []
+        for tier in ('critical', 'warning', 'normal'):
+            buckets[tier].sort(key=lambda pair: pair[0])
+            ordered.extend(row for _, row in buckets[tier])
 
-        return Response({'items': ordered[:QUEUE_LIMIT], 'total_count': len(ordered)})
+        all_rows = [row for _, row in buckets['critical'] + buckets['warning'] + buckets['normal']]
+        counts = {
+            'bookings': sum(1 for row in all_rows if row['type'] == 'booking'),
+            'listings': sum(1 for row in all_rows if row['type'] in ('hotel', 'bnb')),
+            'critical': sum(1 for row in all_rows if row['urgency'] == 'critical'),
+        }
+
+        return Response({'items': ordered[:QUEUE_LIMIT], 'total_count': len(ordered), 'counts': counts})
 
 
 LISTING_MODERATION_FIELDS = {'is_active', 'is_verified', 'is_featured'}
