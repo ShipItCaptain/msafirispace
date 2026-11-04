@@ -171,12 +171,22 @@ class Booking(models.Model):
 
     @property
     def is_hold_expired(self):
+        """
+        Mirrors apps.bookings.serializers._exclude_expired_holds -- the two
+        holds that share this one field (pre-approval, and the payment
+        window once approved) lapse under different conditions, so this
+        can't be a single flat comparison. A booking with a real partial
+        payment already in progress is never "expired" even past its
+        window -- that's active commitment, not an abandoned request.
+        """
         from django.utils import timezone
-        return (
-            self.host_approval_status == self.HostApprovalStatus.PENDING
-            and self.hold_expires_at is not None
-            and self.hold_expires_at < timezone.now()
-        )
+        if self.hold_expires_at is None or self.hold_expires_at >= timezone.now():
+            return False
+        if self.host_approval_status == self.HostApprovalStatus.PENDING:
+            return True
+        if self.host_approval_status == self.HostApprovalStatus.APPROVED:
+            return self.payment_status in (self.PaymentStatus.PENDING, self.PaymentStatus.UNPAID)
+        return False
 
     def __str__(self):
         booking_type = "Hotel" if self.hotel else "BnB"
