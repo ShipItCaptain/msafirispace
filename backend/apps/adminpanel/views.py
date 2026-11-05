@@ -363,14 +363,20 @@ class NeedsAttentionView(APIView):
             buckets[tier].sort(key=lambda pair: pair[0])
             ordered.extend(row for _, row in buckets[tier])
 
-        all_rows = [row for _, row in buckets['critical'] + buckets['warning'] + buckets['normal']]
         counts = {
-            'bookings': sum(1 for row in all_rows if row['type'] == 'booking'),
-            'listings': sum(1 for row in all_rows if row['type'] in ('hotel', 'bnb')),
-            'critical': sum(1 for row in all_rows if row['urgency'] == 'critical'),
+            'bookings': sum(1 for row in ordered if row['type'] == 'booking'),
+            'listings': sum(1 for row in ordered if row['type'] in ('hotel', 'bnb')),
+            'critical': sum(1 for row in ordered if row['urgency'] == 'critical'),
         }
 
-        return Response({'items': ordered[:QUEUE_LIMIT], 'total_count': len(ordered), 'counts': counts})
+        # Cap per type, not globally -- the UI groups by type (bookings vs
+        # listings), so a flat QUEUE_LIMIT truncation could let one type
+        # with many critical rows (e.g. 56 stale listings) crowd the other
+        # out of `items` entirely even though it has real items waiting.
+        bookings = [row for row in ordered if row['type'] == 'booking'][:QUEUE_LIMIT]
+        listings = [row for row in ordered if row['type'] in ('hotel', 'bnb')][:QUEUE_LIMIT]
+
+        return Response({'items': bookings + listings, 'total_count': len(ordered), 'counts': counts})
 
 
 class AdminOverviewStatsView(APIView):

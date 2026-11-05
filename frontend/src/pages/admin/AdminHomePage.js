@@ -27,49 +27,51 @@ const timeAgo = (iso) => {
 
 const TYPE_ICON = { booking: CalendarDaysIcon, hotel: BuildingOfficeIcon, bnb: HomeModernIcon };
 
-// Three tiers instead of a flat "urgent/not" -- something waiting a year
-// (a stale unverified listing) and something expiring in 4 hours (a hold)
-// both need to visually outrank ordinary rows, but at different intensity.
-const URGENCY_CLASSES = {
-  critical: { border: 'border-red-400', bg: 'bg-red-50/40', text: 'text-red-700' },
-  warning: { border: 'border-amber-400', bg: 'bg-amber-50/30', text: 'text-amber-700' },
-  normal: { border: 'border-transparent', bg: '', text: 'text-gray-400' },
+// Urgency now reads as a small accent (dot + tinted time), never a full-row
+// wash -- with a backlog of same-age items (56 listings all waiting a year),
+// painting every row the same red turns the whole list into a solid block
+// instead of helping anyone spot what's actually different.
+const URGENCY_TEXT = {
+  critical: 'text-red-600 font-medium',
+  warning: 'text-amber-600',
+  normal: 'text-gray-400',
 };
 
 const QueueRow = ({ item, onQuickVerify, verifying }) => {
   const Icon = TYPE_ICON[item.type] || CalendarDaysIcon;
   const isVerifying = verifying === `${item.type}-${item.id}`;
-  const tone = URGENCY_CLASSES[item.urgency] || URGENCY_CLASSES.normal;
 
   return (
-    <div
-      className={`group flex items-center gap-4 pl-4 pr-2 py-3.5 border-l-2 transition-colors hover:bg-gray-50/60 ${tone.border} ${tone.bg}`}
-    >
+    <div className="flex items-center gap-3 py-3">
       {item.type === 'booking' ? (
         <InitialsAvatar name={item.guest_name} />
       ) : (
-        <Icon className="w-4 h-4 text-gray-400 shrink-0" />
+        <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4 text-gray-400" />
+        </div>
       )}
       <div className="min-w-0 flex-1">
         <p className="text-sm text-gray-900 truncate">{item.title}</p>
-        <p className={`text-xs truncate ${tone.text}`}>{item.subtitle}</p>
+        <p className="text-xs text-gray-400 truncate">{item.subtitle}</p>
       </div>
-      <span className="text-xs text-gray-400 shrink-0 tabular-nums">{timeAgo(item.waiting_since)}</span>
-      <div className="w-16 shrink-0 text-right">
+      <div className="flex items-center gap-1.5 shrink-0">
+        {item.urgency === 'critical' && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+        <span className={`text-xs tabular-nums ${URGENCY_TEXT[item.urgency] || URGENCY_TEXT.normal}`}>
+          {timeAgo(item.waiting_since)}
+        </span>
+      </div>
+      <div className="w-14 shrink-0 text-right">
         {item.quick_action ? (
           <button
             type="button"
             disabled={isVerifying}
             onClick={() => onQuickVerify(item)}
-            className="text-xs font-medium text-indigo-600 hover:text-indigo-700 opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-50 transition-opacity"
+            className="text-xs font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
           >
             Verify
           </button>
         ) : (
-          <Link
-            to={item.action_to}
-            className="text-xs font-medium text-gray-500 hover:text-gray-900 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-          >
+          <Link to={item.action_to} className="text-xs font-medium text-gray-400 hover:text-gray-900">
             View
           </Link>
         )}
@@ -77,6 +79,38 @@ const QueueRow = ({ item, onQuickVerify, verifying }) => {
     </div>
   );
 };
+
+// A queue is a digest, not a backlog dump -- cap each category to its
+// most urgent handful inline and hand the rest off to the category's own
+// (already paginated, filterable) page rather than scrolling 56 near-
+// identical rows on the home screen.
+const SECTION_CAP = 5;
+
+const QueueSection = ({ title, icon: Icon, items, totalCount, viewAllTo, onQuickVerify, verifying, emptyLabel }) => (
+  <div className="flex-1 min-w-0">
+    <div className="flex items-center justify-between mb-2">
+      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+        <Icon className="w-4 h-4 text-gray-400" />
+        {title}
+        {totalCount > 0 && <span className="text-gray-400 font-normal">· {totalCount}</span>}
+      </h3>
+      {totalCount > SECTION_CAP && (
+        <Link to={viewAllTo} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">
+          View all →
+        </Link>
+      )}
+    </div>
+    {items.length === 0 ? (
+      <p className="text-sm text-gray-400 py-6 text-center border-t border-gray-100">{emptyLabel}</p>
+    ) : (
+      <div className="border-t border-gray-100 divide-y divide-gray-50">
+        {items.slice(0, SECTION_CAP).map((item) => (
+          <QueueRow key={`${item.type}-${item.id}`} item={item} onQuickVerify={onQuickVerify} verifying={verifying} />
+        ))}
+      </div>
+    )}
+  </div>
+);
 
 // Plain numbers with hairline dividers, not cards -- gives an at-a-glance
 // read before the list without reintroducing the stat-card grid this admin
@@ -105,7 +139,6 @@ const SummaryStrip = ({ counts }) => (
 const AdminHomePage = () => {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
-  const [totalCount, setTotalCount] = useState(0);
   const [counts, setCounts] = useState({ bookings: 0, listings: 0, critical: 0 });
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(null);
@@ -115,7 +148,6 @@ const AdminHomePage = () => {
     adminAPI.getNeedsAttention()
       .then((data) => {
         setItems(data.items || []);
-        setTotalCount(data.total_count || 0);
         setCounts(data.counts || { bookings: 0, listings: 0, critical: 0 });
       })
       .catch(() => toast.error('Failed to load queue.'))
@@ -167,15 +199,27 @@ const AdminHomePage = () => {
           <p className="text-sm text-gray-500">Nothing needs your attention right now.</p>
         </div>
       ) : (
-        <div className="max-w-3xl">
-          <div className="border-t border-gray-100 divide-y divide-gray-50">
-            {items.map((item) => (
-              <QueueRow key={`${item.type}-${item.id}`} item={item} onQuickVerify={quickVerify} verifying={verifying} />
-            ))}
-          </div>
-          {totalCount > items.length && (
-            <p className="mt-3 text-xs text-gray-400">Showing {items.length} of {totalCount} — oldest and most urgent first.</p>
-          )}
+        <div className="max-w-5xl flex flex-col sm:flex-row gap-10">
+          <QueueSection
+            title="Bookings"
+            icon={CalendarDaysIcon}
+            items={items.filter((item) => item.type === 'booking')}
+            totalCount={counts.bookings}
+            viewAllTo="/admin/bookings"
+            onQuickVerify={quickVerify}
+            verifying={verifying}
+            emptyLabel="No bookings need a decision."
+          />
+          <QueueSection
+            title="Listings"
+            icon={BuildingOfficeIcon}
+            items={items.filter((item) => item.type === 'hotel' || item.type === 'bnb')}
+            totalCount={counts.listings}
+            viewAllTo="/admin/listings"
+            onQuickVerify={quickVerify}
+            verifying={verifying}
+            emptyLabel="No listings need verification."
+          />
         </div>
       )}
     </div>
