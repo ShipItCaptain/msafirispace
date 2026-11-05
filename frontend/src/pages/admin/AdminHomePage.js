@@ -11,6 +11,7 @@ import { adminAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import PageHeader from '../../components/common/PageHeader';
 import InitialsAvatar from '../../components/common/InitialsAvatar';
+import OverviewStats from '../../components/common/OverviewStats';
 
 const timeAgo = (iso) => {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -108,6 +109,7 @@ const AdminHomePage = () => {
   const [counts, setCounts] = useState({ bookings: 0, listings: 0, critical: 0 });
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(null);
+  const [stats, setStats] = useState(null);
 
   const load = useCallback(() => {
     adminAPI.getNeedsAttention()
@@ -121,6 +123,12 @@ const AdminHomePage = () => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    adminAPI.getOverviewStats()
+      .then(setStats)
+      .catch(() => toast.error('Failed to load overview stats.'));
+  }, []);
 
   const quickVerify = async (item) => {
     setVerifying(`${item.type}-${item.id}`);
@@ -139,6 +147,8 @@ const AdminHomePage = () => {
   return (
     <div>
       <PageHeader title="Overview" description={`Signed in as ${user?.email} · ${user?.admin_tier} tier`} />
+
+      <OverviewStats stats={stats} />
 
       {!loading && <SummaryStrip counts={counts} />}
 

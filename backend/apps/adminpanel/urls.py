@@ -17,6 +17,7 @@ urlpatterns = [
     path('bookings/<int:pk>/message-guest/', views.AdminBookingMessageGuestView.as_view(), name='admin-booking-message-guest'),
 
     path('dashboard/needs-attention/', views.NeedsAttentionView.as_view(), name='admin-needs-attention'),
+    path('dashboard/stats/', views.AdminOverviewStatsView.as_view(), name='admin-overview-stats'),
 
     path('listings/hotels/', views.AdminHotelListView.as_view(), name='admin-hotel-list'),
     path('listings/hotels/<int:pk>/', views.AdminHotelDetailView.as_view(), name='admin-hotel-detail'),

@@ -1,6 +1,10 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core.mail import EmailMultiAlternatives
+from django.db.models import Count, Sum
+from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -367,6 +371,93 @@ class NeedsAttentionView(APIView):
         }
 
         return Response({'items': ordered[:QUEUE_LIMIT], 'total_count': len(ordered), 'counts': counts})
+
+
+class AdminOverviewStatsView(APIView):
+    """
+    Top-line numbers for the admin home screen: lifetime + 30d totals with a
+    prior-30d comparison, and a 30-day daily trend. GMV is summed from
+    successful Payments, not Booking.total_amount, since the latter includes
+    unpaid/pending bookings and would overstate revenue.
+    """
+    permission_classes = [IsAnyAdmin]
+
+    def get(self, request):
+        now = timezone.now()
+        last_30_start = now - timedelta(days=30)
+        prev_30_start = now - timedelta(days=60)
+
+        successful_payments = Payment.objects.filter(status=Payment.Status.SUCCESS)
+
+        def gmv_between(start, end):
+            total = successful_payments.filter(created_at__gte=start, created_at__lt=end).aggregate(
+                total=Sum('amount')
+            )['total']
+            return float(total or 0)
+
+        def count_between(queryset, start, end):
+            return queryset.filter(created_at__gte=start, created_at__lt=end).count()
+
+        bookings_by_status = dict(
+            Booking.objects.values_list('status').annotate(count=Count('id')).order_by()
+        )
+
+        daily_bookings = {
+            row['day'].isoformat(): row['count']
+            for row in (
+                Booking.objects.filter(created_at__gte=last_30_start)
+                .annotate(day=TruncDate('created_at'))
+                .values('day')
+                .annotate(count=Count('id'))
+            )
+        }
+        daily_gmv = {
+            row['day'].isoformat(): float(row['total'] or 0)
+            for row in (
+                successful_payments.filter(created_at__gte=last_30_start)
+                .annotate(day=TruncDate('created_at'))
+                .values('day')
+                .annotate(total=Sum('amount'))
+            )
+        }
+        trend = [
+            {
+                'date': (day := (last_30_start + timedelta(days=i)).date().isoformat()),
+                'bookings': daily_bookings.get(day, 0),
+                'gmv': daily_gmv.get(day, 0),
+            }
+            for i in range(31)
+        ]
+
+        return Response({
+            'gmv': {
+                'total': float(successful_payments.aggregate(total=Sum('amount'))['total'] or 0),
+                'last_30d': gmv_between(last_30_start, now),
+                'prev_30d': gmv_between(prev_30_start, last_30_start),
+            },
+            'bookings': {
+                'total': Booking.objects.count(),
+                'last_30d': count_between(Booking.objects, last_30_start, now),
+                'prev_30d': count_between(Booking.objects, prev_30_start, last_30_start),
+                'by_status': bookings_by_status,
+            },
+            'listings': {
+                'active': (
+                    Hotel.objects.filter(is_verified=True, is_active=True).count()
+                    + BnBListing.objects.filter(is_verified=True, is_active=True).count()
+                ),
+                'pending_verification': (
+                    Hotel.objects.filter(is_verified=False).count()
+                    + BnBListing.objects.filter(is_verified=False).count()
+                ),
+            },
+            'users': {
+                'total': User.objects.count(),
+                'last_30d': count_between(User.objects, last_30_start, now),
+                'prev_30d': count_between(User.objects, prev_30_start, last_30_start),
+            },
+            'trend': trend,
+        })
 
 
 LISTING_MODERATION_FIELDS = {'is_active', 'is_verified', 'is_featured'}

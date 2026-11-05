@@ -874,6 +874,7 @@ export const adminAPI = {
   messageGuest: async (id, message) => (await api.post(`/admin/bookings/${id}/message-guest/`, { message })).data,
 
   getNeedsAttention: async () => (await api.get('/admin/dashboard/needs-attention/')).data,
+  getOverviewStats: async () => (await api.get('/admin/dashboard/stats/')).data,
 
   getHotels: async (params = {}) => (await api.get('/admin/listings/hotels/', { params })).data,
   moderateHotel: async (id, field, value) => (await api.post(`/admin/listings/hotels/${id}/moderate/`, { field, value })).data,
