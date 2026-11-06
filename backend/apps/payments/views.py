@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 
-from . import mpesa_client
+from . import mpesa_client, paystack_client
 from .models import Payment, PaymentIntent, PaymentWebhookEvent
 from .serializers import (
     PaymentIntentCreateSerializer,
@@ -85,7 +85,18 @@ class CreatePaymentIntentView(APIView):
         )
 
         if gateway == PaymentIntent.Gateway.PAYSTACK:
-            intent.paystack_authorization_url = f"https://paystack.com/pay/{intent.reference.lower()}"
+            paystack_data = paystack_client.initialize_transaction(
+                email=request.user.email,
+                amount=amount,
+                currency=booking.currency,
+                reference=intent.reference,
+                callback_url=f'{settings.SITE_URL}/booking/{booking.id}',
+            )
+            if paystack_data is None:
+                intent.delete()
+                raise ValidationError({'gateway': 'Could not start Paystack checkout. Please try again.'})
+            intent.paystack_authorization_url = paystack_data['authorization_url']
+            intent.client_secret = paystack_data.get('access_code', '')
             intent.status = PaymentIntent.Status.AUTHORIZING
             intent.save()
         elif gateway == PaymentIntent.Gateway.MPESA:
