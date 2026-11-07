@@ -12,6 +12,7 @@ from rest_framework.test import APIClient
 
 from apps.bookings.models import Booking
 from apps.listings.models import BnBListing
+from apps.notifications.models import Notification
 from apps.payments.models import Payment, PaymentIntent
 
 
@@ -285,3 +286,44 @@ def test_paystack_webhook_is_idempotent_for_duplicate_callbacks():
     assert second.status_code == 200
     assert second.json().get('duplicate') is True
     assert Payment.objects.filter(provider_reference='987654').count() == 1
+    # Duplicate webhook delivery must not double-notify the host.
+    assert Notification.objects.filter(data__payment_id__isnull=False).count() == 1
+
+
+@pytest.mark.django_db
+@override_settings(PAYSTACK_SECRET_KEY='paystack_secret_for_tests', DEBUG=False)
+def test_paystack_webhook_notifies_host_when_payment_succeeds():
+    # Regression test: notify_host_about_guest_payment_decision already
+    # promises the host "You will be notified once payment clears", but
+    # nothing in the webhook path ever sent that follow-up notification --
+    # this confirms it now actually fires with the right guest/amount.
+    booking, intent = _create_booking_with_intent(gateway=PaymentIntent.Gateway.PAYSTACK)
+    payload = {
+        'event': 'charge.success',
+        'data': {
+            'reference': intent.reference,
+            'status': 'success',
+            'id': 555111,
+        },
+    }
+    payload_bytes = json.dumps(payload).encode('utf-8')
+    signature = hmac.new(
+        key='paystack_secret_for_tests'.encode('utf-8'),
+        msg=payload_bytes,
+        digestmod=hashlib.sha512,
+    ).hexdigest()
+
+    client = APIClient()
+    response = client.post(
+        '/api/v1/payments/webhooks/paystack/',
+        data=payload_bytes,
+        content_type='application/json',
+        HTTP_X_PAYSTACK_SIGNATURE=signature,
+    )
+    assert response.status_code == 200
+
+    host = booking.bnb_listing.host
+    notification = Notification.objects.get(user=host, data__booking_id=booking.id, data__payment_id__isnull=False)
+    assert notification.data['amount'] == '4000.00'
+    assert notification.data['currency'] == 'KES'
+    assert 'paid' in notification.message.lower()

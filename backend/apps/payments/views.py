@@ -8,6 +8,7 @@ import logging
 from datetime import timedelta
 from decimal import Decimal
 from django.conf import settings
+from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.views.decorators.csrf import csrf_exempt
@@ -28,12 +29,73 @@ from .serializers import (
 )
 
 from apps.bookings.models import Booking
+from apps.bookings.views import _booking_host
+from apps.notifications.models import Notification
 
 logger = logging.getLogger(__name__)
 
 
 def generate_reference(prefix: str = 'MSF') -> str:
     return f"{prefix}_{get_random_string(10).upper()}"
+
+
+def notify_host_about_payment_received(payment: Payment):
+    """
+    An existing notification (notify_host_about_guest_payment_decision, in
+    apps.bookings.views) already tells the host "You will be notified once
+    payment clears" when a guest picks online payment -- but nothing in the
+    webhook/payment-success path ever actually sent that follow-up
+    notification. This is it.
+    """
+    booking = payment.booking
+    host = _booking_host(booking)
+    if not host:
+        return
+    # Avoid noisy self-notify when someone books their own listing in testing.
+    if host.id == booking.traveler_id:
+        return
+
+    is_hotel_booking = bool(booking.hotel_id)
+    stay_name = (
+        booking.hotel.name if is_hotel_booking
+        else (booking.bnb_listing.title if booking.bnb_listing_id else 'your property')
+    )
+    guest_name = booking.guest_full_name or booking.traveler.get_full_name() or 'A guest'
+    title = 'Payment received'
+    message = (
+        f'{guest_name} paid {payment.currency} {payment.amount} for {stay_name} '
+        f'({booking.check_in} to {booking.check_out}).'
+    )
+
+    Notification.objects.create(
+        user=host,
+        title=title,
+        message=message,
+        notification_type=Notification.Type.SUCCESS,
+        data={
+            'booking_id': booking.id,
+            'hotel_id': booking.hotel_id,
+            'bnb_listing_id': booking.bnb_listing_id,
+            'payment_id': payment.id,
+            'amount': str(payment.amount),
+            'currency': payment.currency,
+        },
+    )
+
+    if host.email:
+        try:
+            send_mail(
+                title,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [host.email],
+                fail_silently=True,
+            )
+        except Exception:
+            logger.exception(
+                "Payment received host email failed",
+                extra={"booking_id": booking.id, "host_id": host.id},
+            )
 
 
 class CreatePaymentIntentView(APIView):
@@ -176,7 +238,7 @@ class WebhookPaystackView(APIView):
         if status_str == 'success':
             intent.status = PaymentIntent.Status.COMPLETED
             intent.save(update_fields=['status', 'updated_at'])
-            Payment.objects.get_or_create(
+            payment, payment_created = Payment.objects.get_or_create(
                 booking=intent.booking,
                 provider_reference=str(provider_reference or reference),
                 defaults={
@@ -190,6 +252,8 @@ class WebhookPaystackView(APIView):
                 },
             )
             _update_booking_payment_state(intent.booking)
+            if payment_created:
+                notify_host_about_payment_received(payment)
             event.processed = True
             event.processing_notes = 'success_applied'
         else:
@@ -307,7 +371,7 @@ class WebhookMpesaView(APIView):
             intent.status = PaymentIntent.Status.COMPLETED
             intent.save(update_fields=['status', 'updated_at'])
             provider_reference = checkout_ref or intent.client_secret or intent.reference
-            Payment.objects.get_or_create(
+            payment, payment_created = Payment.objects.get_or_create(
                 booking=intent.booking,
                 provider_reference=provider_reference,
                 defaults={
@@ -321,6 +385,8 @@ class WebhookMpesaView(APIView):
                 },
             )
             _update_booking_payment_state(intent.booking)
+            if payment_created:
+                notify_host_about_payment_received(payment)
             event.processed = True
             event.processing_notes = 'success_applied'
         elif normalized_result == 0:
@@ -465,7 +531,7 @@ class SimulatePaymentSuccessView(APIView):
             intent.save(update_fields=['status', 'updated_at'])
 
         provider_ref = f"SIM_{reference}"
-        Payment.objects.get_or_create(
+        payment, payment_created = Payment.objects.get_or_create(
             booking=intent.booking,
             provider_reference=provider_ref,
             defaults={
@@ -479,5 +545,7 @@ class SimulatePaymentSuccessView(APIView):
             },
         )
         _update_booking_payment_state(intent.booking)
+        if payment_created:
+            notify_host_about_payment_received(payment)
 
         return Response({'ok': True})
