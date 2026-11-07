@@ -562,3 +562,56 @@ def test_hotel_booking_rejects_dates_with_no_vacancy(user_model):
 
     assert response.status_code == 400
     assert 'check_in' in response.data
+
+
+@pytest.mark.django_db
+def test_guest_can_change_payment_method_on_multi_room_type_booking(user_model):
+    # Regression test: BookingSerializer.validate() re-implements the same
+    # "has room_type_id or bnb_listing_id" rule as Booking.clean() (see the
+    # multi-room-type regression test above), and had the same gap -- a
+    # multi-room-type booking's rooms live in BookingItem rows instead of a
+    # single room_type, so updating it (e.g. switching Pay Now vs Pay at
+    # Hotel) incorrectly failed validation as if it had no rooms at all.
+    host = _create_user(user_model, 'host_mr_update', 'hostmrupdate@example.com')
+    traveler = _create_user(user_model, 'trav_mr_update', 'travmrupdate@example.com')
+    hotel, room = _create_hotel_with_room(host)
+
+    booking = Booking(
+        traveler=traveler,
+        hotel=hotel,
+        room_type=None,
+        check_in=date.today() + timedelta(days=3),
+        check_out=date.today() + timedelta(days=4),
+        num_adults=1,
+        num_children=0,
+        nightly_price=room.base_price,
+        currency='KES',
+        total_nights=1,
+        total_amount=room.base_price,
+        guest_full_name='Traveler Multi',
+        guest_email=traveler.email,
+        guest_phone='+254733333333',
+        status=Booking.BookingStatus.PENDING,
+        payment_method=Booking.PaymentMethod.PAY_AT_PREMISES,
+        host_approval_status=Booking.HostApprovalStatus.APPROVED,
+    )
+    booking._has_booking_items = True
+    booking.save()
+    BookingItem.objects.create(
+        booking=booking,
+        room_type=room,
+        quantity=1,
+        nightly_price=room.base_price,
+        subtotal=room.base_price,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=traveler)
+    response = client.patch(
+        f'/api/v1/bookings/{booking.id}/',
+        {'payment_method': 'online'},
+        format='json',
+    )
+    assert response.status_code == 200
+    booking.refresh_from_db()
+    assert booking.payment_method == Booking.PaymentMethod.ONLINE

@@ -90,9 +90,18 @@ class BookingSerializer(serializers.ModelSerializer):
                 bnb_listing_id = instance.bnb_listing_id
         
         if not room_type_id and not bnb_listing_id:
-            raise serializers.ValidationError(
-                "Either room_type_id (for hotel bookings) or bnb_listing_id (for BnB bookings) must be provided."
+            # Multi-room-type bookings have no single room_type_id of their
+            # own -- their rooms live in BookingItem rows instead (see
+            # Booking.clean(), which has this same fallback). An existing
+            # hotel booking with real items is still valid even though
+            # room_type_id is empty here.
+            has_booking_items = bool(
+                instance and instance.pk and instance.hotel_id and instance.items.exists()
             )
+            if not has_booking_items:
+                raise serializers.ValidationError(
+                    "Either room_type_id (for hotel bookings) or bnb_listing_id (for BnB bookings) must be provided."
+                )
         
         if room_type_id and bnb_listing_id:
             raise serializers.ValidationError(
