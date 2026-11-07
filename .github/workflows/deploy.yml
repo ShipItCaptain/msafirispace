@@ -133,6 +133,8 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
           EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+          PAYSTACK_PUBLIC_KEY: ${{ secrets.PAYSTACK_PUBLIC_KEY }}
+          PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
         run: |
           # Build the finished JSON *here on the runner*, where the secrets
           # above actually exist as env vars -- a previous version of this
@@ -169,6 +171,9 @@ jobs:
               'DEFAULT_FROM_EMAIL': os.environ['EMAIL_HOST_USER'],
               'USE_CLOUDINARY_STORAGE': 'False',
               'DATABASE_URL': 'postgresql://msafbuat_msafiri_user:' + db_password_encoded + '@localhost:5432/msafbuat_msafiri_space',
+              'PAYSTACK_PUBLIC_KEY': os.environ['PAYSTACK_PUBLIC_KEY'],
+              'PAYSTACK_SECRET_KEY': os.environ['PAYSTACK_SECRET_KEY'],
+              'PAYSTACK_ENVIRONMENT': 'live',
           }
           with open('/tmp/env_vars.json', 'w') as f:
               json.dump(env_vars, f)
