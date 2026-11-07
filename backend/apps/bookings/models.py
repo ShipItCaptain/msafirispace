@@ -142,11 +142,19 @@ class Booking(models.Model):
     def clean(self):
         """Validate that either hotel+room_type OR bnb_listing is provided"""
         # `_has_booking_items` is a transient (non-persisted) flag set by
-        # MultiRoomBookingSerializer before save(): a multi-room-type booking
-        # has no single `room_type` of its own, its rooms live in BookingItem
-        # rows created right after this Booking gets a pk.
+        # MultiRoomBookingSerializer before the *first* save(): a
+        # multi-room-type booking has no single `room_type` of its own, its
+        # rooms live in BookingItem rows created right after this Booking
+        # gets a pk -- so at that moment the items don't exist in the DB yet
+        # and this flag is the only signal. Every save() after that first one
+        # (e.g. a host approving/declining later) reloads the booking fresh
+        # in a new request, where this attribute is never set -- so it must
+        # also check for real persisted items, or every later save on a
+        # multi-room booking fails validation as if it had no rooms at all.
         has_hotel_booking = self.hotel is not None and (
-            self.room_type is not None or getattr(self, '_has_booking_items', False)
+            self.room_type is not None
+            or getattr(self, '_has_booking_items', False)
+            or (self.pk is not None and self.items.exists())
         )
         has_bnb_booking = self.bnb_listing is not None
         

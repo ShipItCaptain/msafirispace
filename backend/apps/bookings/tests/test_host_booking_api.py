@@ -5,7 +5,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from apps.bookings.models import Booking
+from apps.bookings.models import Booking, BookingItem
 from apps.listings.models import BnBListing, Hotel, RoomAvailability, RoomType
 from apps.notifications.models import Notification
 
@@ -156,6 +156,60 @@ def test_host_can_update_owned_booking_status(user_model):
     # Approving a pending booking confirms availability but does not finalize
     # it yet — the guest still has to pay or choose pay-at-premises.
     assert booking.status == Booking.BookingStatus.PENDING
+    assert booking.host_approval_status == Booking.HostApprovalStatus.APPROVED
+
+
+@pytest.mark.django_db
+def test_host_can_approve_multi_room_type_booking(user_model):
+    # Regression test: a multi-room-type booking has no single `room_type`
+    # of its own (its rooms live in BookingItem rows instead), so re-saving
+    # it in a *later* request -- like a host approving it here -- must not
+    # fail Booking.clean()'s "has hotel+room_type or bnb_listing" check just
+    # because `room_type` is null on this instance.
+    host = _create_user(user_model, 'host_multiroom', 'hostmultiroom@example.com')
+    traveler = _create_user(user_model, 'trav_multiroom', 'travmultiroom@example.com')
+    hotel, room = _create_hotel_with_room(host)
+
+    # `_has_booking_items` is a transient attribute (not a model field), so
+    # it must be set between construction and save(), not passed to
+    # .objects.create() -- exactly how MultiRoomBookingSerializer uses it.
+    booking = Booking(
+        traveler=traveler,
+        hotel=hotel,
+        room_type=None,
+        check_in=date.today() + timedelta(days=3),
+        check_out=date.today() + timedelta(days=4),
+        num_adults=1,
+        num_children=0,
+        nightly_price=room.base_price,
+        currency='KES',
+        total_nights=1,
+        total_amount=room.base_price,
+        guest_full_name='Traveler Three',
+        guest_email=traveler.email,
+        guest_phone='+254722222222',
+        status=Booking.BookingStatus.PENDING,
+    )
+    booking._has_booking_items = True
+    booking.save()
+    BookingItem.objects.create(
+        booking=booking,
+        room_type=room,
+        quantity=1,
+        nightly_price=room.base_price,
+        subtotal=room.base_price,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=host)
+
+    response = client.post(
+        f'/api/v1/bookings/{booking.id}/host-status/',
+        {'status': 'confirmed'},
+        format='json',
+    )
+    assert response.status_code == 200
+    booking.refresh_from_db()
     assert booking.host_approval_status == Booking.HostApprovalStatus.APPROVED
 
 
